@@ -16,6 +16,10 @@ func is4xxResponse(ctx context.Context, response *okta.Response) bool {
 	return response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499)
 }
 
+func fmtGrantIdV1(resourceID string, principalID string, permission string) string {
+	return fmt.Sprintf("%s:%s:%s", resourceID, principalID, permission)
+}
+
 func fmtResourceGrant(resourceID *v2.ResourceId, principalId *v2.ResourceId, permission string) string {
 	return fmt.Sprintf(
 		"%s-grant:%s:%s:%s:%s",
@@ -27,6 +31,10 @@ func fmtResourceGrant(resourceID *v2.ResourceId, principalId *v2.ResourceId, per
 	)
 }
 
+func fmtResourceIdV1(id string) string {
+	return id
+}
+
 func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 	return &v2.ResourceId{
 		ResourceType: resourceTypeID,
@@ -36,16 +44,15 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 
 func fmtResourceRole(resourceID *v2.ResourceId, role string) string {
 	return fmt.Sprintf(
-		"%s:%s:role:%s",
+		"%s:%s",
 		resourceID.ResourceType,
 		resourceID.Resource,
-		role,
 	)
 }
 
 func queryParams(size int, after string) *query.Params {
-	if size == 0 || size > DefaultLimit {
-		size = DefaultLimit
+	if size == 0 || size > defaultLimit {
+		size = defaultLimit
 	}
 	if after == "" {
 		return query.NewQueryParams(query.WithLimit(int64(size)))
