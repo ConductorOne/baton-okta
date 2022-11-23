@@ -73,10 +73,6 @@ func (o *roleResourceType) List(
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 		}
 
-		var annos annotations.Annotations
-		annos.Append(&v2.V1Identifier{
-			Id: fmtResourceIdV1(role.Type),
-		})
 		rv = append(rv, resource)
 	}
 
