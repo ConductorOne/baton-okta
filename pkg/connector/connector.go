@@ -23,10 +23,6 @@ type Okta struct {
 	syncInactiveApps bool
 }
 
-// const (
-// 	verifyURL = "/api/v1/org"
-// )
-
 func v1AnnotationsForResourceType(resourceTypeID string) annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Append(&v2.V1Identifier{

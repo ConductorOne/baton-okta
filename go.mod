@@ -3,7 +3,7 @@ module github.com/conductorone/baton-okta
 go 1.19
 
 require (
-	github.com/conductorone/baton-sdk v0.0.6
+	github.com/conductorone/baton-sdk v0.0.7
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/okta/okta-sdk-golang/v2 v2.14.0
 	github.com/spf13/cobra v1.6.1
@@ -37,7 +37,7 @@ require (
 	github.com/doug-martin/goqu/v9 v9.18.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v0.9.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/glebarez/go-sqlite v1.19.2 // indirect
+	github.com/glebarez/go-sqlite v1.19.5 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -75,5 +75,5 @@ require (
 	modernc.org/libc v1.21.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.4.0 // indirect
-	modernc.org/sqlite v1.19.4 // indirect
+	modernc.org/sqlite v1.19.5 // indirect
 )
