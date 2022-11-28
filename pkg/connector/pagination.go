@@ -9,6 +9,8 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
+const defaultLimit = 100
+
 func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 	var nextPage string
@@ -46,4 +48,15 @@ func parsePageToken(token string, resourceID *v2.ResourceId) (*pagination.Bag, s
 	page := b.PageToken()
 
 	return b, page, nil
+}
+
+func newPaginationToken(limit int, nextPageToken string) *pagination.Token {
+	if limit == 0 || limit > defaultLimit {
+		limit = defaultLimit
+	}
+
+	return &pagination.Token{
+		Size:  limit,
+		Token: nextPageToken,
+	}
 }
