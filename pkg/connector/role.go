@@ -161,6 +161,33 @@ func (o *roleResourceType) Entitlements(
 	return rv, pageToken, nil, nil
 }
 
+func userHasRoleAccess(administratorRoleFlags *AdministratorRoleFlags, resource *v2.Resource) bool {
+	switch resource.Id.GetResource() {
+	case "API_ACCESS_MANAGEMENT_ADMIN":
+		return administratorRoleFlags.ApiAccessManagementAdmin
+	case "MOBILE_ADMIN":
+		return administratorRoleFlags.MobileAdmin
+	case "ORG_ADMIN":
+		return administratorRoleFlags.OrgAdmin
+	case "READ_ONLY_ADMIN":
+		return administratorRoleFlags.ReadOnlyAdmin
+	case "REPORT_ADMIN":
+		return administratorRoleFlags.ReportAdmin
+	case "SUPER_ADMIN":
+		return administratorRoleFlags.SuperAdmin
+	case "USER_ADMIN":
+		return administratorRoleFlags.UserAdmin
+	case "HELP_DESK_ADMIN":
+		return administratorRoleFlags.HelpDeskAdmin
+	case "APP_ADMIN":
+		return administratorRoleFlags.AppAdmin
+	case "GROUP_MEMBERSHIP_ADMIN":
+		return administratorRoleFlags.GroupMembershipAdmin
+	default:
+		return false
+	}
+}
+
 func (o *roleResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -174,73 +201,45 @@ func (o *roleResourceType) Grants(
 	var rv []*v2.Grant
 	var reqAnnos annotations.Annotations
 
-	switch bag.ResourceTypeID() {
-	case resourceTypeRole.Id:
-		qp := queryParams(token.Size, page)
+	qp := queryParams(token.Size, page)
 
-		users, respCtx, err := listUsers(ctx, o.client, token, qp)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-		}
+	administratorRoleFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, qp)
 
-		nextPage, annos, err := parseResp(respCtx.OktaResponse)
-		reqAnnos = annos
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-		}
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+	}
 
-		err = bag.Next(nextPage)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-		}
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	reqAnnos = annos
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+	}
 
-		for _, user := range users {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeUser.Id,
-				ResourceID:     user.Id,
-			})
-		}
+	err = bag.Next(nextPage)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+	}
 
-	case resourceTypeUser.Id:
-		userID := bag.ResourceID()
-		qp := queryParams(token.Size, page)
-
-		userRoles, respCtx, err := listUserRoles(ctx, o.client, userID, token, qp)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list user roles: %w", err)
-		}
-
-		nextPage, annos, err := parseResp(respCtx.OktaResponse)
-		reqAnnos = annos
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-		}
-
-		err = bag.Next(nextPage)
-		if err != nil {
-			return nil, "", nil, err
-		}
-
-		for _, role := range userRoles {
+	for _, administratorRoleFlag := range administratorRoleFlags {
+		if userHasRoleAccess(administratorRoleFlag, resource) {
+			userID := administratorRoleFlag.UserId
+			roleID := resource.Id.GetResource()
 			ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 
 			var annos annotations.Annotations
 			annos.Append(&v2.V1Identifier{
-				Id: fmtGrantIdV1(resource.Id.Resource, userID, role.Id),
+				Id: fmtGrantIdV1(resource.Id.Resource, userID, roleID),
 			})
 			rv = append(rv, &v2.Grant{
-				Id: fmtResourceGrant(resource.Id, ur.Id, role.Id),
+				Id: fmtResourceGrant(resource.Id, ur.Id, roleID),
 				Entitlement: &v2.Entitlement{
-					Id:       fmtResourceRole(resource.Id, role.Id),
+					Id:       fmtResourceRole(resource.Id, roleID),
 					Resource: resource,
 				},
 				Annotations: annos,
 				Principal:   ur,
 			})
 		}
-
-	default:
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type while fetching grants for repo")
 	}
 
 	pageToken, err := bag.Marshal()
@@ -359,6 +358,53 @@ func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.
 		return nil, nil, err
 	}
 	return orgSettings, respCtx, nil
+}
+
+type AdministratorRoleFlags struct {
+	UserId                           string   `json:"userId"`
+	SuperAdmin                       bool     `json:"superAdmin"`
+	OrgAdmin                         bool     `json:"orgAdmin"`
+	ReadOnlyAdmin                    bool     `json:"readOnlyAdmin"`
+	MobileAdmin                      bool     `json:"mobileAdmin"`
+	AppAdmin                         bool     `json:"appAdmin"`
+	HelpDeskAdmin                    bool     `json:"helpDeskAdmin"`
+	GroupMembershipAdmin             bool     `json:"groupMembershipAdmin"`
+	ApiAccessManagementAdmin         bool     `json:"apiAccessManagementAdmin"`
+	UserAdmin                        bool     `json:"userAdmin"`
+	ReportAdmin                      bool     `json:"reportAdmin"`
+	ForAllApps                       bool     `json:"forAllApps"`
+	ForAllUserAdminGroups            bool     `json:"forAllUserAdminGroups"`
+	ForAllHelpDeskAdminGroups        bool     `json:"forAllHelpDeskAdminGroups"`
+	ForAllGroupMembershipAdminGroups bool     `json:"forAllGroupMembershipAdminGroups"`
+	RolesFromIndividualAssignments   []string `json:"rolesFromIndividualAssignments"`
+}
+
+func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*AdministratorRoleFlags, *ResponseContext, error) {
+	url := "/api/internal/administrators"
+	if qp != nil {
+		url += qp.String()
+	}
+
+	rq := client.CloneRequestExecutor()
+
+	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var administratorRoleFlags []*AdministratorRoleFlags
+
+	resp, err := rq.Do(ctx, req, &administratorRoleFlags)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	respCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return administratorRoleFlags, respCtx, nil
 }
 
 type CustomRole struct {
