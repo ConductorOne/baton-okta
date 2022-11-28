@@ -63,16 +63,6 @@ func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-const (
-	listRoleStandard = "standard"
-	listRoleCustom   = "custom"
-)
-
-var listRoleTypes = []string{
-	listRoleStandard,
-	listRoleCustom,
-}
-
 func (o *roleResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
@@ -84,29 +74,11 @@ func (o *roleResourceType) List(
 	}
 
 	var rv []*v2.Resource
-	switch bag.ResourceID() {
-	case "":
-		bag.Pop()
-		for _, listRoleType := range listRoleTypes {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeRole.Id,
-				ResourceID:     listRoleType,
-			})
-		}
-	case listRoleStandard:
-		bag.Pop()
-		rv, err = o.listSystemRoles(ctx, resourceID, token)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
-		}
-	case listRoleCustom:
-		bag.Pop()
-		rv, err = o.listCustomRoles(ctx, resourceID, token)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
-		}
-	default:
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type for role: %w", err)
+
+	bag.Pop()
+	rv, err = o.listSystemRoles(ctx, resourceID, token)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
 	}
 
 	pageToken, err := bag.Marshal()
@@ -128,29 +100,11 @@ func (o *roleResourceType) Entitlements(
 	}
 
 	var rv []*v2.Entitlement
-	switch bag.ResourceID() {
-	case "":
-		bag.Pop()
-		for _, listRoleType := range listRoleTypes {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeRole.Id,
-				ResourceID:     listRoleType,
-			})
-		}
-	case listRoleStandard:
-		bag.Pop()
-		rv, err = o.listSystemEntitlements(ctx, resource, token)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system entitlements: %w", err)
-		}
-	case listRoleCustom:
-		bag.Pop()
-		rv, err = o.listCustomEntitlements(ctx, resource, token)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom entitlements: %w", err)
-		}
-	default:
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type for role: %w", err)
+
+	bag.Pop()
+	rv, err = o.listSystemEntitlements(ctx, resource, token)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system entitlements: %w", err)
 	}
 
 	pageToken, err := bag.Marshal()
@@ -268,37 +222,6 @@ func (o *roleResourceType) listSystemRoles(
 	return rv, nil
 }
 
-func (o *roleResourceType) listCustomRoles(
-	ctx context.Context,
-	resource *v2.ResourceId,
-	token *pagination.Token,
-) ([]*v2.Resource, error) {
-	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-	}
-
-	qp := queryParams(token.Size, page)
-
-	roles, _, err := listOktaIamCustomRoles(ctx, o.client, token, qp)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
-	}
-
-	rv := make([]*v2.Resource, 0)
-
-	for _, role := range roles {
-		resource, err := roleResource(ctx, role)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
-		}
-
-		rv = append(rv, resource)
-	}
-
-	return rv, nil
-}
-
 func (o *roleResourceType) listSystemEntitlements(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -312,37 +235,6 @@ func (o *roleResourceType) listSystemEntitlements(
 		}
 
 		rv = append(rv, entitlement)
-	}
-
-	return rv, nil
-}
-
-func (o *roleResourceType) listCustomEntitlements(
-	ctx context.Context,
-	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, error) {
-	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-	}
-
-	qp := queryParams(token.Size, page)
-
-	roles, _, err := listOktaIamCustomRoles(ctx, o.client, token, qp)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to list custom entitlements: %w", err)
-	}
-
-	rv := make([]*v2.Entitlement, 0)
-
-	for _, role := range roles {
-		resource, err := roleEntitlement(ctx, resource, role)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: failed to create role entitlement: %w", err)
-		}
-
-		rv = append(rv, resource)
 	}
 
 	return rv, nil
@@ -405,48 +297,6 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 	}
 
 	return administratorRoleFlags, respCtx, nil
-}
-
-type CustomRole struct {
-	Id          string      `json:"id,omitempty"`
-	Label       string      `json:"label,omitempty"`
-	Description string      `json:"description,omitempty"`
-	Created     string      `json:"created,omitempty"`
-	LastUpdated string      `json:"lastUpdated,omitempty"`
-	Links       interface{} `json:"_links,omitempty"`
-}
-
-type CustomRoles struct {
-	Roles []*okta.Role `json:"roles,omitempty"`
-	Links interface{}  `json:"_links,omitempty"`
-}
-
-func listOktaIamCustomRoles(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Role, *ResponseContext, error) {
-	url := "/api/v1/iam/roles"
-	if qp != nil {
-		url += qp.String()
-	}
-
-	rq := client.CloneRequestExecutor()
-
-	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var role *CustomRoles
-
-	resp, err := rq.Do(ctx, req, &role)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	respCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return role.Roles, respCtx, nil
 }
 
 func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) (*v2.Entitlement, error) {

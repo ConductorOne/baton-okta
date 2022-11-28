@@ -1,7 +1,6 @@
 package connector
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"time"
@@ -11,10 +10,6 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
-
-func is4xxResponse(ctx context.Context, response *okta.Response) bool {
-	return response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499)
-}
 
 func fmtGrantIdV1(resourceID string, principalID string, permission string) string {
 	return fmt.Sprintf("%s:%s:%s", resourceID, principalID, permission)

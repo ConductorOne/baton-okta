@@ -116,30 +116,6 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	return oktaUsers, respCtx, nil
 }
 
-func listUserRoles(ctx context.Context, client *okta.Client, userId string, token *pagination.Token, qp *query.Params) ([]*okta.Role, *ResponseContext, error) {
-	oktaRoles, resp, err := client.User.ListAssignedRolesForUser(ctx, userId, qp)
-	if err != nil {
-		if !is4xxResponse(ctx, resp) {
-			return nil, nil, err
-		}
-	}
-	reqCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var roles []*okta.Role
-	for _, r := range oktaRoles {
-		roles = append(roles, &okta.Role{
-			Id:    r.Id,
-			Type:  r.Type,
-			Label: r.Label,
-		})
-	}
-
-	return roles, reqCtx, nil
-}
-
 func userBuilder(domain string, apiToken string, client *okta.Client) *userResourceType {
 	return &userResourceType{
 		resourceType: resourceTypeUser,
