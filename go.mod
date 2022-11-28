@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/conductorone/baton-sdk v0.0.7
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
-	github.com/okta/okta-sdk-golang/v2 v2.14.0
+	github.com/okta/okta-sdk-golang/v2 v2.15.0
 	github.com/spf13/cobra v1.6.1
 	go.uber.org/zap v1.23.0
 	google.golang.org/protobuf v1.28.1
@@ -75,5 +75,5 @@ require (
 	modernc.org/libc v1.21.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.4.0 // indirect
-	modernc.org/sqlite v1.19.5 // indirect
+	modernc.org/sqlite v1.20.0 // indirect
 )
