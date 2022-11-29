@@ -104,7 +104,7 @@ func userName(user *okta.User) (string, string) {
 	return firstName, lastName
 }
 
-func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *ResponseContext, error) {
+func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
 	oktaUsers, resp, err := client.User.ListUsers(ctx, qp)
 	if err != nil {
 		return nil, nil, err

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -14,42 +13,20 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-type Role struct {
-	ID    string
-	Type  string
-	Label string
-}
-
-type ResponseContext struct {
-	token *pagination.Token
-
-	requestID string
-
-	status     string
-	statusCode uint32
-
-	hasRateLimit       bool
-	rateLimit          int64
-	rateLimitRemaining int64
-	rateLimitReset     time.Time
-
-	OktaResponse *okta.Response
-}
-
 // Roles that can only be assigned at the org-wide scope.
 // For full list of roles see: https://developer.okta.com/docs/reference/api/roles/#role-types
 var standardRoleTypes = []*okta.Role{
-	{Id: "API_ACCESS_MANAGEMENT_ADMIN", Label: "API Access Management Administrator"},
-	{Id: "MOBILE_ADMIN", Label: "Mobile Administrator"},
-	{Id: "ORG_ADMIN", Label: "Organizational Administrator"},
-	{Id: "READ_ONLY_ADMIN", Label: "Read-Only Administrator"},
-	{Id: "REPORT_ADMIN", Label: "Report Administrator"},
-	{Id: "SUPER_ADMIN", Label: "Super Administrator"},
+	{Type: "API_ACCESS_MANAGEMENT_ADMIN", Label: "API Access Management Administrator"},
+	{Type: "MOBILE_ADMIN", Label: "Mobile Administrator"},
+	{Type: "ORG_ADMIN", Label: "Organizational Administrator"},
+	{Type: "READ_ONLY_ADMIN", Label: "Read-Only Administrator"},
+	{Type: "REPORT_ADMIN", Label: "Report Administrator"},
+	{Type: "SUPER_ADMIN", Label: "Super Administrator"},
 	// The type name is strange, but it is what Okta uses for the Group Administrator standard role
-	{Id: "USER_ADMIN", Label: "Group Administrator"},
-	{Id: "HELP_DESK_ADMIN", Label: "Help Desk Administrator"},
-	{Id: "APP_ADMIN", Label: "Application Administrator"},
-	{Id: "GROUP_MEMBERSHIP_ADMIN", Label: "Group Membership Administrator"},
+	{Type: "USER_ADMIN", Label: "Group Administrator"},
+	{Type: "HELP_DESK_ADMIN", Label: "Help Desk Administrator"},
+	{Type: "APP_ADMIN", Label: "Application Administrator"},
+	{Type: "GROUP_MEMBERSHIP_ADMIN", Label: "Group Membership Administrator"},
 }
 
 type roleResourceType struct {
@@ -115,33 +92,6 @@ func (o *roleResourceType) Entitlements(
 	return rv, pageToken, nil, nil
 }
 
-func userHasRoleAccess(administratorRoleFlags *AdministratorRoleFlags, resource *v2.Resource) bool {
-	switch resource.Id.GetResource() {
-	case "API_ACCESS_MANAGEMENT_ADMIN":
-		return administratorRoleFlags.ApiAccessManagementAdmin
-	case "MOBILE_ADMIN":
-		return administratorRoleFlags.MobileAdmin
-	case "ORG_ADMIN":
-		return administratorRoleFlags.OrgAdmin
-	case "READ_ONLY_ADMIN":
-		return administratorRoleFlags.ReadOnlyAdmin
-	case "REPORT_ADMIN":
-		return administratorRoleFlags.ReportAdmin
-	case "SUPER_ADMIN":
-		return administratorRoleFlags.SuperAdmin
-	case "USER_ADMIN":
-		return administratorRoleFlags.UserAdmin
-	case "HELP_DESK_ADMIN":
-		return administratorRoleFlags.HelpDeskAdmin
-	case "APP_ADMIN":
-		return administratorRoleFlags.AppAdmin
-	case "GROUP_MEMBERSHIP_ADMIN":
-		return administratorRoleFlags.GroupMembershipAdmin
-	default:
-		return false
-	}
-}
-
 func (o *roleResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -204,6 +154,33 @@ func (o *roleResourceType) Grants(
 	return rv, pageToken, reqAnnos, nil
 }
 
+func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource *v2.Resource) bool {
+	switch resource.Id.GetResource() {
+	case "API_ACCESS_MANAGEMENT_ADMIN":
+		return administratorRoleFlags.ApiAccessManagementAdmin
+	case "MOBILE_ADMIN":
+		return administratorRoleFlags.MobileAdmin
+	case "ORG_ADMIN":
+		return administratorRoleFlags.OrgAdmin
+	case "READ_ONLY_ADMIN":
+		return administratorRoleFlags.ReadOnlyAdmin
+	case "REPORT_ADMIN":
+		return administratorRoleFlags.ReportAdmin
+	case "SUPER_ADMIN":
+		return administratorRoleFlags.SuperAdmin
+	case "USER_ADMIN":
+		return administratorRoleFlags.UserAdmin
+	case "HELP_DESK_ADMIN":
+		return administratorRoleFlags.HelpDeskAdmin
+	case "APP_ADMIN":
+		return administratorRoleFlags.AppAdmin
+	case "GROUP_MEMBERSHIP_ADMIN":
+		return administratorRoleFlags.GroupMembershipAdmin
+	default:
+		return false
+	}
+}
+
 func (o *roleResourceType) listSystemRoles(
 	ctx context.Context,
 	resource *v2.ResourceId,
@@ -240,7 +217,7 @@ func (o *roleResourceType) listSystemEntitlements(
 	return rv, nil
 }
 
-func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *ResponseContext, error) {
+func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
 	orgSettings, resp, err := client.OrgSetting.GetOrgSettings(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -252,7 +229,7 @@ func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.
 	return orgSettings, respCtx, nil
 }
 
-type AdministratorRoleFlags struct {
+type administratorRoleFlags struct {
 	UserId                           string   `json:"userId"`
 	SuperAdmin                       bool     `json:"superAdmin"`
 	OrgAdmin                         bool     `json:"orgAdmin"`
@@ -271,7 +248,7 @@ type AdministratorRoleFlags struct {
 	RolesFromIndividualAssignments   []string `json:"rolesFromIndividualAssignments"`
 }
 
-func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*AdministratorRoleFlags, *ResponseContext, error) {
+func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*administratorRoleFlags, *responseContext, error) {
 	url := "/api/internal/administrators"
 	if qp != nil {
 		url += qp.String()
@@ -284,7 +261,7 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 		return nil, nil, err
 	}
 
-	var administratorRoleFlags []*AdministratorRoleFlags
+	var administratorRoleFlags []*administratorRoleFlags
 
 	resp, err := rq.Do(ctx, req, &administratorRoleFlags)
 	if err != nil {
@@ -302,17 +279,17 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) (*v2.Entitlement, error) {
 	var annos annotations.Annotations
 	annos.Append(&v2.V1Identifier{
-		Id: fmtResourceIdV1(role.Id),
+		Id: fmtResourceIdV1(role.Type),
 	})
 	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, role.Id),
+		Id:          fmtResourceRole(resource.Id, role.Type),
 		Resource:    resource,
 		DisplayName: fmt.Sprintf("%s Role Member", role.Label),
 		Description: fmt.Sprintf("Has the %s role in Okta", role.Label),
 		Annotations: annos,
 		GrantableTo: []*v2.ResourceType{resourceTypeUser},
 		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
-		Slug:        role.Id,
+		Slug:        role.Type,
 	}, nil
 }
 
@@ -325,11 +302,11 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 	var annos annotations.Annotations
 	annos.Append(trait)
 	annos.Append(&v2.V1Identifier{
-		Id: fmtResourceIdV1(role.Id),
+		Id: fmtResourceIdV1(role.Type),
 	})
 
 	return &v2.Resource{
-		Id:          fmtResourceId(resourceTypeRole.Id, role.Id),
+		Id:          fmtResourceId(resourceTypeRole.Id, role.Type),
 		DisplayName: resourceTypeRole.DisplayName,
 		Annotations: annos,
 	}, nil
@@ -337,7 +314,7 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 
 func roleTrait(ctx context.Context, role *okta.Role) (*v2.RoleTrait, error) {
 	profile, err := structpb.NewStruct(map[string]interface{}{
-		"id":    role.Id,
+		"type":  role.Type,
 		"label": role.Label,
 	})
 	if err != nil {
