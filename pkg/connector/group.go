@@ -74,8 +74,12 @@ func (o *groupResourceType) Entitlements(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	var rv []*v2.Entitlement
 
-	return nil, "", nil, nil
+	entitlement := groupEntitlement(ctx, resource)
+	rv = append(rv, entitlement)
+
+	return rv, "", nil, nil
 }
 
 func (o *groupResourceType) Grants(
@@ -133,6 +137,23 @@ func groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) 
 	}
 
 	return ret, nil
+}
+
+func groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+	var annos annotations.Annotations
+	annos.Append(&v2.V1Identifier{
+		Id: fmtResourceIdV1(resource.Id.GetResource()),
+	})
+	return &v2.Entitlement{
+		Id:          fmtResourceRole(resource.Id, resource.Id.GetResource()),
+		Resource:    resource,
+		DisplayName: fmt.Sprintf("%s Group Member", resource.DisplayName),
+		Description: fmt.Sprintf("Member of %s group in Okta", resource.DisplayName),
+		Annotations: annos,
+		GrantableTo: []*v2.ResourceType{resourceTypeUser},
+		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
+		Slug:        resource.DisplayName,
+	}
 }
 
 func groupBuilder(domain string, apiToken string, client *okta.Client) *groupResourceType {
