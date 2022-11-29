@@ -307,7 +307,7 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeRole.Id, role.Type),
-		DisplayName: resourceTypeRole.DisplayName,
+		DisplayName: role.Type,
 		Annotations: annos,
 	}, nil
 }
