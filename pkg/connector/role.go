@@ -103,8 +103,6 @@ func (o *roleResourceType) Grants(
 	}
 
 	var rv []*v2.Grant
-	var reqAnnos annotations.Annotations
-
 	qp := queryParams(token.Size, page)
 
 	administratorRoleFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, qp)
@@ -114,7 +112,6 @@ func (o *roleResourceType) Grants(
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
-	reqAnnos = annos
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -128,21 +125,8 @@ func (o *roleResourceType) Grants(
 		if userHasRoleAccess(administratorRoleFlag, resource) {
 			userID := administratorRoleFlag.UserId
 			roleID := resource.Id.GetResource()
-			ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 
-			var annos annotations.Annotations
-			annos.Append(&v2.V1Identifier{
-				Id: fmtGrantIdV1(resource.Id.Resource, userID, roleID),
-			})
-			rv = append(rv, &v2.Grant{
-				Id: fmtResourceGrant(resource.Id, ur.Id, roleID),
-				Entitlement: &v2.Entitlement{
-					Id:       fmtResourceRole(resource.Id, roleID),
-					Resource: resource,
-				},
-				Annotations: annos,
-				Principal:   ur,
-			})
+			rv = append(rv, roleGrant(userID, roleID, resource))
 		}
 	}
 
@@ -151,7 +135,7 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, err
 	}
 
-	return rv, pageToken, reqAnnos, nil
+	return rv, pageToken, annos, nil
 }
 
 func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource *v2.Resource) bool {
@@ -310,6 +294,25 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 		DisplayName: role.Type,
 		Annotations: annos,
 	}, nil
+}
+
+func roleGrant(userID string, roleID string, resource *v2.Resource) *v2.Grant {
+	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
+
+	var annos annotations.Annotations
+	annos.Append(&v2.V1Identifier{
+		Id: fmtGrantIdV1(resource.Id.Resource, userID, roleID),
+	})
+
+	return &v2.Grant{
+		Id: fmtResourceGrant(resource.Id, ur.Id, roleID),
+		Entitlement: &v2.Entitlement{
+			Id:       fmtResourceRole(resource.Id, roleID),
+			Resource: resource,
+		},
+		Annotations: annos,
+		Principal:   ur,
+	}
 }
 
 func roleTrait(ctx context.Context, role *okta.Role) (*v2.RoleTrait, error) {

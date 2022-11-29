@@ -76,8 +76,7 @@ func (o *groupResourceType) Entitlements(
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
-	entitlement := groupEntitlement(ctx, resource)
-	rv = append(rv, entitlement)
+	rv = append(rv, groupEntitlement(ctx, resource))
 
 	return rv, "", nil, nil
 }
@@ -87,7 +86,39 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+	}
+
+	var rv []*v2.Grant
+	qp := queryParams(token.Size, page)
+
+	users, respCtx, err := listGroupUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
+	}
+
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+	}
+
+	err = bag.Next(nextPage)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+	}
+
+	for _, user := range users {
+		rv = append(rv, groupGrant(resource, user))
+	}
+
+	pageToken, err := bag.Marshal()
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	return rv, pageToken, annos, nil
 }
 
 func listGroups(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
@@ -102,6 +133,20 @@ func listGroups(ctx context.Context, client *okta.Client, token *pagination.Toke
 	}
 
 	return groups, reqCtx, nil
+}
+
+func listGroupUsers(ctx context.Context, client *okta.Client, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
+	users, resp, err := client.Group.ListGroupUsers(ctx, groupID, qp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
+	}
+
+	reqCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return users, reqCtx, nil
 }
 
 func groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error) {
@@ -153,6 +198,26 @@ func groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlemen
 		GrantableTo: []*v2.ResourceType{resourceTypeUser},
 		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
 		Slug:        resource.DisplayName,
+	}
+}
+
+func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
+	groupID := resource.Id.GetResource()
+	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: user.Id}}
+
+	var annos annotations.Annotations
+	annos.Append(&v2.V1Identifier{
+		Id: fmtGrantIdV1(resource.Id.Resource, user.Id, groupID),
+	})
+
+	return &v2.Grant{
+		Id: fmtResourceGrant(resource.Id, ur.Id, groupID),
+		Entitlement: &v2.Entitlement{
+			Id:       fmtResourceRole(resource.Id, groupID),
+			Resource: resource,
+		},
+		Annotations: annos,
+		Principal:   ur,
 	}
 }
 
