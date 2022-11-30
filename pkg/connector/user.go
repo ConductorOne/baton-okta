@@ -36,8 +36,6 @@ func (o *userResourceType) List(
 	}
 
 	var rv []*v2.Resource
-	var reqAnnos annotations.Annotations
-
 	qp := queryParams(token.Size, page)
 
 	users, respCtx, err := listUsers(ctx, o.client, token, qp)
@@ -46,7 +44,6 @@ func (o *userResourceType) List(
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
-	reqAnnos = annos
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -70,7 +67,7 @@ func (o *userResourceType) List(
 		return nil, "", nil, err
 	}
 
-	return rv, pageToken, reqAnnos, nil
+	return rv, pageToken, annos, nil
 }
 
 func (o *userResourceType) Entitlements(
@@ -104,7 +101,7 @@ func userName(user *okta.User) (string, string) {
 	return firstName, lastName
 }
 
-func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *ResponseContext, error) {
+func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
 	oktaUsers, resp, err := client.User.ListUsers(ctx, qp)
 	if err != nil {
 		return nil, nil, err

@@ -11,6 +11,22 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
 
+type responseContext struct {
+	token *pagination.Token
+
+	requestID string
+
+	status     string
+	statusCode uint32
+
+	hasRateLimit       bool
+	rateLimit          int64
+	rateLimitRemaining int64
+	rateLimitReset     time.Time
+
+	OktaResponse *okta.Response
+}
+
 func fmtGrantIdV1(resourceID string, principalID string, permission string) string {
 	return fmt.Sprintf("%s:%s:%s", resourceID, principalID, permission)
 }
@@ -56,7 +72,7 @@ func queryParams(size int, after string) *query.Params {
 	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after))
 }
 
-func responseToContext(token *pagination.Token, resp *okta.Response) (*ResponseContext, error) {
+func responseToContext(token *pagination.Token, resp *okta.Response) (*responseContext, error) {
 	u, err := url.Parse(resp.NextPage)
 	if err != nil {
 		return nil, err
@@ -65,7 +81,7 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*ResponseC
 	after := u.Query().Get("after")
 	token.Token = after
 
-	ret := &ResponseContext{
+	ret := &responseContext{
 		token:        token,
 		requestID:    resp.Header.Get(oktaRequestIDHeader),
 		status:       resp.Status,

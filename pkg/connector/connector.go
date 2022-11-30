@@ -45,12 +45,12 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: v1AnnotationsForResourceType("user"),
 	}
-	// resourceTypeGroup = &v2.ResourceType{
-	// 	Id:          "group",
-	// 	DisplayName: "Group",
-	// 	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
-	// 	Annotations: v1AnnotationsForResourceType("group"),
-	// }
+	resourceTypeGroup = &v2.ResourceType{
+		Id:          "group",
+		DisplayName: "Group",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
+		Annotations: v1AnnotationsForResourceType("group"),
+	}
 	// resourceTypeApp = &v2.ResourceType{
 	// 	Id:          "app",
 	// 	DisplayName: "App",
@@ -63,7 +63,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	return []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.domain, o.apiToken, o.client),
 		userBuilder(o.domain, o.apiToken, o.client),
-		// groupBuilder(o.domain, o.apiToken, o.client),
+		groupBuilder(o.domain, o.apiToken, o.client),
 		// appBuilder(o.domain, o.apiToken, o.client),
 	}
 }
@@ -73,7 +73,7 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 		List: []*v2.ResourceType{
 			resourceTypeRole,
 			resourceTypeUser,
-			// resourceTypeGroup,
+			resourceTypeGroup,
 			// resourceTypeApp,
 		},
 	}, nil
