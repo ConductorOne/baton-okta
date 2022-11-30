@@ -3,11 +3,11 @@ module github.com/conductorone/baton-okta
 go 1.19
 
 require (
-	github.com/conductorone/baton-sdk v0.0.7
+	github.com/conductorone/baton-sdk v0.0.14
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
-	github.com/okta/okta-sdk-golang/v2 v2.15.0
+	github.com/okta/okta-sdk-golang/v2 v2.16.0
 	github.com/spf13/cobra v1.6.1
-	go.uber.org/zap v1.23.0
+	go.uber.org/zap v1.24.0
 	google.golang.org/protobuf v1.28.1
 )
 
@@ -41,7 +41,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/klauspost/compress v1.15.12 // indirect
@@ -66,7 +66,7 @@ require (
 	golang.org/x/net v0.2.0 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
-	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6 // indirect
+	google.golang.org/genproto v0.0.0-20221130183247-a2ec334bae6f // indirect
 	google.golang.org/grpc v1.51.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
