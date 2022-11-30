@@ -34,5 +34,5 @@ func validateConfig(ctx context.Context, cfg *config) error {
 func cmdFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("domain", "", "The URL for the Okta organization")
 	cmd.PersistentFlags().String("api-token", "", "The API token for the service account")
-	cmd.PersistentFlags().Bool("sync-inactive-apps", false, "Whether to sync inactive apps or not")
+	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not")
 }
