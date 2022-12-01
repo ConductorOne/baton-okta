@@ -1,8 +1,10 @@
 ![Baton Logo](./docs/images/baton-logo.png)
 
-# `baton-okta` ![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-okta.svg) ![ci](https://github.com/conductorone/baton-github/actions/workflows/main.yaml/badge.svg)
+# `baton-okta` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-okta.svg)](https://pkg.go.dev/github.com/conductorone/baton-okta) ![main ci](https://github.com/conductorone/baton-okta/actions/workflows/main.yaml/badge.svg)
 
 `baton-okta` is a connector for Okta built using the [Baton SDK](https://github.com/conductorone/baton-sdk). It communicates with the Okta API to sync data about which groups and users have access to applications, groups, and roles within an Okta domain.
+
+Check out [Baton](https://github.com/conductorone/baton) to learn more about Baton.
 
 # Getting Started
 
@@ -11,14 +13,14 @@
 ```
 brew install conductor/baton/baton conductor/baton/baton-okta
 
-BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=oktaDomain baton-okta
+BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
 ```
 
 ## docker
 
 ```
-docker run --rm -v $(pwd):/out -e BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=oktaDomain ghcr.io/conductorone/baton-okta:latest -f "/out/sync.c1z"
+docker run --rm -v $(pwd):/out -e BATON_API_TOKEN=oktaAPIToken -e BATON_DOMAIN=domain-1234.okta.com ghcr.io/conductorone/baton-okta:latest -f "/out/sync.c1z"
 docker run --rm -v $(pwd):/out ghcr.io/conductorone/baton:latest -f "/out/sync.c1z" resources
 ```
 
@@ -28,7 +30,7 @@ docker run --rm -v $(pwd):/out ghcr.io/conductorone/baton:latest -f "/out/sync.c
 go install github.com/conductorone/baton/cmd/baton@main
 go install github.com/conductorone/baton-okta/cmd/baton-okta@main
 
-BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=oktaDomain baton-okta
+BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
 ```
 
@@ -42,10 +44,6 @@ baton resources
 - Users
 
 By default, `baton-okta` will sync information for inactive applications. You can exclude inactive applications setting the `--sync-inactive-apps` flag to `false`.
-
-# Baton
-
-Check out [Baton](https://github.com/conductorone/baton) to learn more about Baton's mission.
 
 # Contributing, Support and Issues
 
