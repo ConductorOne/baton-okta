@@ -64,7 +64,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.domain, o.apiToken, o.client),
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o.domain, o.apiToken, o.client),
-		appBuilder(o.domain, o.apiToken, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 	}
 }
 

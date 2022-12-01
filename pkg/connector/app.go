@@ -35,12 +35,13 @@ func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, client *okta.Client) *appResourceType {
 	return &appResourceType{
-		resourceType: resourceTypeApp,
-		domain:       domain,
-		apiToken:     apiToken,
-		client:       client,
+		resourceType:     resourceTypeApp,
+		domain:           domain,
+		apiToken:         apiToken,
+		client:           client,
+		syncInactiveApps: syncInactiveApps,
 	}
 }
 
@@ -124,13 +125,11 @@ func (o *appResourceType) Grants(
 			})
 		}
 	case appGrantGroup:
-		bag.Pop()
 		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, token, bag, page)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app group grants: %w", err)
 		}
 	case appGrantUser:
-		bag.Pop()
 		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, token, bag, page)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app users grants: %w", err)
@@ -263,19 +262,22 @@ func listApplicationUsers(ctx context.Context, client *okta.Client, appID string
 }
 
 func oktaAppsToOktaApplications(ctx context.Context, apps []okta.App) ([]*okta.Application, error) {
-	var oktaApp *okta.Application
-	applications := make([]*okta.Application, len(apps))
-	for i, iapp := range apps {
+	var applications []*okta.Application
+	for _, iapp := range apps {
+		var oktaApp okta.Application
+
 		b, err := json.Marshal(iapp)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connectorv2: error marshalling okta app: %w", err)
 		}
-		if err = json.Unmarshal(b, &oktaApp); err != nil {
+		err = json.Unmarshal(b, &oktaApp)
+		if err != nil {
 			return nil, fmt.Errorf("okta-connectorv2: error unmarshalling okta app: %w", err)
 		}
 
-		applications[i] = oktaApp
+		applications = append(applications, &oktaApp)
 	}
+
 	return applications, nil
 }
 
@@ -333,7 +335,7 @@ func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement 
 func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment) *v2.Grant {
 	appID := resource.Id.GetResource()
 	userID := applicationGroupAssignment.Id
-	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
+	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: userID}}
 
 	var annos annotations.Annotations
 	annos.Append(&v2.V1Identifier{
