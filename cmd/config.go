@@ -32,7 +32,7 @@ func validateConfig(ctx context.Context, cfg *config) error {
 
 // cmdFlags sets the cmdFlags required for the connector.
 func cmdFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().String("domain", "", "The URL for the Okta organization")
-	cmd.PersistentFlags().String("api-token", "", "The API token for the service account")
-	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not")
+	cmd.PersistentFlags().String("domain", "", "The URL for the Okta organization. ($BATON_DOMAIN)")
+	cmd.PersistentFlags().String("api-token", "", "The API token for the service account.  ($BATON_API_TOKEN)")
+	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS)")
 }

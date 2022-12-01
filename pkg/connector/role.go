@@ -232,7 +232,7 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 
 func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) *v2.Entitlement {
 	var annos annotations.Annotations
-	annos.Append(&v2.V1Identifier{
+	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(role.Type),
 	})
 
@@ -265,8 +265,8 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 	}
 
 	var annos annotations.Annotations
-	annos.Append(trait)
-	annos.Append(&v2.V1Identifier{
+	annos.Update(trait)
+	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(role.Type),
 	})
 
@@ -281,7 +281,7 @@ func roleGrant(userID string, roleID string, resource *v2.Resource) *v2.Grant {
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 
 	var annos annotations.Annotations
-	annos.Append(&v2.V1Identifier{
+	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(resource.Id.Resource, userID, roleID),
 	})
 

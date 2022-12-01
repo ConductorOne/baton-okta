@@ -288,8 +288,8 @@ func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, erro
 	}
 
 	var annos annotations.Annotations
-	annos.Append(trait)
-	annos.Append(&v2.V1Identifier{
+	annos.Update(trait)
+	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(app.Id),
 	})
 
@@ -317,7 +317,7 @@ func appTrait(ctx context.Context, app *okta.Application) (*v2.AppTrait, error) 
 
 func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
 	var annos annotations.Annotations
-	annos.Append(&v2.V1Identifier{
+	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(resource.Id.GetResource()),
 	})
 	return &v2.Entitlement{
@@ -338,7 +338,7 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: userID}}
 
 	var annos annotations.Annotations
-	annos.Append(&v2.V1Identifier{
+	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(resource.Id.Resource, userID, appID),
 	})
 
@@ -359,7 +359,7 @@ func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser) *v2.Gran
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 
 	var annos annotations.Annotations
-	annos.Append(&v2.V1Identifier{
+	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(resource.Id.Resource, userID, appID),
 	})
 

@@ -131,8 +131,8 @@ func userResource(ctx context.Context, user *okta.User) (*v2.Resource, error) {
 		return nil, err
 	}
 	var annos annotations.Annotations
-	annos.Append(trait)
-	annos.Append(&v2.V1Identifier{
+	annos.Update(trait)
+	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(user.Id),
 	})
 
