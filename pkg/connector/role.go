@@ -71,25 +71,13 @@ func (o *roleResourceType) Entitlements(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-	}
-
 	var rv []*v2.Entitlement
 
-	bag.Pop()
-	rv, err = o.listSystemEntitlements(ctx, resource, token)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system entitlements: %w", err)
-	}
+	role := standardRoleFromType(resource.Id.GetResource())
 
-	pageToken, err := bag.Marshal()
-	if err != nil {
-		return nil, "", nil, err
-	}
+	rv = append(rv, roleEntitlement(ctx, resource, role))
 
-	return rv, pageToken, nil, nil
+	return rv, "", nil, nil
 }
 
 func (o *roleResourceType) Grants(
@@ -183,24 +171,6 @@ func (o *roleResourceType) listSystemRoles(
 	return rv, nil
 }
 
-func (o *roleResourceType) listSystemEntitlements(
-	ctx context.Context,
-	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, error) {
-	rv := make([]*v2.Entitlement, 0, len(standardRoleTypes))
-	for _, role := range standardRoleTypes {
-		entitlement, err := roleEntitlement(ctx, resource, role)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: failed to create role entitlement: %w", err)
-		}
-
-		rv = append(rv, entitlement)
-	}
-
-	return rv, nil
-}
-
 func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
 	orgSettings, resp, err := client.OrgSetting.GetOrgSettings(ctx)
 	if err != nil {
@@ -260,11 +230,12 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 	return administratorRoleFlags, respCtx, nil
 }
 
-func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) (*v2.Entitlement, error) {
+func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) *v2.Entitlement {
 	var annos annotations.Annotations
 	annos.Append(&v2.V1Identifier{
 		Id: fmtResourceIdV1(role.Type),
 	})
+
 	return &v2.Entitlement{
 		Id:          fmtResourceRole(resource.Id, role.Type),
 		Resource:    resource,
@@ -274,7 +245,17 @@ func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role
 		GrantableTo: []*v2.ResourceType{resourceTypeUser},
 		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
 		Slug:        role.Type,
-	}, nil
+	}
+}
+
+func standardRoleFromType(roleType string) *okta.Role {
+	for _, standardRoleType := range standardRoleTypes {
+		if standardRoleType.Type == roleType {
+			return standardRoleType
+		}
+	}
+
+	return nil
 }
 
 func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
