@@ -7,7 +7,7 @@ OUTPUT_PATH = ${BUILD_DIR}/baton-okta
 build:
 	rm -f ${OUTPUT_PATH}
 	mkdir -p ${BUILD_DIR}
-	go build -o ${OUTPUT_PATH} cmd/*.go
+	go build -o ${OUTPUT_PATH} cmd/baton-okta/*.go
 
 .PHONY: update-deps
 update-deps:
