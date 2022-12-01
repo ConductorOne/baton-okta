@@ -124,7 +124,7 @@ github.com/aws/smithy-go/waiter
 # github.com/cenkalti/backoff/v4 v4.2.0
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
-# github.com/conductorone/baton-sdk v0.0.14
+# github.com/conductorone/baton-sdk v0.0.16
 ## explicit; go 1.19
 github.com/conductorone/baton-sdk/internal/connector
 github.com/conductorone/baton-sdk/internal/dotc1z
@@ -326,7 +326,7 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/genproto v0.0.0-20221130183247-a2ec334bae6f
+# google.golang.org/genproto v0.0.0-20221201164419-0e50fba7f41c
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.51.0
