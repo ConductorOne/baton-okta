@@ -25,7 +25,7 @@ type Okta struct {
 
 func v1AnnotationsForResourceType(resourceTypeID string) annotations.Annotations {
 	annos := annotations.Annotations{}
-	annos.Append(&v2.V1Identifier{
+	annos.Update(&v2.V1Identifier{
 		Id: resourceTypeID,
 	})
 
@@ -86,7 +86,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 	}
 
 	var annos annotations.Annotations
-	annos.Append(&v2.ExternalLink{
+	annos.Update(&v2.ExternalLink{
 		Url: c.domain,
 	})
 
