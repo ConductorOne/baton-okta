@@ -21,6 +21,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/conductorone/baton-sdk/pkg/ugrpc"
 	utls2 "github.com/conductorone/baton-sdk/pkg/utls"
+	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -28,7 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const listenerFdEnv = "C1_CONNECTOR_SERVICE_LISTENER_FD"
+const listenerFdEnv = "BATON_CONNECTOR_SERVICE_LISTENER_FD"
 
 type connectorClient struct {
 	connectorV2.ResourceTypesServiceClient
@@ -103,6 +104,8 @@ func NewWrapper(ctx context.Context, server interface{}, opts ...Option) (*wrapp
 }
 
 func (cw *wrapper) Run(ctx context.Context, serverCfg *connectorwrapperV1.ServerConfig) error {
+	logger := ctxzap.Extract(ctx)
+
 	listenerFd := os.Getenv(listenerFdEnv)
 	if listenerFd == "" {
 		return fmt.Errorf("missing required listener fd")
@@ -122,6 +125,8 @@ func (cw *wrapper) Run(ctx context.Context, serverCfg *connectorwrapperV1.Server
 	if err != nil {
 		return err
 	}
+
+	grpc_zap.ReplaceGrpcLoggerV2(logger)
 
 	server := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(tlsConfig)),

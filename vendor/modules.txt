@@ -124,7 +124,7 @@ github.com/aws/smithy-go/waiter
 # github.com/cenkalti/backoff/v4 v4.2.0
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
-# github.com/conductorone/baton-sdk v0.0.7
+# github.com/conductorone/baton-sdk v0.0.14
 ## explicit; go 1.19
 github.com/conductorone/baton-sdk/internal/connector
 github.com/conductorone/baton-sdk/internal/dotc1z
@@ -202,7 +202,7 @@ github.com/hashicorp/hcl/hcl/token
 github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
-# github.com/inconshreveable/mousetrap v1.0.1
+# github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
 # github.com/jmespath/go-jmespath v0.4.0
@@ -229,7 +229,7 @@ github.com/mattn/go-isatty
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
-# github.com/okta/okta-sdk-golang/v2 v2.15.0
+# github.com/okta/okta-sdk-golang/v2 v2.16.0
 ## explicit; go 1.19
 github.com/okta/okta-sdk-golang/v2/okta
 github.com/okta/okta-sdk-golang/v2/okta/cache
@@ -293,8 +293,8 @@ go.uber.org/multierr
 # go.uber.org/ratelimit v0.2.0
 ## explicit; go 1.14
 go.uber.org/ratelimit
-# go.uber.org/zap v1.23.0
-## explicit; go 1.18
+# go.uber.org/zap v1.24.0
+## explicit; go 1.19
 go.uber.org/zap
 go.uber.org/zap/buffer
 go.uber.org/zap/internal
@@ -326,7 +326,7 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6
+# google.golang.org/genproto v0.0.0-20221130183247-a2ec334bae6f
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.51.0
