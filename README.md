@@ -4,7 +4,7 @@
 
 `baton-okta` is a connector for Okta built using the [Baton SDK](https://github.com/conductorone/baton-sdk). It communicates with the Okta API to sync data about which groups and users have access to applications, groups, and roles within an Okta domain.
 
-Check out [Baton](https://github.com/conductorone/baton) to learn more about Baton.
+Check out [Baton](https://github.com/conductorone/baton) to learn more about the project in general.
 
 # Getting Started
 
