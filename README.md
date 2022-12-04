@@ -11,7 +11,7 @@ Check out [Baton](https://github.com/conductorone/baton) to learn more about the
 ## brew
 
 ```
-brew install conductor/baton/baton conductor/baton/baton-okta
+brew install conductorone/baton/baton conductorone/baton/baton-okta
 
 BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
