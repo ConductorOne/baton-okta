@@ -295,7 +295,7 @@ func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, erro
 
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeApp.Id, app.Id),
-		DisplayName: app.Name,
+		DisplayName: app.Label,
 		Annotations: annos,
 	}, nil
 }
