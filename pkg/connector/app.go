@@ -327,7 +327,7 @@ func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement 
 		Description: fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName),
 		Annotations: annos,
 		GrantableTo: []*v2.ResourceType{resourceTypeGroup, resourceTypeUser},
-		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
+		Purpose:     v2.Entitlement_PURPOSE_VALUE_ASSIGNMENT,
 		Slug:        resource.DisplayName,
 	}
 }

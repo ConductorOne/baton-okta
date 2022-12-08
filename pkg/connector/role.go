@@ -243,7 +243,7 @@ func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role
 		Description: fmt.Sprintf("Has the %s role in Okta", role.Label),
 		Annotations: annos,
 		GrantableTo: []*v2.ResourceType{resourceTypeUser},
-		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
+		Purpose:     v2.Entitlement_PURPOSE_VALUE_ASSIGNMENT,
 		Slug:        role.Type,
 	}
 }
