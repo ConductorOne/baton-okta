@@ -187,7 +187,7 @@ func groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) 
 func groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
 	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
-		Id: fmtResourceIdV1(resource.Id.GetResource()),
+		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 	})
 	return &v2.Entitlement{
 		Id:          fmtResourceRole(resource.Id, resource.Id.GetResource()),
@@ -207,7 +207,7 @@ func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
 
 	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
-		Id: fmtGrantIdV1(resource.Id.Resource, user.Id, groupID),
+		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), user.Id),
 	})
 
 	return &v2.Grant{
