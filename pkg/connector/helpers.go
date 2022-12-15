@@ -11,6 +11,11 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
 
+const (
+	V1MembershipEntitlementIDTemplate = "membership:%s"
+	V1GrantIDTemplate                 = "grant:%s:%s"
+)
+
 type responseContext struct {
 	token *pagination.Token
 
@@ -27,8 +32,12 @@ type responseContext struct {
 	OktaResponse *okta.Response
 }
 
-func fmtGrantIdV1(resourceID string, principalID string, permission string) string {
-	return fmt.Sprintf("%s:%s:%s", resourceID, principalID, permission)
+func V1MembershipEntitlementID(resourceID string) string {
+	return fmt.Sprintf(V1MembershipEntitlementIDTemplate, resourceID)
+}
+
+func fmtGrantIdV1(entitlementID string, userID string) string {
+	return fmt.Sprintf(V1GrantIDTemplate, entitlementID, userID)
 }
 
 func fmtResourceGrant(resourceID *v2.ResourceId, principalId *v2.ResourceId, permission string) string {
