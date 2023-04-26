@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+var errMissingRolePermissions = errors.New("okta-connectorv2: missing role permissions")
 
 // Roles that can only be assigned at the org-wide scope.
 // For full list of roles see: https://developer.okta.com/docs/reference/api/roles/#role-types
@@ -93,9 +96,12 @@ func (o *roleResourceType) Grants(
 	var rv []*v2.Grant
 	qp := queryParams(token.Size, page)
 
-	administratorRoleFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, qp)
-
+	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, qp)
 	if err != nil {
+		// We don't have permissions to fetch role assignments, so return an empty list
+		if errors.Is(err, errMissingRolePermissions) {
+			return nil, "", nil, nil
+		}
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
@@ -109,7 +115,7 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, administratorRoleFlag := range administratorRoleFlags {
+	for _, administratorRoleFlag := range adminFlags {
 		if userHasRoleAccess(administratorRoleFlag, resource) {
 			userID := administratorRoleFlag.UserId
 			roleID := resource.Id.GetResource()
@@ -215,10 +221,15 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 		return nil, nil, err
 	}
 
-	var administratorRoleFlags []*administratorRoleFlags
+	var adminFlags []*administratorRoleFlags
 
-	resp, err := rq.Do(ctx, req, &administratorRoleFlags)
+	resp, err := rq.Do(ctx, req, &adminFlags)
 	if err != nil {
+		// If we don't have access to the role endpoint, we should just return nil
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, nil, errMissingRolePermissions
+		}
+
 		return nil, nil, err
 	}
 
@@ -227,7 +238,7 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 		return nil, nil, err
 	}
 
-	return administratorRoleFlags, respCtx, nil
+	return adminFlags, respCtx, nil
 }
 
 func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) *v2.Entitlement {
