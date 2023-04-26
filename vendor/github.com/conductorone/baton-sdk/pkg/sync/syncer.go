@@ -3,19 +3,21 @@ package sync
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	reader_v2 "github.com/conductorone/baton-sdk/pb/c1/reader/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorstore"
 	"github.com/conductorone/baton-sdk/pkg/types"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -34,6 +36,7 @@ type syncer struct {
 	state             State
 	runDuration       time.Duration
 	transitionHandler func(s Action)
+	progressHandler   func(p *Progress)
 }
 
 // Checkpoint marshals the current state and stores it.
@@ -53,6 +56,12 @@ func (s *syncer) Checkpoint(ctx context.Context) error {
 func (s *syncer) handleInitialActionForStep(ctx context.Context, a Action) {
 	if s.transitionHandler != nil {
 		s.transitionHandler(a)
+	}
+}
+
+func (s *syncer) handleProgress(ctx context.Context, a *Action, c int) {
+	if s.progressHandler != nil {
+		s.progressHandler(NewProgress(a, uint32(c)))
 	}
 }
 
@@ -113,8 +122,15 @@ func (s *syncer) Sync(ctx context.Context) error {
 
 		select {
 		case <-runCtx.Done():
-			l.Info("sync run duration has expired, exiting sync early", zap.String("sync_id", syncID))
-			return ErrSyncNotComplete
+			err = context.Cause(runCtx)
+			switch {
+			case errors.Is(err, context.DeadlineExceeded):
+				l.Info("sync run duration has expired, exiting sync early", zap.String("sync_id", syncID))
+				return ErrSyncNotComplete
+			default:
+				l.Error("sync context cancelled", zap.String("sync_id", syncID), zap.Error(err))
+				return err
+			}
 		default:
 		}
 
@@ -183,6 +199,11 @@ func (s *syncer) Sync(ctx context.Context) error {
 
 	l.Info("Sync complete.")
 
+	err = s.store.Cleanup(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -212,6 +233,8 @@ func (s *syncer) SyncResourceTypes(ctx context.Context) error {
 		}
 	}
 
+	s.handleProgress(ctx, s.state.Current(), len(resp.List))
+
 	if resp.NextPageToken == "" {
 		s.state.FinishAction(ctx)
 		return nil
@@ -225,38 +248,31 @@ func (s *syncer) SyncResourceTypes(ctx context.Context) error {
 	return nil
 }
 
-// subResource is used to track the specific resources that have been visited to avoid infinite loops.
-type subResource struct {
-	resourceTypeId   string
-	parentResourceId *v2.ResourceId
-}
-
 // getSubResources fetches the sub resource types from a resources' annotations.
-func (s *syncer) getSubResources(ctx context.Context, parent *v2.Resource) ([]subResource, error) {
-	var subResources []subResource
-
+func (s *syncer) getSubResources(ctx context.Context, parent *v2.Resource) error {
 	for _, a := range parent.Annotations {
 		if a.MessageIs((*v2.ChildResourceType)(nil)) {
 			crt := &v2.ChildResourceType{}
 			err := a.UnmarshalTo(crt)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			subResources = append(subResources, subResource{
-				parentResourceId: parent.Id,
-				resourceTypeId:   crt.ResourceTypeId,
-			})
+			childAction := Action{
+				Op:                   SyncResourcesOp,
+				ResourceTypeID:       crt.ResourceTypeId,
+				ParentResourceID:     parent.Id.Resource,
+				ParentResourceTypeID: parent.Id.ResourceType,
+			}
+			s.state.PushAction(ctx, childAction)
 		}
 	}
 
-	return subResources, nil
+	return nil
 }
 
 // SyncResources handles fetching all of the resources from the connector given the provided resource types. For each
-// resource, we gather any child resource types it may emit, and traverse the resource tree. Currently this will checkpoint
-// for each root resource type. Additional work to track the history across actions is required for more fine grained
-// checkpointing.
+// resource, we gather any child resource types it may emit, and traverse the resource tree.
 func (s *syncer) SyncResources(ctx context.Context) error {
 	if s.state.Current().ResourceTypeID == "" {
 		ctxzap.Extract(ctx).Info("Syncing resources...")
@@ -285,84 +301,73 @@ func (s *syncer) SyncResources(ctx context.Context) error {
 		return nil
 	}
 
-	visited := make(map[subResource]struct{})
-	subResources := []subResource{{resourceTypeId: s.state.Current().ResourceTypeID}}
+	return s.syncResources(ctx)
+}
 
-	for len(subResources) > 0 {
-		// If the context is cancelled, bail from the loop
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+// syncResources fetches a given resource from the connector, and returns a slice of new child resources to fetch.
+func (s *syncer) syncResources(ctx context.Context) error {
+	req := &v2.ResourcesServiceListResourcesRequest{
+		ResourceTypeId: s.state.ResourceTypeID(ctx),
+		PageToken:      s.state.PageToken(ctx),
+	}
+	if s.state.ParentResourceTypeID(ctx) != "" && s.state.ParentResourceID(ctx) != "" {
+		req.ParentResourceId = &v2.ResourceId{
+			ResourceType: s.state.ParentResourceTypeID(ctx),
+			Resource:     s.state.ParentResourceID(ctx),
 		}
+	}
 
-		subR := subResources[0]
-		subResources = subResources[1:]
-		// If we've seen this subresource before, skip it
-		if _, ok := visited[subR]; ok {
+	c, err := s.connector.C(ctx)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.ListResources(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	s.handleProgress(ctx, s.state.Current(), len(resp.List))
+
+	if resp.NextPageToken == "" {
+		s.state.FinishAction(ctx)
+	} else {
+		err = s.state.NextPage(ctx, resp.NextPageToken)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, r := range resp.List {
+		// Check if we've already synced this resource, skip it if we have
+		_, err = s.store.GetResource(ctx, &reader_v2.ResourceTypesReaderServiceGetResourceRequest{
+			ResourceId: &v2.ResourceId{ResourceType: r.Id.ResourceType, Resource: r.Id.Resource},
+		})
+		if err == nil {
 			continue
 		}
 
-		nested, err := s.syncResources(ctx, subR.resourceTypeId, subR.parentResourceId)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+
+		err = s.validateResourceTraits(ctx, r)
 		if err != nil {
 			return err
 		}
 
-		visited[subR] = struct{}{}
-		subResources = append(subResources, nested...)
-	}
+		err = s.store.PutResource(ctx, r)
+		if err != nil {
+			return err
+		}
 
-	s.state.FinishAction(ctx)
+		err = s.getSubResources(ctx, r)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
-}
-
-// syncResources fetches a given resource from the connector, and returns a slice of new child resources to fetch.
-func (s *syncer) syncResources(ctx context.Context, resourceTypeID string, parentResourceID *v2.ResourceId) ([]subResource, error) {
-	var ret []subResource
-
-	pageToken := ""
-	for {
-		req := &v2.ResourcesServiceListResourcesRequest{
-			ResourceTypeId:   resourceTypeID,
-			ParentResourceId: parentResourceID,
-			PageToken:        pageToken,
-		}
-
-		c, err := s.connector.C(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		resp, err := c.ListResources(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, r := range resp.List {
-			err = s.validateResourceTraits(ctx, r)
-			if err != nil {
-				return nil, err
-			}
-
-			err = s.store.PutResource(ctx, r)
-			if err != nil {
-				return nil, err
-			}
-			subResources, err := s.getSubResources(ctx, r)
-			if err != nil {
-				return nil, err
-			}
-			ret = append(ret, subResources...)
-		}
-
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
-	}
-
-	return ret, nil
 }
 
 func (s *syncer) validateResourceTraits(ctx context.Context, r *v2.Resource) error {
@@ -472,6 +477,8 @@ func (s *syncer) syncEntitlementsForResource(ctx context.Context, resourceID *v2
 			return err
 		}
 	}
+
+	s.handleProgress(ctx, s.state.Current(), len(resp.List))
 
 	if resp.NextPageToken != "" {
 		err = s.state.NextPage(ctx, resp.NextPageToken)
@@ -705,6 +712,8 @@ func (s *syncer) syncGrantsForResource(ctx context.Context, resourceID *v2.Resou
 		}
 	}
 
+	s.handleProgress(ctx, s.state.Current(), len(resp.List))
+
 	if resp.NextPageToken != "" {
 		err = s.state.NextPage(ctx, resp.NextPageToken)
 		if err != nil {
@@ -751,6 +760,15 @@ func WithTransitionHandler(f func(s Action)) SyncOpt {
 	return func(s *syncer) {
 		if f != nil {
 			s.transitionHandler = f
+		}
+	}
+}
+
+// WithProgress sets a `progressHandler` for `NewSyncer` Options.
+func WithProgressHandler(f func(s *Progress)) SyncOpt {
+	return func(s *syncer) {
+		if f != nil {
+			s.progressHandler = f
 		}
 	}
 }
