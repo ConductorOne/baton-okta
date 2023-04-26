@@ -3,8 +3,6 @@ package us3
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -147,7 +145,7 @@ type S3BucketConfig struct {
 }
 
 func parseS3Uri(s3Uri string) (*S3BucketConfig, error) {
-	parsed, err := url.Parse(s3Uri)
+	parsed, err := url.Parse(strings.TrimSpace(s3Uri))
 	if err != nil {
 		return nil, err
 	}
@@ -501,26 +499,12 @@ func (s *S3Client) Put(ctx context.Context, key string, r io.Reader, contentType
 		return err
 	}
 
-	fBytes, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-
-	h := sha256.New()
-	_, err = h.Write(fBytes)
-	if err != nil {
-		return err
-	}
-	shaBytes := h.Sum(nil)
-	sha256Sum := base64.StdEncoding.EncodeToString(shaBytes)
-
 	uploader := s3manager.NewUploader(s3svc)
 	input := &s3.PutObjectInput{
 		ACL:               s3Types.ObjectCannedACLPrivate,
 		Bucket:            awsSdk.String(s.cfg.bucketName),
 		Key:               awsSdk.String(key),
-		Body:              bytes.NewBuffer(fBytes),
-		ChecksumSHA256:    awsSdk.String(sha256Sum),
+		Body:              r,
 		ChecksumAlgorithm: s3Types.ChecksumAlgorithmSha256,
 	}
 
@@ -542,4 +526,8 @@ func (s *S3Client) Put(ctx context.Context, key string, r io.Reader, contentType
 	)
 
 	return nil
+}
+
+func (s *S3Client) BucketName(ctx context.Context) string {
+	return s.cfg.bucketName
 }
