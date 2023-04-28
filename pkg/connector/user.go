@@ -12,7 +12,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const unknownProfileValue = "unknown"
+const (
+	unknownProfileValue     = "unknown"
+	userStatusSuspended     = "SUSPENDED"
+	userStatusDeprovisioned = "DEPROVISIONED"
+)
 
 type userResourceType struct {
 	resourceType *v2.ResourceType
@@ -146,27 +150,30 @@ func userResource(ctx context.Context, user *okta.User) (*v2.Resource, error) {
 // Create and return a User trait for a okta user.
 func userTrait(ctx context.Context, user *okta.User) (*v2.UserTrait, error) {
 	oktaProfile := *user.Profile
-	firstName, lastName := userName(user)
 
 	email, ok := oktaProfile["email"].(string)
 	if !ok {
 		email = unknownProfileValue
 	}
 
-	profile, err := structpb.NewStruct(map[string]interface{}{
-		"first_name": firstName,
-		"last_name":  lastName,
-		"login":      email,
-		"user_id":    user.Id,
-	})
+	profile, err := structpb.NewStruct(oktaProfile)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to construct user profile for user trait: %w", err)
+	}
+
+	var status v2.UserTrait_Status_Status
+	switch user.Status {
+	case userStatusSuspended, userStatusDeprovisioned:
+		status = v2.UserTrait_Status_STATUS_DISABLED
+	default:
+		status = v2.UserTrait_Status_STATUS_ENABLED
 	}
 
 	ret := &v2.UserTrait{
 		Profile: profile,
 		Status: &v2.UserTrait_Status{
-			Status: v2.UserTrait_Status_STATUS_ENABLED,
+			Status:  status,
+			Details: user.Status,
 		},
 	}
 
