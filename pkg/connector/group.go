@@ -3,7 +3,10 @@ package connector
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -12,6 +15,8 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
+
+const membershipUpdatedField = "lastMembershipUpdated"
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
@@ -37,7 +42,7 @@ func (o *groupResourceType) List(
 	var rv []*v2.Resource
 	qp := queryParams(token.Size, page)
 
-	groups, respCtx, err := listGroups(ctx, o.client, token, qp)
+	groups, respCtx, err := o.listGroups(ctx, token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
@@ -53,7 +58,7 @@ func (o *groupResourceType) List(
 	}
 
 	for _, group := range groups {
-		resource, err := groupResource(ctx, group)
+		resource, err := o.groupResource(ctx, group)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -76,9 +81,91 @@ func (o *groupResourceType) Entitlements(
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
-	rv = append(rv, groupEntitlement(ctx, resource))
+	rv = append(rv, o.groupEntitlement(ctx, resource))
 
 	return rv, "", nil, nil
+}
+
+func (o *groupResourceType) fetchEtags(etagValues *v2.ETagMetadata) (time.Time, bool, error) {
+	if etagValues == nil || etagValues.Metadata == nil {
+		return time.Time{}, false, nil
+	}
+
+	fields := etagValues.Metadata.GetFields()
+
+	lastMembershipUpdated, ok := fields[membershipUpdatedField]
+	if !ok {
+		return time.Time{}, false, nil
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, lastMembershipUpdated.GetStringValue())
+	if err != nil {
+		return time.Time{}, false, err
+	}
+
+	return t, true, nil
+}
+
+func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) {
+	if group.LastMembershipUpdated != nil {
+		data, err := structpb.NewStruct(map[string]interface{}{
+			membershipUpdatedField: (*group.LastMembershipUpdated).Format(time.RFC3339Nano),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &v2.ETagMetadata{
+			Metadata: data,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+// handleEtag returns true if listing grants should be skipped
+func (o *groupResourceType) handleEtag(ctx context.Context, resource *v2.Resource) (bool, error) {
+	annos := annotations.Annotations(resource.Annotations)
+	etag := &v2.ETag{}
+	ok, err := annos.Pick(etag)
+	if err != nil {
+		return false, err
+	}
+	// No etag present, continue to do work
+	if !ok || etag.Value == "" {
+		return false, nil
+	}
+
+	etagMd := &v2.ETagMetadata{}
+	ok, err = annos.Pick(etagMd)
+	if err != nil {
+		return false, err
+	}
+
+	// No etag metadata present, continue to do work
+	if !ok || etagMd.Metadata == nil {
+		return false, nil
+	}
+
+	etagTime, err := time.Parse(time.RFC3339Nano, etag.Value)
+	if err != nil {
+		return false, err
+	}
+
+	lastUpdatedAt, ok, err := o.fetchEtags(etagMd)
+	if err != nil {
+		return false, err
+	}
+	// We were unable to get relevant data from the etag metadata, do the work
+	if !ok {
+		return false, nil
+	}
+
+	// The stored etag time is after the lastMembershipUpdated time, so we can skip the work.
+	if etagTime.After(lastUpdatedAt) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (o *groupResourceType) Grants(
@@ -86,6 +173,24 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	skip, err := o.handleEtag(ctx, resource)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	if skip {
+		l.Info(
+			"skipping listing grants for resource due to etag match",
+			zap.String("resource", resource.Id.GetResource()),
+			zap.String("resource_type", resource.Id.GetResourceType()),
+			zap.String("resource_name", resource.DisplayName),
+		)
+		var respAnnos annotations.Annotations
+		respAnnos.Update(&v2.ETagMatch{})
+		return nil, "", respAnnos, nil
+	}
+
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
@@ -94,7 +199,7 @@ func (o *groupResourceType) Grants(
 	var rv []*v2.Grant
 	qp := queryParams(token.Size, page)
 
-	users, respCtx, err := listGroupUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
+	users, respCtx, err := o.listGroupUsers(ctx, resource.Id.GetResource(), token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
 	}
@@ -118,11 +223,18 @@ func (o *groupResourceType) Grants(
 		return nil, "", nil, err
 	}
 
+	if pageToken == "" {
+		etag := &v2.ETag{
+			Value: time.Now().UTC().Format(time.RFC3339Nano),
+		}
+		annos.Update(etag)
+	}
+
 	return rv, pageToken, annos, nil
 }
 
-func listGroups(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := client.Group.ListGroups(ctx, qp)
+func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	groups, resp, err := o.client.Group.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
 	}
@@ -135,8 +247,8 @@ func listGroups(ctx context.Context, client *okta.Client, token *pagination.Toke
 	return groups, reqCtx, nil
 }
 
-func listGroupUsers(ctx context.Context, client *okta.Client, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	users, resp, err := client.Group.ListGroupUsers(ctx, groupID, qp)
+func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
+	users, resp, err := o.client.Group.ListGroupUsers(ctx, groupID, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
 	}
@@ -149,8 +261,8 @@ func listGroupUsers(ctx context.Context, client *okta.Client, groupID string, to
 	return users, reqCtx, nil
 }
 
-func groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error) {
-	trait, err := groupTrait(ctx, group)
+func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error) {
+	trait, err := o.groupTrait(ctx, group)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +273,12 @@ func groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error)
 		Id: fmtResourceIdV1(group.Id),
 	})
 
+	etagMd, err := o.etagMd(group)
+	if err != nil {
+		return nil, err
+	}
+	annos.Update(etagMd)
+
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeGroup.Id, group.Id),
 		DisplayName: group.Profile.Name,
@@ -168,7 +286,7 @@ func groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error)
 	}, nil
 }
 
-func groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
+func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
 	profile, err := structpb.NewStruct(map[string]interface{}{
 		"description": group.Profile.Description,
 		"name":        group.Profile.Name,
@@ -184,7 +302,7 @@ func groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) 
 	return ret, nil
 }
 
-func groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
 	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
