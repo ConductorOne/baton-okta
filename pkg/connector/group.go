@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -173,19 +171,11 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
-
 	skip, err := o.handleEtag(ctx, resource)
 	if err != nil {
 		return nil, "", nil, err
 	}
 	if skip {
-		l.Info(
-			"skipping listing grants for resource due to etag match",
-			zap.String("resource", resource.Id.GetResource()),
-			zap.String("resource_type", resource.Id.GetResourceType()),
-			zap.String("resource_name", resource.DisplayName),
-		)
 		var respAnnos annotations.Annotations
 		respAnnos.Update(&v2.ETagMatch{})
 		return nil, "", respAnnos, nil
