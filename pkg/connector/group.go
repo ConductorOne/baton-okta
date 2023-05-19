@@ -107,7 +107,7 @@ func (o *groupResourceType) fetchEtags(etagValues *v2.ETagMetadata) (time.Time, 
 func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) {
 	if group.LastMembershipUpdated != nil {
 		data, err := structpb.NewStruct(map[string]interface{}{
-			membershipUpdatedField: (*group.LastMembershipUpdated).Format(time.RFC3339Nano),
+			membershipUpdatedField: group.LastMembershipUpdated.Format(time.RFC3339Nano),
 		})
 		if err != nil {
 			return nil, err
@@ -120,7 +120,7 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 	return nil, nil
 }
 
-// handleEtag returns true if listing grants should be skipped
+// handleEtag returns true if listing grants should be skipped.
 func (o *groupResourceType) handleEtag(ctx context.Context, resource *v2.Resource) (bool, error) {
 	annos := annotations.Annotations(resource.Annotations)
 	etag := &v2.ETag{}
