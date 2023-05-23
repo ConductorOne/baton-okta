@@ -120,8 +120,8 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 	return nil, nil
 }
 
-// handleEtag returns true if listing grants should be skipped.
-func (o *groupResourceType) handleEtag(ctx context.Context, resource *v2.Resource) (bool, error) {
+// shouldSkipGroupGrants parses the resource etag, and returns true if listing grants should be skipped.
+func (o *groupResourceType) shouldSkipGroupGrants(ctx context.Context, resource *v2.Resource) (bool, error) {
 	annos := annotations.Annotations(resource.Annotations)
 	etag := &v2.ETag{}
 	ok, err := annos.Pick(etag)
@@ -171,7 +171,7 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	skip, err := o.handleEtag(ctx, resource)
+	skip, err := o.shouldSkipGroupGrants(ctx, resource)
 	if err != nil {
 		return nil, "", nil, err
 	}
