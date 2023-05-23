@@ -3,7 +3,7 @@ module github.com/conductorone/baton-okta
 go 1.20
 
 require (
-	github.com/conductorone/baton-sdk v0.0.30
+	github.com/conductorone/baton-sdk v0.0.31
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/okta/okta-sdk-golang/v2 v2.16.0
 	github.com/spf13/cobra v1.6.1
@@ -76,5 +76,3 @@ require (
 	modernc.org/memory v1.5.0 // indirect
 	modernc.org/sqlite v1.20.4 // indirect
 )
-
-replace github.com/conductorone/baton-sdk => ../baton-sdk
