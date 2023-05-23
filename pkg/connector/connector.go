@@ -23,11 +23,15 @@ type Okta struct {
 	syncInactiveApps bool
 }
 
-func v1AnnotationsForResourceType(resourceTypeID string) annotations.Annotations {
+func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Update(&v2.V1Identifier{
 		Id: resourceTypeID,
 	})
+
+	if skipEntitlementsAndGrants {
+		annos.Update(&v2.SkipEntitlementsAndGrants{})
+	}
 
 	return annos
 }
@@ -37,25 +41,25 @@ var (
 		Id:          "role",
 		DisplayName: "Role",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
-		Annotations: v1AnnotationsForResourceType("role"),
+		Annotations: v1AnnotationsForResourceType("role", false),
 	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          "user",
 		DisplayName: "User",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
-		Annotations: v1AnnotationsForResourceType("user"),
+		Annotations: v1AnnotationsForResourceType("user", true),
 	}
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
 		DisplayName: "Group",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
-		Annotations: v1AnnotationsForResourceType("group"),
+		Annotations: v1AnnotationsForResourceType("group", false),
 	}
 	resourceTypeApp = &v2.ResourceType{
 		Id:          "app",
 		DisplayName: "App",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_APP},
-		Annotations: v1AnnotationsForResourceType("app"),
+		Annotations: v1AnnotationsForResourceType("app", false),
 	}
 )
 
