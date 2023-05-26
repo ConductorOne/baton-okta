@@ -96,6 +96,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 
 	return &v2.ConnectorMetadata{
 		DisplayName: "Okta",
+		Description: "The Okta connector syncs user, group, role, and app data from Okta",
 		Annotations: annos,
 	}, nil
 }
