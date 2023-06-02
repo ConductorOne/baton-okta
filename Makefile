@@ -10,8 +10,6 @@ endif
 
 .PHONY: build
 build:
-	rm -f ${OUTPUT_PATH}
-	mkdir -p ${BUILD_DIR}
 	go build -o ${OUTPUT_PATH} ./cmd/baton-okta
 
 .PHONY: update-deps
