@@ -10,6 +10,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
@@ -80,6 +81,14 @@ func (o *groupResourceType) Entitlements(
 	var rv []*v2.Entitlement
 
 	rv = append(rv, o.groupEntitlement(ctx, resource))
+
+	rv = append(rv, sdkEntitlement.NewPermissionEntitlement(
+		resource,
+		"admin",
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Group Admin", resource.DisplayName)),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Administrator of the %s group", resource.DisplayName)),
+		sdkEntitlement.WithGrantableTo(resourceTypeUser),
+	))
 
 	return rv, "", nil, nil
 }
