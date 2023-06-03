@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -16,6 +17,8 @@ const (
 	unknownProfileValue     = "unknown"
 	userStatusSuspended     = "SUSPENDED"
 	userStatusDeprovisioned = "DEPROVISIONED"
+	groupAdminRoleID        = "KVJUKUS7IFCE2SKO"
+	appAdminRoleID          = "IFIFAX2BIRGUSTQ"
 )
 
 type userResourceType struct {
@@ -87,7 +90,103 @@ func (o *userResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+	}
+
+	var rv []*v2.Grant
+	var nextPage string
+	var annos annotations.Annotations
+
+	qp := queryParams(token.Size, page)
+
+	switch bag.Current().ResourceTypeID {
+	case resourceTypeUser.Id:
+		bag.Pop()
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeGroup.Id,
+		})
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeApp.Id,
+		})
+
+		npt, err := bag.Marshal()
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		return rv, npt, nil, nil
+
+	case resourceTypeGroup.Id:
+		groups, respCtx, err := listGroupsUserIsAdminOf(ctx, o.client, resource.Id.Resource, token, qp)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		if len(groups) == 0 {
+			break
+		}
+
+		nextPage, annos, err = parseResp(respCtx.OktaResponse)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		for _, g := range groups {
+			rv = append(rv, &v2.Grant{
+				Id: fmt.Sprintf("group-grant:%s:admin:%s:%s", g.Id, resource.Id.ResourceType, resource.Id.Resource),
+				Entitlement: &v2.Entitlement{
+					Id: fmt.Sprintf("group:%s:admin", g.Id),
+					Resource: &v2.Resource{
+						Id: &v2.ResourceId{
+							ResourceType: resourceTypeGroup.Id,
+							Resource:     g.Id,
+						},
+					},
+				},
+				Principal: resource,
+			})
+		}
+
+	case resourceTypeApp.Id:
+		apps, respCtx, err := listAppsUserIsAdminOf(ctx, o.client, resource.Id.Resource, token, qp)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		if len(apps) == 0 {
+			break
+		}
+
+		nextPage, annos, err = parseResp(respCtx.OktaResponse)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		for _, a := range apps {
+			rv = append(rv, &v2.Grant{
+				Id: fmt.Sprintf("app-grant:%s:admin:%s:%s", a.Id, resource.Id.ResourceType, resource.Id.Resource),
+				Entitlement: &v2.Entitlement{
+					Id: fmt.Sprintf("app:%s:admin", a.Id),
+					Resource: &v2.Resource{
+						Id: &v2.ResourceId{
+							ResourceType: resourceTypeApp.Id,
+							Resource:     a.Id,
+						},
+					},
+				},
+				Principal: resource,
+			})
+		}
+	}
+
+	npt, err := bag.NextToken(nextPage)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	return rv, npt, annos, nil
 }
 
 func userName(user *okta.User) (string, string) {
@@ -117,6 +216,40 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	return oktaUsers, respCtx, nil
 }
 
+func listGroupsUserIsAdminOf(ctx context.Context, client *okta.Client, userID string, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	groups, resp, err := client.User.ListGroupTargetsForRole(ctx, userID, groupAdminRoleID, qp)
+	if err != nil {
+		// We got an error, but we have a response. If the response is a 404, then the user is not an admin of any groups, can return empty list.
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return nil, nil, nil
+		}
+
+		return nil, nil, err
+	}
+	respCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+	return groups, respCtx, nil
+}
+
+func listAppsUserIsAdminOf(ctx context.Context, client *okta.Client, userID string, token *pagination.Token, qp *query.Params) ([]*okta.CatalogApplication, *responseContext, error) {
+	apps, resp, err := client.User.ListApplicationTargetsForApplicationAdministratorRoleForUser(ctx, userID, appAdminRoleID, qp)
+	if err != nil {
+		// We got an error, but we have a response. If the response is a 404, then the user is not an admin of any apps, can return empty list.
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return nil, nil, nil
+		}
+
+		return nil, nil, err
+	}
+
+	respCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+	return apps, respCtx, nil
+}
 func userBuilder(domain string, apiToken string, client *okta.Client) *userResourceType {
 	return &userResourceType{
 		resourceType: resourceTypeUser,
