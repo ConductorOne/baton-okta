@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	jose "gopkg.in/square/go-jose.v2"
+	jose "github.com/go-jose/go-jose/v3"
 )
 
 // ParsePrivateKey converts a private key from a PEM encoding to a *jose.JSONWebKey.

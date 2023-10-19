@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 
-	jose "gopkg.in/square/go-jose.v2"
+	jose "github.com/go-jose/go-jose/v3"
 )
 
 // RandomNonce provides a basic, random value, conforming to the jose.NonceSource interface.
