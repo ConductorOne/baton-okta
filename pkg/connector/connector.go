@@ -136,7 +136,7 @@ func New(ctx context.Context, config map[string]any) (*Okta, error) {
 
 	apiToken, _ := config["ApiToken"].(string)
 	domain, _ := config["Domain"].(string)
-	oktaClientId, _ := config["OktaClientId"].(string)
+	syncInactiveApps, _ := config["SyncInactiveApps"].(bool)
 	if apiToken != "" && domain != "" {
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
@@ -150,7 +150,7 @@ func New(ctx context.Context, config map[string]any) (*Okta, error) {
 	}
 
 	oktaPrivateKey, _ := config["OktaPrivateKey"].(string)
-	syncInactiveApps, _ := config["SyncInactiveApps"].(bool)
+	oktaClientId, _ := config["OktaClientId"].(string)
 	if oktaClientId != "" && oktaPrivateKey != "" && domain != "" {
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
