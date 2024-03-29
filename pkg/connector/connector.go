@@ -127,20 +127,42 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func New(ctx context.Context, domain, apiToken string, syncInactiveApps bool) (*Okta, error) {
+func New(ctx context.Context, options map[string]any) (*Okta, error) {
+	var oktaClient *okta.Client
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
 		return nil, err
 	}
 
-	_, oktaClient, err := okta.NewClient(ctx,
-		okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
-		okta.WithToken(apiToken),
-		okta.WithHttpClientPtr(client),
-		okta.WithCache(false),
-	)
-	if err != nil {
-		return nil, err
+	apiToken, _ := options["ApiToken"].(string)
+	domain, _ := options["Domain"].(string)
+	oktaClientId, _ := options["OktaClientId"].(string)
+	if apiToken != "" && domain != "" {
+		_, oktaClient, err = okta.NewClient(ctx,
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
+			okta.WithToken(apiToken),
+			okta.WithHttpClientPtr(client),
+			okta.WithCache(false),
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	oktaPrivateKey, _ := options["OktaPrivateKey"].(string)
+	syncInactiveApps, _ := options["SyncInactiveApps"].(bool)
+	if oktaClientId != "" && oktaPrivateKey != "" && domain != "" {
+		_, oktaClient, err = okta.NewClient(ctx,
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
+			okta.WithAuthorizationMode("PrivateKey"),
+			okta.WithClientId(oktaClientId),
+			okta.WithScopes(([]string{"okta.users.manage"})),
+			okta.WithPrivateKey("auth.pem"),
+			okta.WithPrivateKeyId(oktaPrivateKey),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Okta{
