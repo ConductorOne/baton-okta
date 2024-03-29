@@ -373,6 +373,9 @@ func (s *syncer) syncResources(ctx context.Context) error {
 			return err
 		}
 
+		// Set the resource creation source
+		r.CreationSource = v2.Resource_CREATION_SOURCE_CONNECTOR_LIST_RESOURCES
+
 		err = s.store.PutResource(ctx, r)
 		if err != nil {
 			return err
