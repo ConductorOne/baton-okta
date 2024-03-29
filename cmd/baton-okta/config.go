@@ -25,7 +25,7 @@ func validateConfig(ctx context.Context, cfg *config) error {
 		return fmt.Errorf("domain is missing")
 	}
 
-	if cfg.ApiToken == "" {
+	if cfg.OktaClientId == "" && cfg.ApiToken == "" {
 		return fmt.Errorf("api token is missing")
 	}
 

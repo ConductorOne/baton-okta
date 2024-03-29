@@ -156,8 +156,8 @@ func New(ctx context.Context, config map[string]any) (*Okta, error) {
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
 			okta.WithAuthorizationMode("PrivateKey"),
 			okta.WithClientId(oktaClientId),
-			okta.WithScopes(([]string{"okta.users.manage"})),
-			okta.WithPrivateKey("auth.pem"),
+			okta.WithScopes(([]string{"okta.myAccount.manage"})),
+			okta.WithPrivateKey(""),
 			okta.WithPrivateKeyId(oktaPrivateKey),
 		)
 		if err != nil {
