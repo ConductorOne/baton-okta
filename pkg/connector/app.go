@@ -8,6 +8,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -98,6 +99,14 @@ func (o *appResourceType) Entitlements(
 	var rv []*v2.Entitlement
 
 	rv = append(rv, appEntitlement(ctx, resource))
+
+	rv = append(rv, sdkEntitlement.NewPermissionEntitlement(
+		resource,
+		"admin",
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Admin", resource.DisplayName)),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Administrator of the %s application", resource.DisplayName)),
+		sdkEntitlement.WithGrantableTo(resourceTypeUser),
+	))
 
 	return rv, "", nil, nil
 }
@@ -323,7 +332,7 @@ func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement 
 	return &v2.Entitlement{
 		Id:          fmtResourceRole(resource.Id, resource.Id.GetResource()),
 		Resource:    resource,
-		DisplayName: fmt.Sprintf("%s app access", resource.DisplayName),
+		DisplayName: fmt.Sprintf("%s App Access", resource.DisplayName),
 		Description: fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName),
 		Annotations: annos,
 		GrantableTo: []*v2.ResourceType{resourceTypeGroup, resourceTypeUser},
