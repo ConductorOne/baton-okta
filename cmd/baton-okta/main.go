@@ -39,14 +39,14 @@ func main() {
 
 func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	options := map[string]any{
+	config := map[string]any{
 		"Domain":           cfg.Domain,
 		"ApiToken":         cfg.ApiToken,
 		"SyncInactiveApps": cfg.SyncInactiveApps,
 		"OktaClientId":     cfg.OktaClientId,
 		"OktaPrivateKey":   cfg.OktaPrivateKey,
 	}
-	cb, err := connector.New(ctx, options)
+	cb, err := connector.New(ctx, config)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
