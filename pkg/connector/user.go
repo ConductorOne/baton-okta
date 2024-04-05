@@ -3,19 +3,26 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
-	unknownProfileValue     = "unknown"
-	userStatusSuspended     = "SUSPENDED"
-	userStatusDeprovisioned = "DEPROVISIONED"
+	unknownProfileValue       = "unknown"
+	userStatusSuspended       = "SUSPENDED"
+	userStatusDeprovisioned   = "DEPROVISIONED"
+	userStatusActive          = "ACTIVE"
+	userStatusLockedOut       = "LOCKED_OUT"
+	userStatusPasswordExpired = "PASSWORD_EXPIRED"
+	userStatusProvisioned     = "PROVISIONED"
+	userStatusRecovery        = "RECOVERY"
+	userStatusStaged          = "STAGED"
 )
 
 type userResourceType struct {
@@ -133,61 +140,60 @@ func userBuilder(domain string, apiToken string, client *okta.Client) *userResou
 func userResource(ctx context.Context, user *okta.User) (*v2.Resource, error) {
 	firstName, lastName := userName(user)
 
-	trait, err := userTrait(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-	var annos annotations.Annotations
-	annos.Update(trait)
-	annos.Update(&v2.V1Identifier{
-		Id: fmtResourceIdV1(user.Id),
-	})
-
-	return &v2.Resource{
-		Id:          fmtResourceId(resourceTypeUser.Id, user.Id),
-		DisplayName: fmt.Sprintf("%s %s", firstName, lastName),
-		Annotations: annos,
-	}, nil
-}
-
-// Create and return a User trait for a okta user.
-func userTrait(ctx context.Context, user *okta.User) (*v2.UserTrait, error) {
 	oktaProfile := *user.Profile
+	options := []resource.UserTraitOption{
+		resource.WithUserProfile(oktaProfile),
+		// TODO?: use the user types API to figure out the account type
+		// https://developer.okta.com/docs/reference/api/user-types/
+		// resource.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_UNSPECIFIED),
+	}
 
-	email, ok := oktaProfile["email"].(string)
+	displayName, ok := oktaProfile["displayName"].(string)
 	if !ok {
-		email = unknownProfileValue
+		displayName = fmt.Sprintf("%s %s", firstName, lastName)
 	}
 
-	profile, err := structpb.NewStruct(oktaProfile)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to construct user profile for user trait: %w", err)
+	if user.Created != nil {
+		resource.WithCreatedAt(*user.Created)
+	}
+	if user.LastLogin != nil {
+		resource.WithLastLogin(*user.LastLogin)
 	}
 
-	var status v2.UserTrait_Status_Status
-	switch user.Status {
-	case userStatusSuspended, userStatusDeprovisioned:
-		status = v2.UserTrait_Status_STATUS_DISABLED
-	default:
-		status = v2.UserTrait_Status_STATUS_ENABLED
+	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+		options = append(options, resource.WithEmail(email, true))
+	}
+	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" {
+		options = append(options, resource.WithEmail(secondEmail, false))
 	}
 
-	ret := &v2.UserTrait{
-		Profile: profile,
-		Status: &v2.UserTrait_Status{
-			Status:  status,
-			Details: user.Status,
-		},
-	}
-
-	if email != "" {
-		ret.Emails = []*v2.UserTrait_Email{
-			{
-				Address:   email,
-				IsPrimary: true,
-			},
+	if login, ok := oktaProfile["login"].(string); ok {
+		// If possible, calculate shortname alias from login
+		splitLogin := strings.Split(login, "@")
+		if len(splitLogin) == 2 {
+			options = append(options, resource.WithUserLogin(login, splitLogin[0]))
+		} else {
+			options = append(options, resource.WithUserLogin(login))
 		}
 	}
 
-	return ret, nil
+	switch user.Status {
+	// TODO: change userStatusDeprovisioned to STATUS_DELETED once we show deleted stuff in baton & the UI
+	// case userStatusDeprovisioned:
+	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
+	case userStatusSuspended, userStatusLockedOut, userStatusDeprovisioned:
+		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DISABLED, user.Status))
+	case userStatusActive, userStatusProvisioned, userStatusStaged, userStatusPasswordExpired, userStatusRecovery:
+		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_ENABLED, user.Status))
+	default:
+		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_UNSPECIFIED, user.Status))
+	}
+
+	ret, err := resource.NewUserResource(
+		displayName,
+		resourceTypeUser,
+		user.Id,
+		options,
+	)
+	return ret, err
 }
