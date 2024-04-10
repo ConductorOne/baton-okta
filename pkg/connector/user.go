@@ -113,7 +113,7 @@ func userName(user *okta.User) (string, string) {
 }
 
 func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	if qp.Search != "" {
+	if qp.Search == "" {
 		qp.Search = "status pr" // ListUsers doesn't get deactivated users by default. this should fetch them all
 	}
 	oktaUsers, resp, err := client.User.ListUsers(ctx, qp)
