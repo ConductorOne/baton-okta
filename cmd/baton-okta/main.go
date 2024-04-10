@@ -46,6 +46,7 @@ func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, erro
 		"OktaClientId":     cfg.OktaClientId,
 		"OktaPrivateKey":   cfg.OktaPrivateKey,
 		"OktaPrivateKeyId": cfg.OktaPrivateKeyId,
+		"OktaProvisioning": cfg.OktaProvisioning,
 	}
 	cb, err := connector.New(ctx, config)
 	if err != nil {

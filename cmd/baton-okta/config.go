@@ -18,6 +18,7 @@ type config struct {
 	OktaPrivateKey   string `mapstructure:"okta-private-key"`
 	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
 	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
+	OktaProvisioning bool   `mapstructure:"provisioning"`
 }
 
 // validateConfig is run after the configuration is loaded, and should return an error if it isn't valid.
