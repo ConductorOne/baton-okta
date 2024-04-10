@@ -45,6 +45,7 @@ func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, erro
 		"SyncInactiveApps": cfg.SyncInactiveApps,
 		"OktaClientId":     cfg.OktaClientId,
 		"OktaPrivateKey":   cfg.OktaPrivateKey,
+		"OktaPrivateKeyId": cfg.OktaPrivateKeyId,
 	}
 	cb, err := connector.New(ctx, config)
 	if err != nil {

@@ -16,6 +16,7 @@ type config struct {
 	ApiToken         string `mapstructure:"api-token"`
 	OktaClientId     string `mapstructure:"okta-client-id"`
 	OktaPrivateKey   string `mapstructure:"okta-private-key"`
+	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
 	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
 }
 
@@ -37,6 +38,7 @@ func cmdFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("domain", "", "The URL for the Okta organization. ($BATON_DOMAIN)")
 	cmd.PersistentFlags().String("okta-client-id", "", "The Okta Client ID. ($BATON_OKTA_CLIENT_ID)")
 	cmd.PersistentFlags().String("okta-private-key", "", "The Okta Private Key. ($BATON_OKTA_PRIVATE_KEY)")
+	cmd.PersistentFlags().String("okta-private-key-id", "", "The Okta Private Key ID. ($BATON_OKTA_PRIVATE_KEY_ID)")
 	cmd.PersistentFlags().String("api-token", "", "The API token for the service account.  ($BATON_API_TOKEN)")
 	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS)")
 }
