@@ -61,6 +61,28 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_APP},
 		Annotations: v1AnnotationsForResourceType("app", false),
 	}
+	defaultScopes = []string{
+		"okta.users.read",
+		"okta.orgs.read",
+		"okta.groups.read",
+		"okta.roles.read",
+		"okta.profileMappings.read",
+		"okta.policies.read",
+		"okta.myAccount.profile.read",
+		"okta.myAccount.email.read",
+		"okta.apps.read",
+		"okta.appGrants.read",
+		"okta.apiTokens.read",
+		"okta.roles.read",
+	}
+	provisioningScopes = []string{
+		"okta.groups.manage",
+		"okta.roles.manage",
+		"okta.policies.manage",
+		"okta.apps.manage",
+		"okta.appGrants.manage",
+		"okta.apiTokens.manage",
+	}
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
@@ -128,7 +150,10 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 }
 
 func New(ctx context.Context, config map[string]any) (*Okta, error) {
-	var oktaClient *okta.Client
+	var (
+		oktaClient *okta.Client
+		scopes     = []string{}
+	)
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
 		return nil, err
@@ -149,47 +174,23 @@ func New(ctx context.Context, config map[string]any) (*Okta, error) {
 		}
 	}
 
-	oktaPrivateKey, _ := config["OktaPrivateKey"].(string)
 	oktaClientId, _ := config["OktaClientId"].(string)
+	oktaPrivateKey, _ := config["OktaPrivateKey"].(string)
 	oktaPrivateKeyId, _ := config["OktaPrivateKeyId"].(string)
 	provisioningEnabled, _ := config["OktaProvisioning"].(bool)
 	if oktaClientId != "" && oktaPrivateKey != "" && domain != "" {
-		oktaScopes := func(isProvisioningEnabled bool) []string {
-			if isProvisioningEnabled {
-				return []string{
-					"okta.groups.manage",
-					"okta.roles.manage",
-					"okta.policies.manage",
-					"okta.apps.manage",
-					"okta.appGrants.manage",
-					"okta.apiTokens.manage",
-				}
-			}
-
-			return []string{ // default scopes with no provisioning flag
-				"okta.users.read",
-				"okta.orgs.read",
-				"okta.groups.read",
-				"okta.roles.read",
-				"okta.profileMappings.read",
-				"okta.policies.read",
-				"okta.myAccount.profile.read",
-				"okta.myAccount.email.read",
-				"okta.apps.read",
-				"okta.appGrants.read",
-				"okta.apiTokens.read",
-				"okta.roles.read",
-			}
+		if provisioningEnabled {
+			scopes = append(scopes, provisioningScopes...)
+		} else {
+			scopes = append(scopes, defaultScopes...)
 		}
-
-		scopes := oktaScopes(provisioningEnabled)
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
 			okta.WithAuthorizationMode("PrivateKey"),
 			okta.WithClientId(oktaClientId),
 			okta.WithScopes(scopes),
-			okta.WithPrivateKey(oktaPrivateKeyId),
-			okta.WithPrivateKeyId(oktaPrivateKey),
+			okta.WithPrivateKey(oktaPrivateKey),
+			okta.WithPrivateKeyId(oktaPrivateKeyId),
 		)
 		if err != nil {
 			return nil, err
