@@ -17,6 +17,16 @@ BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
 ```
 
+## Applications
+
+```
+BATON_OKTA_CLIENT_ID=appClientID \
+BATON_OKTA_PRIVATE_KEY='auth0.pem' \
+BATON_OKTA_PRIVATE_KEY_ID=appKID \
+BATON_DOMAIN=domain-1234.okta.com baton-okta
+baton resources
+```
+
 ## docker
 
 ```
@@ -66,17 +76,20 @@ Available Commands:
   help               Help about any command
 
 Flags:
-      --api-token string       The API token for the service account.  ($BATON_API_TOKEN)
-      --client-id string       The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
-      --client-secret string   The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
-      --domain string          The URL for the Okta organization. ($BATON_DOMAIN)
-  -f, --file string            The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
-  -h, --help                   help for baton-okta
-      --log-format string      The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
-      --log-level string       The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
-  -p, --provisioning           This must be set in order for provisioning actions to be enabled. ($BATON_PROVISIONING)
-      --sync-inactive-apps     Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS) (default true)
-  -v, --version                version for baton-okta
+      --api-token string             The API token for the service account.  ($BATON_API_TOKEN)
+      --client-id string             The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
+      --client-secret string         The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
+      --domain string                The URL for the Okta organization. ($BATON_DOMAIN)
+  -f, --file string                  The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
+  -h, --help                         help for baton-okta
+      --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
+      --log-level string             The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
+      --okta-client-id string        The Okta Client ID. ($BATON_OKTA_CLIENT_ID)
+      --okta-private-key string      The Okta Private Key. ($BATON_OKTA_PRIVATE_KEY)
+      --okta-private-key-id string   The Okta Private Key ID. ($BATON_OKTA_PRIVATE_KEY_ID)
+  -p, --provisioning                 This must be set in order for provisioning actions to be enabled. ($BATON_PROVISIONING)
+      --sync-inactive-apps           Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS) (default true)
+  -v, --version                      version for baton-okta
 
 Use "baton-okta [command] --help" for more information about a command.
 ```
