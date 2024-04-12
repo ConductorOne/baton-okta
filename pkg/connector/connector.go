@@ -63,14 +63,13 @@ var (
 	}
 	defaultScopes = []string{
 		"okta.users.read",
-		"okta.orgs.read",
 		"okta.groups.read",
 		"okta.roles.read",
 		"okta.apps.read",
+		"okta.authenticators.read",
 	}
 	provisioningScopes = []string{
 		"okta.users.manage",
-		"okta.orgs.manage",
 		"okta.groups.manage",
 		"okta.roles.manage",
 		"okta.apps.manage",
