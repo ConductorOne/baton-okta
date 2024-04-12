@@ -85,7 +85,7 @@ Flags:
       --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
       --log-level string             The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
       --okta-client-id string        The Okta Client ID. ($BATON_OKTA_CLIENT_ID)
-      --okta-private-key string      The Okta Private Key. This can be the whole private key or the path to the private key, ($BATON_OKTA_PRIVATE_KEY)
+      --okta-private-key string      The Okta Private Key. This can be the whole private key or the path to the private key. ($BATON_OKTA_PRIVATE_KEY)
       --okta-private-key-id string   The Okta Private Key ID. ($BATON_OKTA_PRIVATE_KEY_ID)
   -p, --provisioning                 This must be set in order for provisioning actions to be enabled. ($BATON_PROVISIONING)
       --sync-inactive-apps           Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS) (default true)
