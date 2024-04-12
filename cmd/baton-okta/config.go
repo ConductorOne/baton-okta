@@ -27,8 +27,18 @@ func validateConfig(ctx context.Context, cfg *config) error {
 		return fmt.Errorf("domain is missing")
 	}
 
-	if cfg.OktaClientId == "" && cfg.ApiToken == "" {
-		return fmt.Errorf("api token is missing")
+	if cfg.ApiToken != "" {
+		if cfg.OktaClientId != "" {
+			return fmt.Errorf("api token and client id cannot be provided simultaneously")
+		}
+
+		if cfg.OktaClientId != "" && cfg.OktaPrivateKey != "" && cfg.OktaPrivateKeyId != "" {
+			return fmt.Errorf("either api token or client id is required")
+		}
+	}
+
+	if cfg.OktaClientId != "" && cfg.OktaPrivateKey == "" && cfg.OktaPrivateKeyId == "" {
+		return fmt.Errorf("private key and private key id required")
 	}
 
 	return nil
