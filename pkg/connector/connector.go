@@ -141,7 +141,9 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func New(ctx context.Context, config map[string]any) (*Okta, error) {
+func New(ctx context.Context, domain, apiToken,
+	oktaClientId, oktaPrivateKey, oktaPrivateKeyId string,
+	syncInactiveApps, provisioningEnabled bool) (*Okta, error) {
 	var (
 		oktaClient *okta.Client
 		scopes     = defaultScopes
@@ -151,9 +153,6 @@ func New(ctx context.Context, config map[string]any) (*Okta, error) {
 		return nil, err
 	}
 
-	apiToken, _ := config["ApiToken"].(string)
-	domain, _ := config["Domain"].(string)
-	syncInactiveApps, _ := config["SyncInactiveApps"].(bool)
 	if apiToken != "" && domain != "" {
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
@@ -166,10 +165,6 @@ func New(ctx context.Context, config map[string]any) (*Okta, error) {
 		}
 	}
 
-	oktaClientId, _ := config["OktaClientId"].(string)
-	oktaPrivateKey, _ := config["OktaPrivateKey"].(string)
-	oktaPrivateKeyId, _ := config["OktaPrivateKeyId"].(string)
-	provisioningEnabled, _ := config["OktaProvisioning"].(bool)
 	if oktaClientId != "" && oktaPrivateKey != "" && domain != "" {
 		if provisioningEnabled {
 			scopes = append(scopes, provisioningScopes...)
