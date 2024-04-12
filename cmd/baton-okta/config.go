@@ -38,7 +38,7 @@ func validateConfig(ctx context.Context, cfg *config) error {
 func cmdFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("domain", "", "The URL for the Okta organization. ($BATON_DOMAIN)")
 	cmd.PersistentFlags().String("okta-client-id", "", "The Okta Client ID. ($BATON_OKTA_CLIENT_ID)")
-	cmd.PersistentFlags().String("okta-private-key", "", "The Okta Private Key. ($BATON_OKTA_PRIVATE_KEY)")
+	cmd.PersistentFlags().String("okta-private-key", "", "The Okta Private Key. This can be the whole private key or the path to the private key, ($BATON_OKTA_PRIVATE_KEY)")
 	cmd.PersistentFlags().String("okta-private-key-id", "", "The Okta Private Key ID. ($BATON_OKTA_PRIVATE_KEY_ID)")
 	cmd.PersistentFlags().String("api-token", "", "The API token for the service account.  ($BATON_API_TOKEN)")
 	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS)")

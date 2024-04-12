@@ -17,11 +17,11 @@ BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
 ```
 
-## Applications
+Or auth using a public/private keypair
 
 ```
 BATON_OKTA_CLIENT_ID=appClientID \
-BATON_OKTA_PRIVATE_KEY='auth0.pem' \
+BATON_OKTA_PRIVATE_KEY='auth.key' \
 BATON_OKTA_PRIVATE_KEY_ID=appKID \
 BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
