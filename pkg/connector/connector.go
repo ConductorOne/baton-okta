@@ -66,7 +66,6 @@ var (
 		"okta.groups.read",
 		"okta.roles.read",
 		"okta.apps.read",
-		"okta.authenticators.read",
 	}
 	provisioningScopes = []string{
 		"okta.users.manage",
@@ -115,24 +114,27 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 }
 
 func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
-	token := newPaginationToken(defaultLimit, "")
+	if c.apiToken != "" {
+		l := ctxzap.Extract(ctx)
+		token := newPaginationToken(defaultLimit, "")
 
-	_, respCtx, err := getOrgSettings(ctx, c.client, token)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connector: verify failed to fetch org: %w", err)
+		_, respCtx, err := getOrgSettings(ctx, c.client, token)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: verify failed to fetch org: %w", err)
+		}
+
+		_, _, err = parseResp(respCtx.OktaResponse)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: verify failed to parse response: %w", err)
+		}
+
+		if respCtx.OktaResponse.StatusCode != http.StatusOK {
+			err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", respCtx.OktaResponse.StatusCode)
+			l.Error("Invalid Status Code from Verity", zap.Error(err))
+			return nil, err
+		}
 	}
 
-	_, _, err = parseResp(respCtx.OktaResponse)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connector: verify failed to parse response: %w", err)
-	}
-
-	if respCtx.OktaResponse.StatusCode != http.StatusOK {
-		err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", respCtx.OktaResponse.StatusCode)
-		l.Error("Invalid Status Code from Verity", zap.Error(err))
-		return nil, err
-	}
 	return nil, nil
 }
 
@@ -168,7 +170,6 @@ func New(ctx context.Context, domain, apiToken,
 		if provisioningEnabled {
 			scopes = append(scopes, provisioningScopes...)
 		}
-
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
 			okta.WithAuthorizationMode("PrivateKey"),
