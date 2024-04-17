@@ -4,25 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/conductorone/baton-sdk/pkg/cli"
+	"github.com/conductorone/baton-okta/pkg/connector"
 	"github.com/spf13/cobra"
 )
 
-// config defines the external configuration required for the connector to run.
-type config struct {
-	cli.BaseConfig `mapstructure:",squash"` // Puts the base config options in the same place as the connector options
-
-	Domain           string `mapstructure:"domain"`
-	ApiToken         string `mapstructure:"api-token"`
-	OktaClientId     string `mapstructure:"okta-client-id"`
-	OktaPrivateKey   string `mapstructure:"okta-private-key"`
-	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
-	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
-	OktaProvisioning bool   `mapstructure:"provisioning"`
-}
-
 // validateConfig is run after the configuration is loaded, and should return an error if it isn't valid.
-func validateConfig(ctx context.Context, cfg *config) error {
+func validateConfig(ctx context.Context, cfg *connector.Config) error {
 	if cfg.Domain == "" {
 		return fmt.Errorf("domain is missing")
 	}

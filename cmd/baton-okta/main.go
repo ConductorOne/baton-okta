@@ -19,7 +19,7 @@ var version = "dev"
 func main() {
 	ctx := context.Background()
 
-	cfg := &config{}
+	cfg := &connector.Config{}
 	cmd, err := cli.NewCmd(ctx, "baton-okta", cfg, validateConfig, getConnector)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -37,10 +37,9 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, cfg *connector.Config) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	c := setConfig(cfg)
-	cb, err := connector.New(ctx, c)
+	cb, err := connector.New(ctx, cfg)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
@@ -53,15 +52,4 @@ func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, erro
 	}
 
 	return connector, nil
-}
-
-func setConfig(cfg *config) *connector.Okta {
-	cfgOAuth2 := &connector.ConfigOAuth2{
-		OktaClientId:            cfg.OktaClientId,
-		OktaPrivateKey:          cfg.OktaPrivateKey,
-		OktaPrivateKeyId:        cfg.OktaPrivateKeyId,
-		OktaProvisioningEnabled: cfg.OktaProvisioning,
-	}
-	oktaCon := connector.NewOktaClient(cfg.Domain, cfg.ApiToken, cfg.SyncInactiveApps, cfgOAuth2)
-	return oktaCon
 }

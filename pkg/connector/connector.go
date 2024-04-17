@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -19,14 +20,19 @@ type Okta struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
-	config           *ConfigOAuth2
 }
 
-type ConfigOAuth2 struct {
-	OktaClientId            string
-	OktaPrivateKey          string
-	OktaPrivateKeyId        string
-	OktaProvisioningEnabled bool
+// config defines the external configuration required for the connector to run.
+type Config struct {
+	cli.BaseConfig `mapstructure:",squash"` // Puts the base config options in the same place as the connector options
+
+	Domain           string `mapstructure:"domain"`
+	ApiToken         string `mapstructure:"api-token"`
+	OktaClientId     string `mapstructure:"okta-client-id"`
+	OktaPrivateKey   string `mapstructure:"okta-private-key"`
+	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
+	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
+	OktaProvisioning bool   `mapstructure:"provisioning"`
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -146,22 +152,7 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func NewOktaClient(domain, apiToken string, syncInactiveApps bool, cfg *ConfigOAuth2) *Okta {
-	return &Okta{
-		client:           &okta.Client{},
-		domain:           domain,
-		apiToken:         apiToken,
-		syncInactiveApps: syncInactiveApps,
-		config: &ConfigOAuth2{
-			OktaClientId:            cfg.OktaClientId,
-			OktaPrivateKey:          cfg.OktaPrivateKey,
-			OktaPrivateKeyId:        cfg.OktaPrivateKeyId,
-			OktaProvisioningEnabled: cfg.OktaProvisioningEnabled,
-		},
-	}
-}
-
-func New(ctx context.Context, o *Okta) (*Okta, error) {
+func New(ctx context.Context, cfg *Config) (*Okta, error) {
 	var (
 		oktaClient *okta.Client
 		scopes     = defaultScopes
@@ -171,10 +162,10 @@ func New(ctx context.Context, o *Okta) (*Okta, error) {
 		return nil, err
 	}
 
-	if o.apiToken != "" && o.domain != "" {
+	if cfg.ApiToken != "" && cfg.Domain != "" {
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", o.domain)),
-			okta.WithToken(o.apiToken),
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
+			okta.WithToken(cfg.ApiToken),
 			okta.WithHttpClientPtr(client),
 			okta.WithCache(false),
 		)
@@ -183,17 +174,17 @@ func New(ctx context.Context, o *Okta) (*Okta, error) {
 		}
 	}
 
-	if o.config.OktaClientId != "" && o.config.OktaPrivateKey != "" && o.domain != "" {
-		if o.config.OktaProvisioningEnabled {
+	if cfg.OktaClientId != "" && cfg.OktaPrivateKey != "" && cfg.Domain != "" {
+		if cfg.OktaProvisioning {
 			scopes = append(scopes, provisioningScopes...)
 		}
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", o.domain)),
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
 			okta.WithAuthorizationMode("PrivateKey"),
-			okta.WithClientId(o.config.OktaClientId),
+			okta.WithClientId(cfg.OktaClientId),
 			okta.WithScopes(scopes),
-			okta.WithPrivateKey(o.config.OktaPrivateKey),
-			okta.WithPrivateKeyId(o.config.OktaPrivateKeyId),
+			okta.WithPrivateKey(cfg.OktaPrivateKey),
+			okta.WithPrivateKeyId(cfg.OktaPrivateKeyId),
 			okta.WithCache(false),
 		)
 		if err != nil {
@@ -203,8 +194,8 @@ func New(ctx context.Context, o *Okta) (*Okta, error) {
 
 	return &Okta{
 		client:           oktaClient,
-		domain:           o.domain,
-		apiToken:         o.apiToken,
-		syncInactiveApps: o.syncInactiveApps,
+		domain:           cfg.Domain,
+		apiToken:         cfg.ApiToken,
+		syncInactiveApps: cfg.SyncInactiveApps,
 	}, nil
 }
