@@ -9,9 +9,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"go.uber.org/zap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 )
@@ -21,6 +19,14 @@ type Okta struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
+	config           *ConfigOAuth2
+}
+
+type ConfigOAuth2 struct {
+	OktaClientId            string
+	OktaPrivateKey          string
+	OktaPrivateKeyId        string
+	OktaProvisioningEnabled bool
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -115,7 +121,6 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 
 func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 	if c.apiToken != "" {
-		l := ctxzap.Extract(ctx)
 		token := newPaginationToken(defaultLimit, "")
 
 		_, respCtx, err := getOrgSettings(ctx, c.client, token)
@@ -130,7 +135,6 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 
 		if respCtx.OktaResponse.StatusCode != http.StatusOK {
 			err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", respCtx.OktaResponse.StatusCode)
-			l.Error("Invalid Status Code from Verity", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -142,9 +146,22 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func New(ctx context.Context, domain, apiToken,
-	oktaClientId, oktaPrivateKey, oktaPrivateKeyId string,
-	syncInactiveApps, provisioningEnabled bool) (*Okta, error) {
+func NewOktaClient(domain, apiToken string, syncInactiveApps bool, cfg *ConfigOAuth2) *Okta {
+	return &Okta{
+		client:           &okta.Client{},
+		domain:           domain,
+		apiToken:         apiToken,
+		syncInactiveApps: syncInactiveApps,
+		config: &ConfigOAuth2{
+			OktaClientId:            cfg.OktaClientId,
+			OktaPrivateKey:          cfg.OktaPrivateKey,
+			OktaPrivateKeyId:        cfg.OktaPrivateKeyId,
+			OktaProvisioningEnabled: cfg.OktaProvisioningEnabled,
+		},
+	}
+}
+
+func New(ctx context.Context, o *Okta) (*Okta, error) {
 	var (
 		oktaClient *okta.Client
 		scopes     = defaultScopes
@@ -154,10 +171,10 @@ func New(ctx context.Context, domain, apiToken,
 		return nil, err
 	}
 
-	if apiToken != "" && domain != "" {
+	if o.apiToken != "" && o.domain != "" {
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
-			okta.WithToken(apiToken),
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", o.domain)),
+			okta.WithToken(o.apiToken),
 			okta.WithHttpClientPtr(client),
 			okta.WithCache(false),
 		)
@@ -166,17 +183,18 @@ func New(ctx context.Context, domain, apiToken,
 		}
 	}
 
-	if oktaClientId != "" && oktaPrivateKey != "" && domain != "" {
-		if provisioningEnabled {
+	if o.config.OktaClientId != "" && o.config.OktaPrivateKey != "" && o.domain != "" {
+		if o.config.OktaProvisioningEnabled {
 			scopes = append(scopes, provisioningScopes...)
 		}
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", domain)),
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", o.domain)),
 			okta.WithAuthorizationMode("PrivateKey"),
-			okta.WithClientId(oktaClientId),
+			okta.WithClientId(o.config.OktaClientId),
 			okta.WithScopes(scopes),
-			okta.WithPrivateKey(oktaPrivateKey),
-			okta.WithPrivateKeyId(oktaPrivateKeyId),
+			okta.WithPrivateKey(o.config.OktaPrivateKey),
+			okta.WithPrivateKeyId(o.config.OktaPrivateKeyId),
+			okta.WithCache(false),
 		)
 		if err != nil {
 			return nil, err
@@ -185,8 +203,8 @@ func New(ctx context.Context, domain, apiToken,
 
 	return &Okta{
 		client:           oktaClient,
-		domain:           domain,
-		apiToken:         apiToken,
-		syncInactiveApps: syncInactiveApps,
+		domain:           o.domain,
+		apiToken:         o.apiToken,
+		syncInactiveApps: o.syncInactiveApps,
 	}, nil
 }

@@ -39,9 +39,8 @@ func main() {
 
 func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	cb, err := connector.New(ctx, cfg.Domain, cfg.ApiToken,
-		cfg.OktaClientId, cfg.OktaPrivateKey, cfg.OktaPrivateKeyId,
-		cfg.SyncInactiveApps, cfg.OktaProvisioning)
+	c := setConfig(cfg)
+	cb, err := connector.New(ctx, c)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
@@ -54,4 +53,15 @@ func getConnector(ctx context.Context, cfg *config) (types.ConnectorServer, erro
 	}
 
 	return connector, nil
+}
+
+func setConfig(cfg *config) *connector.Okta {
+	cfgOAuth2 := &connector.ConfigOAuth2{
+		OktaClientId:            cfg.OktaClientId,
+		OktaPrivateKey:          cfg.OktaPrivateKey,
+		OktaPrivateKeyId:        cfg.OktaPrivateKeyId,
+		OktaProvisioningEnabled: cfg.OktaProvisioning,
+	}
+	oktaCon := connector.NewOktaClient(cfg.Domain, cfg.ApiToken, cfg.SyncInactiveApps, cfgOAuth2)
+	return oktaCon
 }
