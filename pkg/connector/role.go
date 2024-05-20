@@ -323,6 +323,14 @@ func roleTrait(ctx context.Context, role *okta.Role) (*v2.RoleTrait, error) {
 	return ret, nil
 }
 
+func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	return nil, nil
+}
+
+func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	return nil, nil
+}
+
 func roleBuilder(domain string, apiToken string, client *okta.Client) *roleResourceType {
 	return &roleResourceType{
 		resourceType: resourceTypeRole,

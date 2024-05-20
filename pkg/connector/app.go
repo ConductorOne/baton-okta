@@ -374,33 +374,10 @@ func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser) *v2.Gran
 	}
 }
 
-// type logo struct {
-// 	URL      string
-// 	Name     string
-// 	MimeType string
-// }
+func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	return nil, nil
+}
 
-// func oktaApplogos(ctx context.Context, app *okta.Application) ([]*logo, error) {
-// 	links, ok := app.Links.(map[string]interface{})
-// 	if !ok {
-// 		return nil, fmt.Errorf("okta-connectorv2: error parsing okta app links")
-// 	}
-
-// 	oktaLogos, ok := links["logo"].([]interface{})
-// 	if !ok {
-// 		return nil, fmt.Errorf("okta-connectorv2: error parsing okta logo from links")
-// 	}
-
-// 	var logos []*logo
-// 	for _, oktaLogo := range oktaLogos {
-// 		logo := logo{}
-// 		logoIMap, _ := oktaLogo.(map[string]interface{})
-// 		logo.URL, _ = logoIMap["href"].(string)
-// 		logo.Name, _ = logoIMap["name"].(string)
-// 		logo.MimeType, _ = logoIMap["type"].(string)
-
-// 		logos = append(logos, &logo)
-// 	}
-
-// 	return logos, nil
-// }
+func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	return nil, nil
+}

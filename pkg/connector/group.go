@@ -329,6 +329,14 @@ func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
 	}
 }
 
+func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	return nil, nil
+}
+
+func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	return nil, nil
+}
+
 func groupBuilder(domain string, apiToken string, client *okta.Client) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
