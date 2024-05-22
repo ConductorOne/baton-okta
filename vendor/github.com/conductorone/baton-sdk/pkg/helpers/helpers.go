@@ -25,27 +25,32 @@ func SplitFullName(name string) (string, string) {
 	return firstName, lastName
 }
 
-func ExtractRateLimitData(header *http.Header) (*v2.RateLimitDescription, error) {
+func ExtractRateLimitData(statusCode int, header *http.Header) (*v2.RateLimitDescription, error) {
 	if header == nil {
 		return nil, nil
 	}
 
-	var l int64
+	var rlstatus v2.RateLimitDescription_Status
+
+	var limit int64
 	var err error
-	limit := header.Get("X-Ratelimit-Limit")
-	if limit != "" {
-		l, err = strconv.ParseInt(limit, 10, 64)
+	limitStr := header.Get("X-Ratelimit-Limit")
+	if limitStr != "" {
+		limit, err = strconv.ParseInt(limitStr, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	var r int64
-	remaining := header.Get("X-Ratelimit-Remaining")
-	if remaining != "" {
-		r, err = strconv.ParseInt(remaining, 10, 64)
+	var remaining int64
+	remainingStr := header.Get("X-Ratelimit-Remaining")
+	if remainingStr != "" {
+		remaining, err = strconv.ParseInt(remainingStr, 10, 64)
 		if err != nil {
 			return nil, err
+		}
+		if remaining > 0 {
+			rlstatus = v2.RateLimitDescription_STATUS_OK
 		}
 	}
 
@@ -60,9 +65,18 @@ func ExtractRateLimitData(header *http.Header) (*v2.RateLimitDescription, error)
 		resetAt = time.Now().Add(time.Second * time.Duration(res))
 	}
 
+	// If we didn't get any rate limit headers and status code is 429, return some sane defaults
+	if limit == 0 && remaining == 0 && resetAt.IsZero() && statusCode == http.StatusTooManyRequests {
+		limit = 1
+		remaining = 0
+		resetAt = time.Now().Add(time.Second * 60)
+		rlstatus = v2.RateLimitDescription_STATUS_OVERLIMIT
+	}
+
 	return &v2.RateLimitDescription{
-		Limit:     l,
-		Remaining: r,
+		Status:    rlstatus,
+		Limit:     limit,
+		Remaining: remaining,
 		ResetAt:   timestamppb.New(resetAt),
 	}, nil
 }
@@ -77,4 +91,21 @@ func IsJSONContentType(contentType string) bool {
 	}
 
 	return true
+}
+
+var xmlContentTypes []string = []string{
+	"text/xml",
+	"application/xml",
+}
+
+func IsXMLContentType(contentType string) bool {
+	// there are some janky APIs out there
+	normalizedContentType := strings.TrimSpace(strings.ToLower(contentType))
+
+	for _, xmlContentType := range xmlContentTypes {
+		if normalizedContentType == xmlContentType {
+			return true
+		}
+	}
+	return false
 }

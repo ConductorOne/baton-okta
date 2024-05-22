@@ -9,8 +9,10 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -324,10 +326,76 @@ func roleTrait(ctx context.Context, role *okta.Role) (*v2.RoleTrait, error) {
 }
 
 func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	if principal.Id.ResourceType != resourceTypeUser.Id {
+		l.Warn(
+			"okta-connector: only users or groups can be granted role membership",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted repo membership")
+	}
+
+	userID := principal.Id.Resource
+	roleID := entitlement.Resource.Id.Resource
+	role := okta.AssignRoleRequest{
+		Type: roleID,
+	}
+	createdRole, response, err := g.client.User.AssignRoleToUser(ctx, userID, role, nil)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: failed to add role: %s %s", err.Error(), response.Body)
+	}
+
+	l.Warn("Role Membership has been created.",
+		zap.String("ID", createdRole.Id),
+		zap.String("Description", createdRole.Description),
+		zap.Time("CreatedAt", *createdRole.Created),
+		zap.String("Label", createdRole.Label),
+		zap.String("Status", createdRole.Status),
+		zap.String("Type", createdRole.Type),
+	)
+
 	return nil, nil
 }
 
 func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	entitlement := grant.Entitlement
+	principal := grant.Principal
+	createdRoleId := ""
+	if principal.Id.ResourceType != resourceTypeUser.Id {
+		l.Warn(
+			"okta-connector: only users or groups can have role membership revoked",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector:only users or groups can have role membership revoked")
+	}
+
+	createdRoleType := entitlement.Resource.Id.Resource
+	userId := principal.Id.Resource
+	roles, response, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: failed to get roles: %s %s", err.Error(), response.Body)
+	}
+
+	for _, v := range roles {
+		if v.Type == createdRoleType && v.Status == "ACTIVE" {
+			createdRoleId = v.Id
+			break
+		}
+	}
+
+	response, err = g.client.User.RemoveRoleFromUser(ctx, userId, createdRoleId)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: failed to remove role: %s %s", err.Error(), response.Body)
+	}
+
+	l.Warn("Membership has been revoked..",
+		zap.String("Status", response.Status),
+		zap.Any("Response", response.Body),
+	)
+
 	return nil, nil
 }
 
