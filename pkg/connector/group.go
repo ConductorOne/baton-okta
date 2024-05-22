@@ -333,8 +333,6 @@ func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
 
 func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
-	fmt.Println("-- principal")
-	fmt.Println(principal)
 	if principal.Id.ResourceType != resourceTypeUser.Id {
 		l.Warn(
 			"okta-connector: only users or groups can be granted role membership",
