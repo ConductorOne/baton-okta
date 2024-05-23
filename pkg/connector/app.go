@@ -59,7 +59,6 @@ func (o *appResourceType) List(
 
 	var rv []*v2.Resource
 	qp := queryParams(token.Size, page)
-
 	apps, respCtx, err := listApps(ctx, o.client, o.syncInactiveApps, token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
