@@ -9,6 +9,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -42,12 +44,12 @@ func fmtGrantIdV1(entitlementID string, userID string) string {
 
 func fmtResourceGrant(resourceID *v2.ResourceId, principalId *v2.ResourceId, permission string) string {
 	return fmt.Sprintf(
-		"%s-grant:%s:%s:%s:%s",
+		"%s:%s:%s:%s:%s",
 		resourceID.ResourceType,
 		resourceID.Resource,
+		permission,
 		principalId.ResourceType,
 		principalId.Resource,
-		permission,
 	)
 }
 
@@ -105,4 +107,10 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	ret.hasRateLimit = hasLimit
 
 	return ret, nil
+}
+
+func titleCase(s string) string {
+	titleCaser := cases.Title(language.English)
+
+	return titleCaser.String(s)
 }

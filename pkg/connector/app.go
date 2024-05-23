@@ -98,7 +98,6 @@ func (o *appResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-
 	rv = append(rv, appEntitlement(ctx, resource))
 
 	return rv, "", nil, nil
@@ -174,7 +173,14 @@ func (o *appResourceType) listAppGroupGrants(
 	}
 
 	for _, applicationGroupAssignment := range applicationGroupAssignments {
-		rv = append(rv, appGroupGrant(resource, applicationGroupAssignment))
+		roles, _, err := o.client.Group.ListGroupAssignedRoles(ctx, applicationGroupAssignment.Id, nil)
+		if err != nil {
+			return nil, annos, bag, err
+		}
+
+		for _, role := range roles {
+			rv = append(rv, appGroupGrant(resource, applicationGroupAssignment, role.Type))
+		}
 	}
 
 	return rv, annos, bag, nil
@@ -206,7 +212,14 @@ func (o *appResourceType) listAppUsersGrants(
 	}
 
 	for _, applicationUser := range applicationUsers {
-		rv = append(rv, appUserGrant(resource, applicationUser))
+		roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, applicationUser.Id, nil)
+		if err != nil {
+			return nil, annos, bag, err
+		}
+
+		for _, role := range roles {
+			rv = append(rv, appUserGrant(resource, applicationUser, role.Type))
+		}
 	}
 
 	return rv, annos, bag, nil
@@ -334,18 +347,17 @@ func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement 
 	}
 }
 
-func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment) *v2.Grant {
+func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment, roleType string) *v2.Grant {
+	var annos annotations.Annotations
 	appID := resource.Id.GetResource()
 	groupID := applicationGroupAssignment.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
-
-	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 	})
 
 	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, appID),
+		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
 			Id:       fmtResourceRole(resource.Id, appID),
 			Resource: resource,
@@ -355,18 +367,17 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 	}
 }
 
-func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser) *v2.Grant {
+func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType string) *v2.Grant {
+	var annos annotations.Annotations
 	appID := resource.Id.GetResource()
 	userID := applicationUser.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
-
-	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
 	})
 
 	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, appID),
+		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
 			Id:       fmtResourceRole(resource.Id, appID),
 			Resource: resource,
