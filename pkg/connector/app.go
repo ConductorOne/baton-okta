@@ -353,7 +353,6 @@ func appEntitlement(ctx context.Context, resource *v2.Resource, permission strin
 
 func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment, roleType string) *v2.Grant {
 	var annos annotations.Annotations
-	// appID := resource.Id.GetResource()
 	groupID := applicationGroupAssignment.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
 	annos.Update(&v2.V1Identifier{
@@ -363,11 +362,7 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 	return &v2.Grant{
 		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
-			Id: fmtResourceRole(resource.Id, roleType),
-			// Id: fmt.Sprintf("%s:%s:%s",resource.Id.ResourceType,
-			// 	resource.Id.Resource,
-			// 	roleType,
-			// ),
+			Id:       fmtResourceRole(resource.Id, roleType),
 			Resource: resource,
 		},
 		Annotations: annos,
@@ -377,7 +372,6 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 
 func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType string) *v2.Grant {
 	var annos annotations.Annotations
-	// appID := resource.Id.GetResource()
 	userID := applicationUser.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 	annos.Update(&v2.V1Identifier{
@@ -388,12 +382,7 @@ func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType
 		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
 			Id: fmtResourceRole(resource.Id, roleType),
-			// Id: fmt.Sprintf(
-			// 	"%s:%s:%s",
-			// 	resource.Id.ResourceType,
-			// 	resource.Id.Resource,
-			// 	roleType,
-			// ),
+
 			Resource: resource,
 		},
 		Annotations: annos,
