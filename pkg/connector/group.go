@@ -80,8 +80,9 @@ func (o *groupResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-
-	rv = append(rv, o.groupEntitlement(ctx, resource))
+	for _, level := range standardRoleTypes {
+		rv = append(rv, o.groupEntitlement(ctx, resource, level.Type))
+	}
 
 	return rv, "", nil, nil
 }
@@ -294,13 +295,13 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 	return ret, nil
 }
 
-func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource, permission string) *v2.Entitlement {
 	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 	})
 	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, resource.Id.GetResource()),
+		Id:          fmtResourceRole(resource.Id, permission),
 		Resource:    resource,
 		DisplayName: fmt.Sprintf("%s Group Member", resource.DisplayName),
 		Description: fmt.Sprintf("Member of %s group in Okta", resource.DisplayName),

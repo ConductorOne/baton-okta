@@ -97,7 +97,9 @@ func (o *appResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-	rv = append(rv, appEntitlement(ctx, resource))
+	for _, level := range standardRoleTypes {
+		rv = append(rv, appEntitlement(ctx, resource, level.Type))
+	}
 
 	return rv, "", nil, nil
 }
@@ -107,13 +109,14 @@ func (o *appResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	var (
+		rv    []*v2.Grant
+		annos annotations.Annotations
+	)
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
-
-	var rv []*v2.Grant
-	var annos annotations.Annotations
 
 	switch bag.ResourceID() {
 	case "":
@@ -153,9 +156,8 @@ func (o *appResourceType) listAppGroupGrants(
 	bag *pagination.Bag,
 	page string,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
-	qp := queryParams(token.Size, page)
 	var rv []*v2.Grant
-
+	qp := queryParams(token.Size, page)
 	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
@@ -192,9 +194,8 @@ func (o *appResourceType) listAppUsersGrants(
 	bag *pagination.Bag,
 	page string,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
-	qp := queryParams(token.Size, page)
 	var rv []*v2.Grant
-
+	qp := queryParams(token.Size, page)
 	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
@@ -329,13 +330,17 @@ func appTrait(ctx context.Context, app *okta.Application) (*v2.AppTrait, error) 
 	return ret, nil
 }
 
-func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+func appEntitlement(ctx context.Context, resource *v2.Resource, permission string) *v2.Entitlement {
 	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 	})
 	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, resource.Id.GetResource()),
+		Id: fmt.Sprintf("%s:%s:%s",
+			resource.Id.ResourceType,
+			resource.Id.Resource,
+			permission,
+		),
 		Resource:    resource,
 		DisplayName: fmt.Sprintf("%s app access", resource.DisplayName),
 		Description: fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName),
@@ -348,7 +353,7 @@ func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement 
 
 func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment, roleType string) *v2.Grant {
 	var annos annotations.Annotations
-	appID := resource.Id.GetResource()
+	// appID := resource.Id.GetResource()
 	groupID := applicationGroupAssignment.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
 	annos.Update(&v2.V1Identifier{
@@ -358,7 +363,11 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 	return &v2.Grant{
 		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, appID),
+			Id: fmtResourceRole(resource.Id, roleType),
+			// Id: fmt.Sprintf("%s:%s:%s",resource.Id.ResourceType,
+			// 	resource.Id.Resource,
+			// 	roleType,
+			// ),
 			Resource: resource,
 		},
 		Annotations: annos,
@@ -368,7 +377,7 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 
 func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType string) *v2.Grant {
 	var annos annotations.Annotations
-	appID := resource.Id.GetResource()
+	// appID := resource.Id.GetResource()
 	userID := applicationUser.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 	annos.Update(&v2.V1Identifier{
@@ -378,7 +387,13 @@ func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType
 	return &v2.Grant{
 		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, appID),
+			Id: fmtResourceRole(resource.Id, roleType),
+			// Id: fmt.Sprintf(
+			// 	"%s:%s:%s",
+			// 	resource.Id.ResourceType,
+			// 	resource.Id.Resource,
+			// 	roleType,
+			// ),
 			Resource: resource,
 		},
 		Annotations: annos,

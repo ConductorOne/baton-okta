@@ -64,9 +64,10 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 
 func fmtResourceRole(resourceID *v2.ResourceId, role string) string {
 	return fmt.Sprintf(
-		"%s:%s",
+		"%s:%s:%s",
 		resourceID.ResourceType,
 		resourceID.Resource,
+		role,
 	)
 }
 

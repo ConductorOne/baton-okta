@@ -90,14 +90,13 @@ func (o *roleResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	var rv []*v2.Grant
 	bag, page, err := parsePageToken(token.Token, resource.Id)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	var rv []*v2.Grant
 	qp := queryParams(token.Size, page)
-
 	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, qp)
 	if err != nil {
 		// We don't have permissions to fetch role assignments, so return an empty list
@@ -121,7 +120,6 @@ func (o *roleResourceType) Grants(
 		if userHasRoleAccess(administratorRoleFlag, resource) {
 			userID := administratorRoleFlag.UserId
 			roleID := resource.Id.GetResource()
-
 			rv = append(rv, roleGrant(userID, roleID, resource))
 		}
 	}
@@ -291,9 +289,8 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 }
 
 func roleGrant(userID string, roleID string, resource *v2.Resource) *v2.Grant {
-	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
-
 	var annos annotations.Annotations
+	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
 	})
