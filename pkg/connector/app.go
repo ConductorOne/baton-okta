@@ -335,12 +335,9 @@ func appEntitlement(ctx context.Context, resource *v2.Resource, permission strin
 	annos.Update(&v2.V1Identifier{
 		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 	})
+
 	return &v2.Entitlement{
-		Id: fmt.Sprintf("%s:%s:%s",
-			resource.Id.ResourceType,
-			resource.Id.Resource,
-			permission,
-		),
+		Id:          fmtResourceRole(resource.Id, permission),
 		Resource:    resource,
 		DisplayName: fmt.Sprintf("%s app access", resource.DisplayName),
 		Description: fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName),

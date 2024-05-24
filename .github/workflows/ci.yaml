@@ -45,10 +45,10 @@ jobs:
       BATON_API_TOKEN: ${{ secrets.BATON_API_TOKEN }}
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
       # The following parameters are passed to grant/revoke commands
-      CONNECTOR_GRANT: 'group:778441812670942:member:user:5346803201281760'
-      CONNECTOR_ENTITLEMENT: 'group:778441812670942:member'
+      CONNECTOR_GRANT: 'role:SUPER_ADMIN:SUPER_ADMIN:user:00uabxhr038fRJQPd5d7'
+      CONNECTOR_ENTITLEMENT: 'role:SUPER_ADMIN:SUPER_ADMIN'
       CONNECTOR_PRINCIPAL_TYPE: 'user'
-      CONNECTOR_PRINCIPAL: '5346803201281760'
+      CONNECTOR_PRINCIPAL: '00uabxhr038fRJQPd5d7'
     steps:
       - name: Install Go
         uses: actions/setup-go@v4
