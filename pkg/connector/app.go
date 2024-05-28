@@ -397,11 +397,11 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 	l := ctxzap.Extract(ctx)
 	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
-			"okta-connector: only users or groups can be granted role membership",
+			"okta-connector: only users or groups can be granted app membership",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector: only users or groups can be granted repo membership")
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted app membership")
 	}
 
 	appID := entitlement.Resource.Id.Resource
@@ -443,11 +443,11 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		assignedUser, response, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
 		if err != nil {
 			l.Warn(
-				"okta-connector: The role specified canot be assigned to the user",
+				"okta-connector: The app specified cannot be assigned to the user",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: The role specified canot be assigned to the user %s %s",
+			return nil, fmt.Errorf("okta-connector: The app specified cannot be assigned to the user %s %s",
 				err.Error(), response.Body)
 		}
 
@@ -497,11 +497,11 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	principal := grant.Principal
 	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
-			"okta-connector: only users or groups can have role membership revoked",
+			"okta-connector: only users or groups can have app membership revoked",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector:only users or groups can have role membership revoked")
+		return nil, fmt.Errorf("okta-connector:only users or groups can have app membership revoked")
 	}
 
 	appID := entitlement.Resource.Id.Resource
@@ -511,11 +511,11 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		_, _, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
 			l.Warn(
-				"okta-connector: user does not have role membership",
+				"okta-connector: user does not have app membership",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: user does not have role membership: %s", err.Error())
+			return nil, fmt.Errorf("okta-connector: user does not have app membership: %s", err.Error())
 		}
 
 		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
@@ -533,11 +533,11 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		_, _, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
 		if err != nil {
 			l.Warn(
-				"okta-connector: group does not have role membership",
+				"okta-connector: group does not have app membership",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: group does not have role membership: %s", err.Error())
+			return nil, fmt.Errorf("okta-connector: group does not have app membership: %s", err.Error())
 		}
 
 		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
