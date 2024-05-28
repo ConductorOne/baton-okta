@@ -547,7 +547,7 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: user does not have app membership: %v", err)
+			return nil, fmt.Errorf("okta-connector: user does not have app membership: %s", err.Error())
 		}
 
 		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
