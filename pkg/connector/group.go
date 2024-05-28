@@ -321,10 +321,8 @@ func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.R
 }
 
 func groupGrant(resource *v2.Resource, user *okta.User, permission string) *v2.Grant {
-	// groupID := resource.Id.GetResource()
-	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: user.Id}}
-
 	var annos annotations.Annotations
+	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: user.Id}}
 	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), user.Id),
 	})
