@@ -408,9 +408,25 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
-		appUser, _, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
-		if err != nil && !strings.Contains(err.Error(), "Resource not found") {
-			return nil, fmt.Errorf("okta-connector: %s", err.Error())
+		appUser, response, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+
+			if errOkta.ErrorCode != "E0000007" {
+				l.Warn(
+					"okta-connector: ",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.String("ErrorCode", errOkta.ErrorCode),
+					zap.String("ErrorSummary", errOkta.ErrorSummary),
+				)
+
+				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+			}
 		}
 
 		if appUser != nil && userID == appUser.Id {
@@ -459,9 +475,25 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		)
 	case resourceTypeGroup.Id:
 		groupID := principal.Id.Resource
-		appGroup, _, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
-		if err != nil && !strings.Contains(err.Error(), "Resource not found") {
-			return nil, fmt.Errorf("okta-connector: %s", err.Error())
+		appGroup, response, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil {
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+
+			if errOkta.ErrorCode != "E0000007" {
+				l.Warn(
+					"okta-connector: ",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.String("ErrorCode", errOkta.ErrorCode),
+					zap.String("ErrorSummary", errOkta.ErrorSummary),
+				)
+
+				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+			}
 		}
 
 		if appGroup != nil && groupID == appGroup.Id {
@@ -515,7 +547,7 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: user does not have app membership: %s", err.Error())
+			return nil, fmt.Errorf("okta-connector: user does not have app membership: %v", err)
 		}
 
 		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)

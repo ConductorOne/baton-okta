@@ -345,13 +345,23 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 		}
 		createdRole, response, err := g.client.User.AssignRoleToUser(ctx, userID, role, nil)
 		if err != nil {
-			l.Warn(
-				"okta-connector: The role specified is already assigned to the user",
-				zap.String("principal_id", principal.Id.String()),
-				zap.String("principal_type", principal.Id.ResourceType),
-			)
-			return nil, fmt.Errorf("okta-connector: The role specified is already assigned to the user %s %s",
-				err.Error(), response.Body)
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+
+			if errOkta.ErrorCode == "E0000090" {
+				l.Warn(
+					"okta-connector: The role specified is already assigned to the user",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.String("ErrorCode", errOkta.ErrorCode),
+					zap.String("ErrorSummary", errOkta.ErrorSummary),
+				)
+			}
+
+			return nil, fmt.Errorf("okta-connector: %v", errOkta)
 		}
 
 		l.Warn("Role Membership has been created.",
@@ -369,13 +379,23 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 		}
 		createdRole, response, err := g.client.Group.AssignRoleToGroup(ctx, groupID, role, nil)
 		if err != nil {
-			l.Warn(
-				"okta-connector: The role specified is already assigned to the group",
-				zap.String("principal_id", principal.Id.String()),
-				zap.String("principal_type", principal.Id.ResourceType),
-			)
-			return nil, fmt.Errorf("okta-connector: The role specified is already assigned to the group %s %s",
-				err.Error(), response.Body)
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+
+			if errOkta.ErrorCode == "E0000090" {
+				l.Warn(
+					"okta-connector: The role specified is already assigned to the group",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.String("ErrorCode", errOkta.ErrorCode),
+					zap.String("ErrorSummary", errOkta.ErrorSummary),
+				)
+			}
+
+			return nil, fmt.Errorf("okta-connector: %v", errOkta)
 		}
 
 		l.Warn("Role Membership has been created.",
@@ -397,7 +417,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
 	principal := grant.Principal
-	createdRoleId := ""
+	roleId := ""
 	if principal.Id.ResourceType != resourceTypeUser.Id {
 		l.Warn(
 			"okta-connector: only users or groups can have role membership revoked",
@@ -429,7 +449,8 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 			return nil, fmt.Errorf("okta-connector: user does not have role membership")
 		}
 
-		response, err = g.client.User.RemoveRoleFromUser(ctx, userId, createdRoleId)
+		roleId = roles[rolePos].Id
+		response, err = g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to remove role: %s %s", err.Error(), response.Body)
 		}
@@ -451,15 +472,16 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		})
 		if rolePos == NF {
 			l.Warn(
-				"okta-connector: user does not have role membership",
+				"okta-connector: group does not have role membership",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.String("role_type", entitlement.Resource.Id.Resource),
 			)
-			return nil, fmt.Errorf("okta-connector: user does not have role membership")
+			return nil, fmt.Errorf("okta-connector: group does not have role membership")
 		}
 
-		response, err = g.client.Group.RemoveRoleFromGroup(ctx, groupId, createdRoleId)
+		roleId = roles[rolePos].Id
+		response, err = g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to remove role: %s %s", err.Error(), response.Body)
 		}

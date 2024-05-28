@@ -1,7 +1,9 @@
 package connector
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"time"
 
@@ -106,4 +108,19 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	ret.hasRateLimit = hasLimit
 
 	return ret, nil
+}
+
+func getError(response *okta.Response) (okta.Error, error) {
+	var errOkta okta.Error
+	bytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return okta.Error{}, err
+	}
+
+	err = json.Unmarshal(bytes, &errOkta)
+	if err != nil {
+		return okta.Error{}, err
+	}
+
+	return errOkta, nil
 }
