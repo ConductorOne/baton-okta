@@ -349,15 +349,15 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 		return nil, fmt.Errorf("okta-connector: only users can be granted group membership")
 	}
 
-	groupID := entitlement.Resource.Id.Resource
-	userID := principal.Id.Resource
-	users, _, err := g.client.Group.ListGroupUsers(ctx, groupID, nil)
+	groupId := entitlement.Resource.Id.Resource
+	userId := principal.Id.Resource
+	users, _, err := g.client.Group.ListGroupUsers(ctx, groupId, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	groupPos := slices.IndexFunc(users, func(u *okta.User) bool {
-		return u.Id == userID
+		return u.Id == userId
 	})
 	if groupPos != NF {
 		l.Warn(
@@ -368,7 +368,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 		return nil, fmt.Errorf("okta-connector: The user specified is already a member of the group")
 	}
 
-	response, err := g.client.Group.AddUserToGroup(ctx, groupID, userID)
+	response, err := g.client.Group.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, err
 	}

@@ -336,14 +336,14 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 		return nil, fmt.Errorf("okta-connector: only users or groups can be granted repo membership")
 	}
 
-	roleID := entitlement.Resource.Id.Resource
+	roleId := entitlement.Resource.Id.Resource
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
-		userID := principal.Id.Resource
+		userId := principal.Id.Resource
 		role := okta.AssignRoleRequest{
-			Type: roleID,
+			Type: roleId,
 		}
-		createdRole, response, err := g.client.User.AssignRoleToUser(ctx, userID, role, nil)
+		createdRole, response, err := g.client.User.AssignRoleToUser(ctx, userId, role, nil)
 		if err != nil {
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -373,11 +373,11 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			zap.String("Type", createdRole.Type),
 		)
 	case resourceTypeGroup.Id:
-		groupID := principal.Id.Resource
+		groupId := principal.Id.Resource
 		role := okta.AssignRoleRequest{
-			Type: roleID,
+			Type: roleId,
 		}
-		createdRole, response, err := g.client.Group.AssignRoleToGroup(ctx, groupID, role, nil)
+		createdRole, response, err := g.client.Group.AssignRoleToGroup(ctx, groupId, role, nil)
 		if err != nil {
 			defer response.Body.Close()
 			errOkta, err := getError(response)
