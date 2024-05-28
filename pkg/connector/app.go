@@ -413,16 +413,14 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			return nil, fmt.Errorf("okta-connector: %s", err.Error())
 		}
 
-		if appUser != nil {
-			if userID == appUser.Id {
-				l.Warn(
-					"okta-connector: The app specified is already assigned to the user",
-					zap.String("principal_id", principal.Id.String()),
-					zap.String("principal_type", principal.Id.ResourceType),
-					zap.Any("Profile", appUser.Profile),
-				)
-				return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the user")
-			}
+		if appUser != nil && userID == appUser.Id {
+			l.Warn(
+				"okta-connector: The app specified is already assigned to the user",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+				zap.Any("Profile", appUser.Profile),
+			)
+			return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the user")
 		}
 
 		user, _, err := g.client.User.GetUser(ctx, userID)
@@ -442,9 +440,15 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			Id:    userID,
 			Scope: strings.ToUpper(principal.Id.ResourceType),
 		}
-		assignedUser, _, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
+		assignedUser, response, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
 		if err != nil {
-			return nil, err
+			l.Warn(
+				"okta-connector: The role specified canot be assigned to the user",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return nil, fmt.Errorf("okta-connector: The role specified canot be assigned to the user %s %s",
+				err.Error(), response.Body)
 		}
 
 		l.Warn("App Membership has been created.",
@@ -460,16 +464,14 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			return nil, fmt.Errorf("okta-connector: %s", err.Error())
 		}
 
-		if appGroup != nil {
-			if groupID == appGroup.Id {
-				l.Warn(
-					"okta-connector: The app specified is already assigned to the group",
-					zap.String("principal_id", principal.Id.String()),
-					zap.String("principal_type", principal.Id.ResourceType),
-					zap.Any("Profile", appGroup.Profile),
-				)
-				return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the group")
-			}
+		if appGroup != nil && groupID == appGroup.Id {
+			l.Warn(
+				"okta-connector: The app specified is already assigned to the group",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+				zap.Any("Profile", appGroup.Profile),
+			)
+			return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the group")
 		}
 
 		payload := okta.ApplicationGroupAssignment{}
