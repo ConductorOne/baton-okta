@@ -358,8 +358,8 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 		return nil, err
 	}
 
-	groupPos := slices.IndexFunc(users, func(c *okta.User) bool {
-		return c.Id == userID
+	groupPos := slices.IndexFunc(users, func(u *okta.User) bool {
+		return u.Id == userID
 	})
 	if groupPos != NF {
 		l.Warn(

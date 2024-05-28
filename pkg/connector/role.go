@@ -436,8 +436,8 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 			return nil, fmt.Errorf("okta-connector: failed to get roles: %s %s", err.Error(), response.Body)
 		}
 
-		rolePos := slices.IndexFunc(roles, func(c *okta.Role) bool {
-			return c.Type == roleType && c.Status == "ACTIVE"
+		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
+			return r.Type == roleType && r.Status == "ACTIVE"
 		})
 		if rolePos == NF {
 			l.Warn(
@@ -467,8 +467,8 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 			return nil, fmt.Errorf("okta-connector: failed to get roles: %s %s", err.Error(), response.Body)
 		}
 
-		rolePos := slices.IndexFunc(roles, func(c *okta.Role) bool {
-			return c.Type == roleType && c.Status == "ACTIVE"
+		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
+			return r.Type == roleType && r.Status == "ACTIVE"
 		})
 		if rolePos == NF {
 			l.Warn(
