@@ -1,7 +1,9 @@
 package connector
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"time"
 
@@ -42,12 +44,12 @@ func fmtGrantIdV1(entitlementID string, userID string) string {
 
 func fmtResourceGrant(resourceID *v2.ResourceId, principalId *v2.ResourceId, permission string) string {
 	return fmt.Sprintf(
-		"%s-grant:%s:%s:%s:%s",
+		"%s:%s:%s:%s:%s",
 		resourceID.ResourceType,
 		resourceID.Resource,
+		permission,
 		principalId.ResourceType,
 		principalId.Resource,
-		permission,
 	)
 }
 
@@ -64,9 +66,10 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 
 func fmtResourceRole(resourceID *v2.ResourceId, role string) string {
 	return fmt.Sprintf(
-		"%s:%s",
+		"%s:%s:%s",
 		resourceID.ResourceType,
 		resourceID.Resource,
+		role,
 	)
 }
 
@@ -105,4 +108,19 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	ret.hasRateLimit = hasLimit
 
 	return ret, nil
+}
+
+func getError(response *okta.Response) (okta.Error, error) {
+	var errOkta okta.Error
+	bytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return okta.Error{}, err
+	}
+
+	err = json.Unmarshal(bytes, &errOkta)
+	if err != nil {
+		return okta.Error{}, err
+	}
+
+	return errOkta, nil
 }

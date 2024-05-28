@@ -7,7 +7,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.x
+          go-version: 1.22.x
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Run linters
@@ -18,7 +18,7 @@ jobs:
   go-test:
     strategy:
       matrix:
-        go-version: [1.20.x]
+        go-version: [1.22.x]
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
@@ -36,3 +36,49 @@ jobs:
         uses: guyarb/golang-test-annotations@v0.5.1
         with:
           test-results: test.json
+  
+  test:
+    runs-on: ubuntu-latest
+    env:
+      BATON_LOG_LEVEL: debug
+      # Add any environment variables needed to run baton-bitbucket-datacenter
+      BATON_API_TOKEN: ${{ secrets.BATON_API_TOKEN }}
+      BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
+      # The following parameters are passed to grant/revoke commands
+      CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:SUPER_ADMIN:user:00ug0t0xjvnHRbQuD5d7'
+      CONNECTOR_ENTITLEMENT: 'app:0oaf4rf37pg7W4B6a5d7:SUPER_ADMIN'
+      CONNECTOR_PRINCIPAL_TYPE: 'user'
+      CONNECTOR_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7'
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22.x
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install baton
+        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
+      - name: Build baton-okta
+        run: go build ./cmd/baton-okta
+      - name: Run baton-okta
+        run: ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+      - name: Check for grant before revoking
+        run: |
+          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+          baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+      - name: Revoke grants
+        run: |
+          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }} --revoke-grant ${{ env.CONNECTOR_GRANT }}
+      - name: Check grant was revoked
+        run: |
+           ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+           baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource !=\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+      - name: Grant entitlement
+        run: | 
+          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }} --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
+      - name: Check grant was re-granted
+        run: |
+          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+          baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"

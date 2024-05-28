@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -57,7 +61,6 @@ func (o *appResourceType) List(
 
 	var rv []*v2.Resource
 	qp := queryParams(token.Size, page)
-
 	apps, respCtx, err := listApps(ctx, o.client, o.syncInactiveApps, token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
@@ -96,8 +99,9 @@ func (o *appResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-
-	rv = append(rv, appEntitlement(ctx, resource))
+	for _, level := range standardRoleTypes {
+		rv = append(rv, appEntitlement(ctx, resource, level.Type))
+	}
 
 	return rv, "", nil, nil
 }
@@ -107,13 +111,14 @@ func (o *appResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	var (
+		rv    []*v2.Grant
+		annos annotations.Annotations
+	)
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
-
-	var rv []*v2.Grant
-	var annos annotations.Annotations
 
 	switch bag.ResourceID() {
 	case "":
@@ -153,9 +158,8 @@ func (o *appResourceType) listAppGroupGrants(
 	bag *pagination.Bag,
 	page string,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
-	qp := queryParams(token.Size, page)
 	var rv []*v2.Grant
-
+	qp := queryParams(token.Size, page)
 	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
@@ -172,7 +176,14 @@ func (o *appResourceType) listAppGroupGrants(
 	}
 
 	for _, applicationGroupAssignment := range applicationGroupAssignments {
-		rv = append(rv, appGroupGrant(resource, applicationGroupAssignment))
+		roles, _, err := o.client.Group.ListGroupAssignedRoles(ctx, applicationGroupAssignment.Id, nil)
+		if err != nil {
+			return nil, annos, bag, err
+		}
+
+		for _, role := range roles {
+			rv = append(rv, appGroupGrant(resource, applicationGroupAssignment, role.Type))
+		}
 	}
 
 	return rv, annos, bag, nil
@@ -185,9 +196,8 @@ func (o *appResourceType) listAppUsersGrants(
 	bag *pagination.Bag,
 	page string,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
-	qp := queryParams(token.Size, page)
 	var rv []*v2.Grant
-
+	qp := queryParams(token.Size, page)
 	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
@@ -204,7 +214,14 @@ func (o *appResourceType) listAppUsersGrants(
 	}
 
 	for _, applicationUser := range applicationUsers {
-		rv = append(rv, appUserGrant(resource, applicationUser))
+		roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, applicationUser.Id, nil)
+		if err != nil {
+			return nil, annos, bag, err
+		}
+
+		for _, role := range roles {
+			rv = append(rv, appUserGrant(resource, applicationUser, role.Type))
+		}
 	}
 
 	return rv, annos, bag, nil
@@ -315,13 +332,14 @@ func appTrait(ctx context.Context, app *okta.Application) (*v2.AppTrait, error) 
 	return ret, nil
 }
 
-func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+func appEntitlement(ctx context.Context, resource *v2.Resource, permission string) *v2.Entitlement {
 	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 	})
+
 	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, resource.Id.GetResource()),
+		Id:          fmtResourceRole(resource.Id, permission),
 		Resource:    resource,
 		DisplayName: fmt.Sprintf("%s app access", resource.DisplayName),
 		Description: fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName),
@@ -332,20 +350,18 @@ func appEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement 
 	}
 }
 
-func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment) *v2.Grant {
-	appID := resource.Id.GetResource()
+func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment, roleType string) *v2.Grant {
+	var annos annotations.Annotations
 	groupID := applicationGroupAssignment.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
-
-	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 	})
 
 	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, appID),
+		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, appID),
+			Id:       fmtResourceRole(resource.Id, roleType),
 			Resource: resource,
 		},
 		Annotations: annos,
@@ -353,20 +369,19 @@ func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.Appli
 	}
 }
 
-func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser) *v2.Grant {
-	appID := resource.Id.GetResource()
+func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType string) *v2.Grant {
+	var annos annotations.Annotations
 	userID := applicationUser.Id
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
-
-	var annos annotations.Annotations
 	annos.Update(&v2.V1Identifier{
 		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
 	})
 
 	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, appID),
+		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
 		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, appID),
+			Id: fmtResourceRole(resource.Id, roleType),
+
 			Resource: resource,
 		},
 		Annotations: annos,
@@ -374,33 +389,202 @@ func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser) *v2.Gran
 	}
 }
 
-// type logo struct {
-// 	URL      string
-// 	Name     string
-// 	MimeType string
-// }
+func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	var (
+		ok    bool
+		email string
+	)
+	l := ctxzap.Extract(ctx)
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
+		l.Warn(
+			"okta-connector: only users or groups can be granted app membership",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted app membership")
+	}
 
-// func oktaApplogos(ctx context.Context, app *okta.Application) ([]*logo, error) {
-// 	links, ok := app.Links.(map[string]interface{})
-// 	if !ok {
-// 		return nil, fmt.Errorf("okta-connectorv2: error parsing okta app links")
-// 	}
+	appID := entitlement.Resource.Id.Resource
+	switch principal.Id.ResourceType {
+	case resourceTypeUser.Id:
+		userID := principal.Id.Resource
+		appUser, response, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
 
-// 	oktaLogos, ok := links["logo"].([]interface{})
-// 	if !ok {
-// 		return nil, fmt.Errorf("okta-connectorv2: error parsing okta logo from links")
-// 	}
+			if errOkta.ErrorCode != "E0000007" {
+				l.Warn(
+					"okta-connector: ",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.String("ErrorCode", errOkta.ErrorCode),
+					zap.String("ErrorSummary", errOkta.ErrorSummary),
+				)
 
-// 	var logos []*logo
-// 	for _, oktaLogo := range oktaLogos {
-// 		logo := logo{}
-// 		logoIMap, _ := oktaLogo.(map[string]interface{})
-// 		logo.URL, _ = logoIMap["href"].(string)
-// 		logo.Name, _ = logoIMap["name"].(string)
-// 		logo.MimeType, _ = logoIMap["type"].(string)
+				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+			}
+		}
 
-// 		logos = append(logos, &logo)
-// 	}
+		if appUser != nil && userID == appUser.Id {
+			l.Warn(
+				"okta-connector: The app specified is already assigned to the user",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+				zap.Any("Profile", appUser.Profile),
+			)
+			return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the user")
+		}
 
-// 	return logos, nil
-// }
+		user, _, err := g.client.User.GetUser(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		profile := *user.Profile
+		if email, ok = profile["email"].(string); !ok {
+			email = unknownProfileValue
+		}
+
+		payload := okta.AppUser{
+			Credentials: &okta.AppUserCredentials{
+				UserName: email,
+			},
+			Id:    userID,
+			Scope: strings.ToUpper(principal.Id.ResourceType),
+		}
+		assignedUser, response, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
+		if err != nil {
+			l.Warn(
+				"okta-connector: The app specified cannot be assigned to the user",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return nil, fmt.Errorf("okta-connector: The app specified cannot be assigned to the user %s %s",
+				err.Error(), response.Body)
+		}
+
+		l.Warn("App Membership has been created.",
+			zap.String("userID", assignedUser.Id),
+			zap.String("Status", assignedUser.Status),
+			zap.Time("LastUpdated", *assignedUser.LastUpdated),
+			zap.String("Scope", assignedUser.Scope),
+		)
+	case resourceTypeGroup.Id:
+		groupID := principal.Id.Resource
+		appGroup, response, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil {
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+
+			if errOkta.ErrorCode != "E0000007" {
+				l.Warn(
+					"okta-connector: ",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.String("ErrorCode", errOkta.ErrorCode),
+					zap.String("ErrorSummary", errOkta.ErrorSummary),
+				)
+
+				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+			}
+		}
+
+		if appGroup != nil && groupID == appGroup.Id {
+			l.Warn(
+				"okta-connector: The app specified is already assigned to the group",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+				zap.Any("Profile", appGroup.Profile),
+			)
+			return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the group")
+		}
+
+		payload := okta.ApplicationGroupAssignment{}
+		assignedGroup, _, err := g.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
+		if err != nil {
+			return nil, err
+		}
+
+		l.Warn("App Membership has been created.",
+			zap.String("userID", assignedGroup.Id),
+			zap.Time("LastUpdated", *assignedGroup.LastUpdated),
+		)
+	default:
+		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
+	}
+
+	return nil, nil
+}
+
+func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	entitlement := grant.Entitlement
+	principal := grant.Principal
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
+		l.Warn(
+			"okta-connector: only users or groups can have app membership revoked",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector:only users or groups can have app membership revoked")
+	}
+
+	appID := entitlement.Resource.Id.Resource
+	switch principal.Id.ResourceType {
+	case resourceTypeUser.Id:
+		userID := principal.Id.Resource
+		_, _, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			l.Warn(
+				"okta-connector: user does not have app membership",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return nil, fmt.Errorf("okta-connector: user does not have app membership: %s", err.Error())
+		}
+
+		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %s %s", err.Error(), response.Body)
+		}
+
+		if response.StatusCode == http.StatusNoContent {
+			l.Warn("Membership has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
+	case resourceTypeGroup.Id:
+		groupID := principal.Id.Resource
+		_, _, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil {
+			l.Warn(
+				"okta-connector: group does not have app membership",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return nil, fmt.Errorf("okta-connector: group does not have app membership: %s", err.Error())
+		}
+
+		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %s %s", err.Error(), response.Body)
+		}
+
+		if response.StatusCode == http.StatusNoContent {
+			l.Warn("Membership has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
+	default:
+		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
+	}
+
+	return nil, nil
+}
