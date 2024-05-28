@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -388,8 +390,12 @@ func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType
 }
 
 func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	var (
+		ok    bool
+		email string
+	)
 	l := ctxzap.Extract(ctx)
-	if principal.Id.ResourceType != resourceTypeUser.Id {
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
 			"okta-connector: only users or groups can be granted role membership",
 			zap.String("principal_type", principal.Id.ResourceType),
@@ -398,9 +404,153 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		return nil, fmt.Errorf("okta-connector: only users or groups can be granted repo membership")
 	}
 
+	appID := entitlement.Resource.Id.Resource
+	switch principal.Id.ResourceType {
+	case resourceTypeUser.Id:
+		userID := principal.Id.Resource
+		appUser, _, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil && !strings.Contains(err.Error(), "Resource not found") {
+			return nil, fmt.Errorf("okta-connector: %s", err.Error())
+		}
+
+		if appUser != nil {
+			if userID == appUser.Id {
+				l.Warn(
+					"okta-connector: The app specified is already assigned to the user",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.Any("Profile", appUser.Profile),
+				)
+				return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the user")
+			}
+		}
+
+		user, _, err := g.client.User.GetUser(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		profile := *user.Profile
+		if email, ok = profile["email"].(string); !ok {
+			email = unknownProfileValue
+		}
+
+		payload := okta.AppUser{
+			Credentials: &okta.AppUserCredentials{
+				UserName: email,
+			},
+			Id:    userID,
+			Scope: strings.ToUpper(principal.Id.ResourceType),
+		}
+		assignedUser, _, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
+		if err != nil {
+			return nil, err
+		}
+
+		l.Warn("App Membership has been created.",
+			zap.String("userID", assignedUser.Id),
+			zap.String("Status", assignedUser.Status),
+			zap.Time("LastUpdated", *assignedUser.LastUpdated),
+			zap.String("Scope", assignedUser.Scope),
+		)
+	case resourceTypeGroup.Id:
+		groupID := principal.Id.Resource
+		appGroup, _, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil && !strings.Contains(err.Error(), "Resource not found") {
+			return nil, fmt.Errorf("okta-connector: %s", err.Error())
+		}
+
+		if appGroup != nil {
+			if groupID == appGroup.Id {
+				l.Warn(
+					"okta-connector: The app specified is already assigned to the group",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+					zap.Any("Profile", appGroup.Profile),
+				)
+				return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the group")
+			}
+		}
+
+		payload := okta.ApplicationGroupAssignment{}
+		assignedGroup, _, err := g.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
+		if err != nil {
+			return nil, err
+		}
+
+		l.Warn("App Membership has been created.",
+			zap.String("userID", assignedGroup.Id),
+			zap.Time("LastUpdated", *assignedGroup.LastUpdated),
+		)
+	default:
+		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
+	}
+
 	return nil, nil
 }
 
 func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	entitlement := grant.Entitlement
+	principal := grant.Principal
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
+		l.Warn(
+			"okta-connector: only users or groups can have role membership revoked",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector:only users or groups can have role membership revoked")
+	}
+
+	appID := entitlement.Resource.Id.Resource
+	switch principal.Id.ResourceType {
+	case resourceTypeUser.Id:
+		userID := principal.Id.Resource
+		_, _, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			l.Warn(
+				"okta-connector: user does not have role membership",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return nil, fmt.Errorf("okta-connector: user does not have role membership: %s", err.Error())
+		}
+
+		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %s %s", err.Error(), response.Body)
+		}
+
+		if response.StatusCode == http.StatusNoContent {
+			l.Warn("Membership has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
+	case resourceTypeGroup.Id:
+		groupID := principal.Id.Resource
+		_, _, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil {
+			l.Warn(
+				"okta-connector: group does not have role membership",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return nil, fmt.Errorf("okta-connector: group does not have role membership: %s", err.Error())
+		}
+
+		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %s %s", err.Error(), response.Body)
+		}
+
+		if response.StatusCode == http.StatusNoContent {
+			l.Warn("Membership has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
+	default:
+		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
+	}
+
 	return nil, nil
 }
