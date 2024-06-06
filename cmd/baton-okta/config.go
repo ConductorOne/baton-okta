@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/conductorone/baton-okta/pkg/connector"
 	"github.com/spf13/cobra"
+
+	"github.com/conductorone/baton-okta/pkg/connector"
 )
 
 // validateConfig is run after the configuration is loaded, and should return an error if it isn't valid.
@@ -41,4 +42,5 @@ func cmdFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("okta-private-key-id", "", "The Okta Private Key ID. ($BATON_OKTA_PRIVATE_KEY_ID)")
 	cmd.PersistentFlags().String("api-token", "", "The API token for the service account.  ($BATON_API_TOKEN)")
 	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS)")
+	cmd.PersistentFlags().Bool("ciam", false, "Whether to run in CIAM mode or not.  ($BATON_CIAM)")
 }

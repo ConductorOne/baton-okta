@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var errMissingRolePermissions = errors.New("okta-connectorv2: missing role permissions")
@@ -27,7 +30,7 @@ var standardRoleTypes = []*okta.Role{
 	{Type: "ORG_ADMIN", Label: "Organizational Administrator"},
 	{Type: "READ_ONLY_ADMIN", Label: "Read-Only Administrator"},
 	{Type: "REPORT_ADMIN", Label: "Report Administrator"},
-	{Type: "SUPER_ADMIN", Label: "Super Administrator"},
+	{Type: "SUPER_ORG_ADMIN", Label: "Super Administrator"},
 	// The type name is strange, but it is what Okta uses for the Group Administrator standard role
 	{Type: "USER_ADMIN", Label: "Group Administrator"},
 	{Type: "HELP_DESK_ADMIN", Label: "Help Desk Administrator"},
@@ -83,7 +86,16 @@ func (o *roleResourceType) Entitlements(
 
 	role := standardRoleFromType(resource.Id.GetResource())
 
-	rv = append(rv, roleEntitlement(ctx, resource, role))
+	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
+		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
+			Id: V1MembershipEntitlementID(role.Type),
+		}),
+		sdkEntitlement.WithGrantableTo(resourceTypeUser),
+	)
+
+	rv = append(rv, en)
 
 	return rv, "", nil, nil
 }
@@ -136,30 +148,21 @@ func (o *roleResourceType) Grants(
 }
 
 func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource *v2.Resource) bool {
-	switch resource.Id.GetResource() {
-	case "API_ACCESS_MANAGEMENT_ADMIN":
-		return administratorRoleFlags.ApiAccessManagementAdmin
-	case "MOBILE_ADMIN":
-		return administratorRoleFlags.MobileAdmin
-	case "ORG_ADMIN":
-		return administratorRoleFlags.OrgAdmin
-	case "READ_ONLY_ADMIN":
-		return administratorRoleFlags.ReadOnlyAdmin
-	case "REPORT_ADMIN":
-		return administratorRoleFlags.ReportAdmin
-	case "SUPER_ADMIN":
-		return administratorRoleFlags.SuperAdmin
-	case "USER_ADMIN":
-		return administratorRoleFlags.UserAdmin
-	case "HELP_DESK_ADMIN":
-		return administratorRoleFlags.HelpDeskAdmin
-	case "APP_ADMIN":
-		return administratorRoleFlags.AppAdmin
-	case "GROUP_MEMBERSHIP_ADMIN":
-		return administratorRoleFlags.GroupMembershipAdmin
-	default:
-		return false
+	roleName := strings.ReplaceAll(strings.ToLower(resource.Id.GetResource()), "_", "")
+
+	for _, role := range administratorRoleFlags.RolesFromIndividualAssignments {
+		if strings.ToLower(role) == roleName {
+			return true
+		}
 	}
+
+	for _, role := range administratorRoleFlags.RolesFromGroup {
+		if strings.ToLower(role) == roleName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (o *roleResourceType) listSystemRoles(
@@ -209,6 +212,7 @@ type administratorRoleFlags struct {
 	ForAllHelpDeskAdminGroups        bool     `json:"forAllHelpDeskAdminGroups"`
 	ForAllGroupMembershipAdminGroups bool     `json:"forAllGroupMembershipAdminGroups"`
 	RolesFromIndividualAssignments   []string `json:"rolesFromIndividualAssignments"`
+	RolesFromGroup                   []string `json:"rolesFromGroup"`
 }
 
 func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*administratorRoleFlags, *responseContext, error) {
@@ -244,24 +248,6 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 	return adminFlags, respCtx, nil
 }
 
-func roleEntitlement(ctx context.Context, resource *v2.Resource, role *okta.Role) *v2.Entitlement {
-	var annos annotations.Annotations
-	annos.Update(&v2.V1Identifier{
-		Id: V1MembershipEntitlementID(role.Type),
-	})
-
-	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, role.Type),
-		Resource:    resource,
-		DisplayName: fmt.Sprintf("%s Role Member", role.Label),
-		Description: fmt.Sprintf("Has the %s role in Okta", role.Label),
-		Annotations: annos,
-		GrantableTo: []*v2.ResourceType{resourceTypeUser},
-		Purpose:     v2.Entitlement_PURPOSE_VALUE_ASSIGNMENT,
-		Slug:        role.Type,
-	}
-}
-
 func standardRoleFromType(roleType string) *okta.Role {
 	for _, standardRoleType := range standardRoleTypes {
 		if standardRoleType.Type == roleType {
@@ -273,56 +259,30 @@ func standardRoleFromType(roleType string) *okta.Role {
 }
 
 func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
-	trait, err := roleTrait(ctx, role)
-	if err != nil {
-		return nil, err
+	profile := map[string]interface{}{
+		"type":  role.Type,
+		"label": role.Label,
 	}
 
-	var annos annotations.Annotations
-	annos.Update(trait)
-	annos.Update(&v2.V1Identifier{
-		Id: fmtResourceIdV1(role.Type),
-	})
-
-	return &v2.Resource{
-		Id:          fmtResourceId(resourceTypeRole.Id, role.Type),
-		DisplayName: role.Type,
-		Annotations: annos,
-	}, nil
+	return sdkResource.NewRoleResource(
+		role.Label,
+		resourceTypeRole,
+		role.Type,
+		[]sdkResource.RoleTraitOption{sdkResource.WithRoleProfile(profile)},
+		sdkResource.WithAnnotation(&v2.V1Identifier{
+			Id: fmtResourceIdV1(role.Type),
+		}),
+	)
 }
 
 func roleGrant(userID string, roleID string, resource *v2.Resource) *v2.Grant {
-	var annos annotations.Annotations
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
-	annos.Update(&v2.V1Identifier{
-		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
-	})
 
-	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, roleID),
-		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, roleID),
-			Resource: resource,
-		},
-		Annotations: annos,
-		Principal:   ur,
-	}
-}
-
-func roleTrait(ctx context.Context, role *okta.Role) (*v2.RoleTrait, error) {
-	profile, err := structpb.NewStruct(map[string]interface{}{
-		"type":  role.Type,
-		"label": role.Label,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to construct role profile for role trait: %w", err)
-	}
-
-	ret := &v2.RoleTrait{
-		Profile: profile,
-	}
-
-	return ret, nil
+	return sdkGrant.NewGrant(resource, "assigned", ur,
+		sdkGrant.WithAnnotation(&v2.V1Identifier{
+			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
+		}),
+	)
 }
 
 func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

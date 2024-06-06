@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"go.uber.org/zap"
@@ -12,6 +11,8 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
@@ -81,9 +82,7 @@ func (o *groupResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-	for _, level := range standardRoleTypes {
-		rv = append(rv, o.groupEntitlement(ctx, resource, level.Type))
-	}
+	rv = append(rv, o.groupEntitlement(ctx, resource))
 
 	return rv, "", nil, nil
 }
@@ -209,14 +208,7 @@ func (o *groupResourceType) Grants(
 	}
 
 	for _, user := range users {
-		roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, user.Id, nil)
-		if err != nil {
-			return nil, "", annos, err
-		}
-
-		for _, role := range roles {
-			rv = append(rv, groupGrant(resource, user, role.Type))
-		}
+		rv = append(rv, groupGrant(resource, user))
 	}
 
 	pageToken, err := bag.Marshal()
@@ -303,39 +295,23 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 	return ret, nil
 }
 
-func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource, permission string) *v2.Entitlement {
-	var annos annotations.Annotations
-	annos.Update(&v2.V1Identifier{
-		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
-	})
-	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, permission),
-		Resource:    resource,
-		DisplayName: fmt.Sprintf("%s Group %s", resource.DisplayName, permission),
-		Description: fmt.Sprintf("%s in Okta group %s", permission, resource.DisplayName),
-		Annotations: annos,
-		GrantableTo: []*v2.ResourceType{resourceTypeUser},
-		Purpose:     v2.Entitlement_PURPOSE_VALUE_ASSIGNMENT,
-		Slug:        fmt.Sprintf("%s - %s", resource.DisplayName, permission),
-	}
+func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+	return sdkEntitlement.NewAssignmentEntitlement(resource, "member",
+		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
+			Id: V1MembershipEntitlementID(resource.Id.GetResource()),
+		}),
+		sdkEntitlement.WithGrantableTo(resourceTypeUser),
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Group Member", resource.DisplayName)),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s group in Okta", resource.DisplayName)),
+	)
 }
 
-func groupGrant(resource *v2.Resource, user *okta.User, permission string) *v2.Grant {
-	var annos annotations.Annotations
+func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: user.Id}}
-	annos.Update(&v2.V1Identifier{
-		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), user.Id),
-	})
 
-	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, permission),
-		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, permission),
-			Resource: resource,
-		},
-		Annotations: annos,
-		Principal:   ur,
-	}
+	return sdkGrant.NewGrant(resource, "member", ur, sdkGrant.WithAnnotation(&v2.V1Identifier{
+		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), user.Id),
+	}))
 }
 
 func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
@@ -351,29 +327,13 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
-	users, _, err := g.client.Group.ListGroupUsers(ctx, groupId, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	groupPos := slices.IndexFunc(users, func(u *okta.User) bool {
-		return u.Id == userId
-	})
-	if groupPos != NF {
-		l.Warn(
-			"okta-connector: The user specified is already a member of the group",
-			zap.String("principal_id", principal.Id.String()),
-			zap.String("principal_type", principal.Id.ResourceType),
-		)
-		return nil, fmt.Errorf("okta-connector: The user specified is already a member of the group")
-	}
 
 	response, err := g.client.Group.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, err
 	}
 
-	l.Warn("Membership has been created",
+	l.Debug("Membership has been created",
 		zap.String("Status", response.Status),
 	)
 
@@ -395,23 +355,6 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
-	users, _, err := g.client.Group.ListGroupUsers(ctx, groupId, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	groupPos := slices.IndexFunc(users, func(u *okta.User) bool {
-		return u.Id == userId
-	})
-	if groupPos == NF {
-		l.Warn(
-			"okta-connector: user does not have group membership",
-			zap.String("principal_id", principal.Id.String()),
-			zap.String("principal_type", principal.Id.ResourceType),
-			zap.String("role_type", entitlement.Resource.Id.Resource),
-		)
-		return nil, fmt.Errorf("okta-connector: user does not have group membership")
-	}
 
 	response, err := g.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {

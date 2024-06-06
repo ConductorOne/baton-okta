@@ -20,6 +20,7 @@ type Okta struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
+	ciamMode         bool
 }
 
 // config defines the external configuration required for the connector to run.
@@ -33,6 +34,7 @@ type Config struct {
 	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
 	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
 	OktaProvisioning bool   `mapstructure:"provisioning"`
+	Ciam             bool   `mapstructure:"ciam"`
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -88,6 +90,12 @@ var (
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
+	if o.ciamMode {
+		return []connectorbuilder.ResourceSyncer{
+			ciamUser(),
+			ciamBuilder(o.client),
+		}
+	}
 	return []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.domain, o.apiToken, o.client),
 		userBuilder(o.domain, o.apiToken, o.client),
@@ -197,5 +205,6 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		domain:           cfg.Domain,
 		apiToken:         cfg.ApiToken,
 		syncInactiveApps: cfg.SyncInactiveApps,
+		ciamMode:         cfg.Ciam,
 	}, nil
 }
