@@ -311,12 +311,12 @@ func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.R
 	return &v2.Entitlement{
 		Id:          fmtResourceRole(resource.Id, permission),
 		Resource:    resource,
-		DisplayName: fmt.Sprintf("%s Group Member", resource.DisplayName),
-		Description: fmt.Sprintf("Member of %s group in Okta", resource.DisplayName),
+		DisplayName: fmt.Sprintf("%s Group %s", resource.DisplayName, permission),
+		Description: fmt.Sprintf("%s in Okta group %s", permission, resource.DisplayName),
 		Annotations: annos,
 		GrantableTo: []*v2.ResourceType{resourceTypeUser},
 		Purpose:     v2.Entitlement_PURPOSE_VALUE_ASSIGNMENT,
-		Slug:        resource.DisplayName,
+		Slug:        fmt.Sprintf("%s - %s", resource.DisplayName, permission),
 	}
 }
 
