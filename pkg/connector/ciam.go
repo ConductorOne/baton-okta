@@ -215,7 +215,7 @@ func (g *ciamResourceBuilder) Grant(ctx context.Context, principal *v2.Resource,
 				return nil, err
 			}
 
-			if errOkta.ErrorCode == "E0000090" {
+			if errOkta.ErrorCode == alreadyAssignedRole {
 				l.Warn(
 					"okta-connector: The role specified is already assigned to the user",
 					zap.String("principal_id", principal.Id.String()),
@@ -249,7 +249,7 @@ func (g *ciamResourceBuilder) Grant(ctx context.Context, principal *v2.Resource,
 				return nil, err
 			}
 
-			if errOkta.ErrorCode == "E0000090" {
+			if errOkta.ErrorCode == alreadyAssignedRole {
 				l.Warn(
 					"okta-connector: The role specified is already assigned to the group",
 					zap.String("principal_id", principal.Id.String()),
@@ -301,7 +301,7 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
-			return r.Type == roleType && r.Status == "ACTIVE"
+			return r.Type == roleType && r.Status == userStatusActive
 		})
 		if rolePos == NF {
 			l.Warn(
@@ -332,7 +332,7 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
-			return r.Type == roleType && r.Status == "ACTIVE"
+			return r.Type == roleType && r.Status == userStatusActive
 		})
 		if rolePos == NF {
 			l.Warn(
