@@ -45,6 +45,9 @@ type ciamResourceBuilder struct {
 func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	bag := &pagination.Bag{}
 	err := bag.Unmarshal(pToken.Token)
+	if err != nil {
+		return nil, "", nil, err
+	}
 
 	if bag.Current() == nil {
 		bag.Push(pagination.PageState{
