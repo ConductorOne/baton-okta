@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -23,18 +22,15 @@ type Okta struct {
 	ciamMode         bool
 }
 
-// config defines the external configuration required for the connector to run.
 type Config struct {
-	cli.BaseConfig `mapstructure:",squash"` // Puts the base config options in the same place as the connector options
-
-	Domain           string `mapstructure:"domain"`
-	ApiToken         string `mapstructure:"api-token"`
-	OktaClientId     string `mapstructure:"okta-client-id"`
-	OktaPrivateKey   string `mapstructure:"okta-private-key"`
-	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
-	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
-	OktaProvisioning bool   `mapstructure:"provisioning"`
-	Ciam             bool   `mapstructure:"ciam"`
+	Domain           string
+	ApiToken         string
+	OktaClientId     string
+	OktaPrivateKey   string
+	OktaPrivateKeyId string
+	SyncInactiveApps bool
+	OktaProvisioning bool
+	Ciam             bool
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {

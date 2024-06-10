@@ -19,7 +19,7 @@ var version = "dev"
 func main() {
 	ctx := context.Background()
 
-	cfg := &connector.Config{}
+	cfg := &Config{}
 	cmd, err := cli.NewCmd(ctx, "baton-okta", cfg, validateConfig, getConnector)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -37,9 +37,21 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, cfg *connector.Config) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, cfg *Config) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	cb, err := connector.New(ctx, cfg)
+
+	ccfg := &connector.Config{
+		Domain:           cfg.Domain,
+		ApiToken:         cfg.ApiToken,
+		OktaClientId:     cfg.OktaClientId,
+		OktaPrivateKey:   cfg.OktaPrivateKey,
+		OktaPrivateKeyId: cfg.OktaPrivateKeyId,
+		SyncInactiveApps: cfg.SyncInactiveApps,
+		OktaProvisioning: cfg.OktaProvisioning,
+		Ciam:             cfg.Ciam,
+	}
+
+	cb, err := connector.New(ctx, ccfg)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
