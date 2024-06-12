@@ -43,6 +43,10 @@ func (o *userResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
+	// If we are in ciam mode, and there are no email filters specified, don't sync users.
+	if o.ciamMode && len(o.emailFilters) == 0 {
+		return nil, "", nil, nil
+	}
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
@@ -67,7 +71,7 @@ func (o *userResourceType) List(
 	}
 
 	for _, user := range users {
-		if o.ciamMode && !shouldIncludeUser(user, o.emailFilters) {
+		if o.ciamMode && !shouldIncludeOktaUser(user, o.emailFilters) {
 			continue
 		}
 		resource, err := userResource(ctx, user)
@@ -86,7 +90,7 @@ func (o *userResourceType) List(
 	return rv, pageToken, annos, nil
 }
 
-func shouldIncludeUser(u *okta.User, emailDomainFilters []string) bool {
+func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
 	if len(emailDomainFilters) == 0 {
 		return false
 	}
@@ -106,6 +110,10 @@ func shouldIncludeUser(u *okta.User, emailDomainFilters []string) bool {
 		}
 	}
 
+	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
+}
+
+func shouldIncludeUserByEmails(userEmails []string, emailDomainFilters []string) bool {
 	for _, filter := range emailDomainFilters {
 		for _, ue := range userEmails {
 			if strings.HasSuffix(ue, "@"+filter) {
