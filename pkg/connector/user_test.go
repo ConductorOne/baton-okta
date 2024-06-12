@@ -84,6 +84,14 @@ func Test_shouldIncludeUserByEmails(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "mixed case match",
+			args: args{
+				userEmails:         []string{"alice@fOo.cOm"},
+				emailDomainFilters: []string{"foo.com"},
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

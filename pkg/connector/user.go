@@ -116,7 +116,7 @@ func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
 func shouldIncludeUserByEmails(userEmails []string, emailDomainFilters []string) bool {
 	for _, filter := range emailDomainFilters {
 		for _, ue := range userEmails {
-			if strings.HasSuffix(ue, "@"+filter) {
+			if strings.HasSuffix(strings.ToLower(ue), "@"+filter) {
 				return true
 			}
 		}
@@ -171,13 +171,17 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 }
 
 func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string) *userResourceType {
+	var loweredFilters []string
+	for _, ef := range emailFilters {
+		loweredFilters = append(loweredFilters, strings.ToLower(ef))
+	}
 	return &userResourceType{
 		resourceType: resourceTypeUser,
 		domain:       domain,
 		apiToken:     apiToken,
 		client:       client,
 		ciamMode:     true,
-		emailFilters: emailFilters,
+		emailFilters: loweredFilters,
 	}
 }
 
