@@ -12,14 +12,15 @@ import (
 type Config struct {
 	cli.BaseConfig `mapstructure:",squash"` // Puts the base config options in the same place as the connector options
 
-	Domain           string `mapstructure:"domain"`
-	ApiToken         string `mapstructure:"api-token"`
-	OktaClientId     string `mapstructure:"okta-client-id"`
-	OktaPrivateKey   string `mapstructure:"okta-private-key"`
-	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
-	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
-	OktaProvisioning bool   `mapstructure:"provisioning"`
-	Ciam             bool   `mapstructure:"ciam"`
+	Domain           string   `mapstructure:"domain"`
+	ApiToken         string   `mapstructure:"api-token"`
+	OktaClientId     string   `mapstructure:"okta-client-id"`
+	OktaPrivateKey   string   `mapstructure:"okta-private-key"`
+	OktaPrivateKeyId string   `mapstructure:"okta-private-key-id"`
+	SyncInactiveApps bool     `mapstructure:"sync-inactive-apps"`
+	OktaProvisioning bool     `mapstructure:"provisioning"`
+	Ciam             bool     `mapstructure:"ciam"`
+	CiamEmailDomains []string `mapstructure:"ciam-email-domains"`
 }
 
 // validateConfig is run after the configuration is loaded, and should return an error if it isn't valid.
@@ -56,4 +57,9 @@ func cmdFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("api-token", "", "The API token for the service account.  ($BATON_API_TOKEN)")
 	cmd.PersistentFlags().Bool("sync-inactive-apps", true, "Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS)")
 	cmd.PersistentFlags().Bool("ciam", false, "Whether to run in CIAM mode or not. In CIAM mode, only roles and the users assigned to roles are synced.  ($BATON_CIAM)")
+	cmd.PersistentFlags().StringSlice(
+		"ciam-email-domains",
+		nil,
+		"The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role. ($BATON_CIAM_EMAIL_DOMAIN)",
+	)
 }

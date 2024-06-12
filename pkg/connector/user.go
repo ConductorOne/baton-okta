@@ -30,6 +30,8 @@ type userResourceType struct {
 	domain       string
 	apiToken     string
 	client       *okta.Client
+	ciamMode     bool
+	emailFilters []string
 }
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -65,6 +67,9 @@ func (o *userResourceType) List(
 	}
 
 	for _, user := range users {
+		if o.ciamMode && !shouldIncludeUser(user, o.emailFilters) {
+			continue
+		}
 		resource, err := userResource(ctx, user)
 		if err != nil {
 			return nil, "", nil, err
@@ -79,6 +84,36 @@ func (o *userResourceType) List(
 	}
 
 	return rv, pageToken, annos, nil
+}
+
+func shouldIncludeUser(u *okta.User, emailDomainFilters []string) bool {
+	if len(emailDomainFilters) == 0 {
+		return false
+	}
+
+	var userEmails []string
+	oktaProfile := *u.Profile
+	if email, ok := oktaProfile["email"].(string); ok {
+		userEmails = append(userEmails, email)
+	}
+	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok {
+		userEmails = append(userEmails, secondEmail)
+	}
+
+	if login, ok := oktaProfile["login"].(string); ok {
+		if strings.Contains(login, "@") {
+			userEmails = append(userEmails, login)
+		}
+	}
+
+	for _, filter := range emailDomainFilters {
+		for _, ue := range userEmails {
+			if strings.HasSuffix(ue, "@"+filter) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *userResourceType) Entitlements(
@@ -125,6 +160,17 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 		return nil, nil, err
 	}
 	return oktaUsers, respCtx, nil
+}
+
+func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string) *userResourceType {
+	return &userResourceType{
+		resourceType: resourceTypeUser,
+		domain:       domain,
+		apiToken:     apiToken,
+		client:       client,
+		ciamMode:     true,
+		emailFilters: emailFilters,
+	}
 }
 
 func userBuilder(domain string, apiToken string, client *okta.Client) *userResourceType {

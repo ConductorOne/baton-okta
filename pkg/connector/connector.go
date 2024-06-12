@@ -19,7 +19,12 @@ type Okta struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
-	ciamMode         bool
+	ciamConfig       *ciamConfig
+}
+
+type ciamConfig struct {
+	Enabled      bool
+	EmailDomains []string
 }
 
 type Config struct {
@@ -31,6 +36,7 @@ type Config struct {
 	SyncInactiveApps bool
 	OktaProvisioning bool
 	Ciam             bool
+	CiamEmailDomains []string
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -86,9 +92,9 @@ var (
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
-	if o.ciamMode {
+	if o.ciamConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
-			ciamUser(),
+			ciamUserBuilder(o.domain, o.apiToken, o.client, o.ciamConfig.EmailDomains),
 			ciamBuilder(o.client),
 		}
 	}
@@ -201,6 +207,9 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		domain:           cfg.Domain,
 		apiToken:         cfg.ApiToken,
 		syncInactiveApps: cfg.SyncInactiveApps,
-		ciamMode:         cfg.Ciam,
+		ciamConfig: &ciamConfig{
+			Enabled:      cfg.Ciam,
+			EmailDomains: cfg.CiamEmailDomains,
+		},
 	}, nil
 }

@@ -49,6 +49,7 @@ func getConnector(ctx context.Context, cfg *Config) (types.ConnectorServer, erro
 		SyncInactiveApps: cfg.SyncInactiveApps,
 		OktaProvisioning: cfg.OktaProvisioning,
 		Ciam:             cfg.Ciam,
+		CiamEmailDomains: cfg.CiamEmailDomains,
 	}
 
 	cb, err := connector.New(ctx, ccfg)

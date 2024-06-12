@@ -16,28 +16,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type ciamUserBuilder struct{}
-
-func (c *ciamUserBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
-	return resourceTypeUser
-}
-
-func (c *ciamUserBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
-}
-
-func (c *ciamUserBuilder) Entitlements(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
-}
-
-func (c *ciamUserBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
-}
-
-func ciamUser() *ciamUserBuilder {
-	return &ciamUserBuilder{}
-}
-
 type ciamResourceBuilder struct {
 	client *okta.Client
 }
