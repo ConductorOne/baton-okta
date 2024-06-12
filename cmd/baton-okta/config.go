@@ -60,6 +60,7 @@ func cmdFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringSlice(
 		"ciam-email-domains",
 		nil,
-		"The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role. ($BATON_CIAM_EMAIL_DOMAIN)",
+		"The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored,"+
+			"unless explicitly granted a role. ($BATON_CIAM_EMAIL_DOMAIN)",
 	)
 }

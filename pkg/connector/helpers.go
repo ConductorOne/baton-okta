@@ -42,17 +42,6 @@ func fmtGrantIdV1(entitlementID string, userID string) string {
 	return fmt.Sprintf(V1GrantIDTemplate, entitlementID, userID)
 }
 
-func fmtResourceGrant(resourceID *v2.ResourceId, principalId *v2.ResourceId, permission string) string {
-	return fmt.Sprintf(
-		"%s:%s:%s:%s:%s",
-		resourceID.ResourceType,
-		resourceID.Resource,
-		permission,
-		principalId.ResourceType,
-		principalId.Resource,
-	)
-}
-
 func fmtResourceIdV1(id string) string {
 	return id
 }
@@ -62,15 +51,6 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 		ResourceType: resourceTypeID,
 		Resource:     id,
 	}
-}
-
-func fmtResourceRole(resourceID *v2.ResourceId, role string) string {
-	return fmt.Sprintf(
-		"%s:%s:%s",
-		resourceID.ResourceType,
-		resourceID.Resource,
-		role,
-	)
 }
 
 func queryParams(size int, after string) *query.Params {
