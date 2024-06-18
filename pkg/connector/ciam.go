@@ -59,8 +59,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 			rv = append(rv, resource)
 			bag.Pop()
 		} else {
-			qp := queryParams(pToken.Size, current.Token)
-			adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, qp)
+			adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, current.Token)
 			if err != nil {
 				// We don't have permissions to fetch role assignments, so return an empty list
 				if errors.Is(err, errMissingRolePermissions) {
@@ -69,7 +68,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 			}
 
-			nextPage, respAnnos, err := parseResp(respCtx.OktaResponse)
+			nextPage, respAnnos, err := parseAdminListResp(respCtx.OktaResponse)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
@@ -134,8 +133,7 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	qp := queryParams(pToken.Size, page)
-	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, qp)
+	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, page)
 	if err != nil {
 		// We don't have permissions to fetch role assignments, so return an empty list
 		if errors.Is(err, errMissingRolePermissions) {
@@ -144,7 +142,7 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -162,12 +160,12 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		}
 	}
 
-	pageToken, err := bag.Marshal()
+	nextPageToken, err := bag.Marshal()
 	if err != nil {
 		return nil, "", nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, nextPageToken, annos, nil
 }
 
 func (g *ciamResourceBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

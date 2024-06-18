@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -16,7 +17,6 @@ import (
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
 
@@ -112,8 +112,7 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	qp := queryParams(token.Size, page)
-	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, qp)
+	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, page)
 	if err != nil {
 		// We don't have permissions to fetch role assignments, so return an empty list
 		if errors.Is(err, errMissingRolePermissions) {
@@ -122,7 +121,7 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -216,15 +215,18 @@ type administratorRoleFlags struct {
 	RolesFromGroup                   []string `json:"rolesFromGroup"`
 }
 
-func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*administratorRoleFlags, *responseContext, error) {
-	url := "/api/internal/administrators"
-	if qp != nil {
-		url += qp.String()
+func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, encodedQueryParams string) ([]*administratorRoleFlags, *responseContext, error) {
+	reqUrl, err := url.Parse("/api/internal/administrators")
+	if err != nil {
+		return nil, nil, err
+	}
+	if encodedQueryParams != "" {
+		reqUrl.RawQuery = encodedQueryParams
 	}
 
 	rq := client.CloneRequestExecutor()
 
-	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, url, nil)
+	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, reqUrl.String(), nil)
 	if err != nil {
 		return nil, nil, err
 	}
