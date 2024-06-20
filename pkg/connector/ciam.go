@@ -21,6 +21,7 @@ type ciamResourceBuilder struct {
 }
 
 func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
 	bag := &pagination.Bag{}
 	err := bag.Unmarshal(pToken.Token)
 	if err != nil {
@@ -63,6 +64,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 			if err != nil {
 				// We don't have permissions to fetch role assignments, so return an empty list
 				if errors.Is(err, errMissingRolePermissions) {
+					l.Warn("okta-connectorv2: missing role permissions")
 					return nil, "", nil, nil
 				}
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
@@ -87,7 +89,9 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 				})
 			}
 		}
+		l.Debug("Listing users", zap.Any("bag", bag))
 	case resourceTypeRole.Id:
+		l.Debug("Listing roles", zap.Any("bag", bag))
 		for _, role := range standardRoleTypes {
 			resource, err := roleResource(ctx, role)
 			if err != nil {
