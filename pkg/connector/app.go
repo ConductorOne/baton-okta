@@ -10,11 +10,13 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type appResourceType struct {
@@ -99,9 +101,11 @@ func (o *appResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-	for _, level := range standardRoleTypes {
-		rv = append(rv, appEntitlement(ctx, resource, level.Type))
-	}
+
+	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access",
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Access", resource.DisplayName)),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName)),
+	))
 
 	return rv, "", nil, nil
 }
@@ -176,14 +180,15 @@ func (o *appResourceType) listAppGroupGrants(
 	}
 
 	for _, applicationGroupAssignment := range applicationGroupAssignments {
-		roles, _, err := o.client.Group.ListGroupAssignedRoles(ctx, applicationGroupAssignment.Id, nil)
-		if err != nil {
-			return nil, annos, bag, err
-		}
-
-		for _, role := range roles {
-			rv = append(rv, appGroupGrant(resource, applicationGroupAssignment, role.Type))
-		}
+		groupID := applicationGroupAssignment.Id
+		principalID := &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}
+		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
+			sdkGrant.WithAnnotation(
+				&v2.V1Identifier{
+					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
+				},
+			),
+		))
 	}
 
 	return rv, annos, bag, nil
@@ -214,14 +219,15 @@ func (o *appResourceType) listAppUsersGrants(
 	}
 
 	for _, applicationUser := range applicationUsers {
-		roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, applicationUser.Id, nil)
-		if err != nil {
-			return nil, annos, bag, err
-		}
-
-		for _, role := range roles {
-			rv = append(rv, appUserGrant(resource, applicationUser, role.Type))
-		}
+		userID := applicationUser.Id
+		principalID := &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}
+		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
+			sdkGrant.WithAnnotation(
+				&v2.V1Identifier{
+					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
+				},
+			),
+		))
 	}
 
 	return rv, annos, bag, nil
@@ -299,94 +305,15 @@ func oktaAppsToOktaApplications(ctx context.Context, apps []okta.App) ([]*okta.A
 }
 
 func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, error) {
-	trait, err := appTrait(ctx, app)
-	if err != nil {
-		return nil, err
-	}
-
-	var annos annotations.Annotations
-	annos.Update(trait)
-	annos.Update(&v2.V1Identifier{
-		Id: fmtResourceIdV1(app.Id),
-	})
-
-	return &v2.Resource{
-		Id:          fmtResourceId(resourceTypeApp.Id, app.Id),
-		DisplayName: app.Label,
-		Annotations: annos,
-	}, nil
-}
-
-func appTrait(ctx context.Context, app *okta.Application) (*v2.AppTrait, error) {
-	profile, err := structpb.NewStruct(map[string]interface{}{
+	appProfile := map[string]interface{}{
 		"status": app.Status,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to construct role profile for role trait: %w", err)
 	}
+	var appTraitOpts []sdkResource.AppTraitOption
+	appTraitOpts = append(appTraitOpts, sdkResource.WithAppProfile(appProfile))
 
-	ret := &v2.AppTrait{
-		Profile: profile,
-	}
-
-	return ret, nil
-}
-
-func appEntitlement(ctx context.Context, resource *v2.Resource, permission string) *v2.Entitlement {
-	var annos annotations.Annotations
-	annos.Update(&v2.V1Identifier{
-		Id: V1MembershipEntitlementID(resource.Id.GetResource()),
-	})
-
-	return &v2.Entitlement{
-		Id:          fmtResourceRole(resource.Id, permission),
-		Resource:    resource,
-		DisplayName: fmt.Sprintf("%s App %s", resource.DisplayName, permission),
-		Description: fmt.Sprintf("Can %s on Okta app %s", permission, resource.DisplayName),
-		Annotations: annos,
-		GrantableTo: []*v2.ResourceType{resourceTypeGroup, resourceTypeUser},
-		Purpose:     v2.Entitlement_PURPOSE_VALUE_ASSIGNMENT,
-		Slug:        fmt.Sprintf("%s - %s", resource.DisplayName, permission),
-	}
-}
-
-func appGroupGrant(resource *v2.Resource, applicationGroupAssignment *okta.ApplicationGroupAssignment, roleType string) *v2.Grant {
-	var annos annotations.Annotations
-	groupID := applicationGroupAssignment.Id
-	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
-	annos.Update(&v2.V1Identifier{
-		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
-	})
-
-	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
-		Entitlement: &v2.Entitlement{
-			Id:       fmtResourceRole(resource.Id, roleType),
-			Resource: resource,
-		},
-		Annotations: annos,
-		Principal:   ur,
-	}
-}
-
-func appUserGrant(resource *v2.Resource, applicationUser *okta.AppUser, roleType string) *v2.Grant {
-	var annos annotations.Annotations
-	userID := applicationUser.Id
-	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
-	annos.Update(&v2.V1Identifier{
-		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
-	})
-
-	return &v2.Grant{
-		Id: fmtResourceGrant(resource.Id, ur.Id, roleType),
-		Entitlement: &v2.Entitlement{
-			Id: fmtResourceRole(resource.Id, roleType),
-
-			Resource: resource,
-		},
-		Annotations: annos,
-		Principal:   ur,
-	}
+	return sdkResource.NewAppResource(app.Label, resourceTypeApp, app.Id, appTraitOpts, sdkResource.WithAnnotation(&v2.V1Identifier{
+		Id: fmtResourceIdV1(app.Id),
+	}))
 }
 
 func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
