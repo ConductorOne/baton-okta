@@ -45,8 +45,8 @@ jobs:
       BATON_API_TOKEN: ${{ secrets.BATON_API_TOKEN }}
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
       # The following parameters are passed to grant/revoke commands
-      CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:SUPER_ADMIN:user:00ug0t0xjvnHRbQuD5d7'
-      CONNECTOR_ENTITLEMENT: 'app:0oaf4rf37pg7W4B6a5d7:SUPER_ADMIN'
+      CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:access:user:00ug0t0xjvnHRbQuD5d7'
+      CONNECTOR_ENTITLEMENT: 'app:0oaf4rf37pg7W4B6a5d7:access'
       CONNECTOR_PRINCIPAL_TYPE: 'user'
       CONNECTOR_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7'
     steps:
