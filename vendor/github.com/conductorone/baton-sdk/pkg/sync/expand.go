@@ -7,6 +7,8 @@ import (
 	"reflect"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 var (
@@ -300,7 +302,7 @@ func (g *EntitlementGraph) GetNode(entitlementId string) *Node {
 	return nil
 }
 
-func (g *EntitlementGraph) AddEdge(srcEntitlementID string, dstEntitlementID string, shallow bool, resourceTypeIDs []string) error {
+func (g *EntitlementGraph) AddEdge(ctx context.Context, srcEntitlementID string, dstEntitlementID string, shallow bool, resourceTypeIDs []string) error {
 	srcNode := g.GetNode(srcEntitlementID)
 	if srcNode == nil {
 		return ErrNoEntitlement
@@ -324,7 +326,14 @@ func (g *EntitlementGraph) AddEdge(srcEntitlementID string, dstEntitlementID str
 		}
 	} else {
 		// TODO: just do nothing? it's probably a mistake if we're adding the same edge twice
-		return fmt.Errorf("edge already exists")
+		ctxzap.Extract(ctx).Warn(
+			"duplicate edge from datasource",
+			zap.String("src_entitlement_id", srcEntitlementID),
+			zap.String("dst_entitlement_id", dstEntitlementID),
+			zap.Bool("shallow", shallow),
+			zap.Strings("resource_type_ids", resourceTypeIDs),
+		)
+		return nil
 	}
 	return nil
 }
@@ -377,11 +386,18 @@ func (g *EntitlementGraph) mergeNodes(node1ID int, node2ID int) {
 func (g *EntitlementGraph) FixCycles() error {
 	// If we can't fix the cycles in 10 tries, just give up
 	const maxTries = 10
+	prevCycleCount := 0
 	for i := 0; i < maxTries; i++ {
 		cycles, hasCycles := g.GetCycles()
 		if !hasCycles {
 			return nil
 		}
+		cycleCount := len(cycles)
+		if cycleCount < prevCycleCount {
+			// Reset the number of tries if we made progress
+			i = 0
+		}
+		prevCycleCount = cycleCount
 
 		// Merge all the nodes in a cycle.
 		for i := 1; i < len(cycles[0]); i++ {

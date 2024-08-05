@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -20,19 +19,24 @@ type Okta struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
+	ciamConfig       *ciamConfig
 }
 
-// config defines the external configuration required for the connector to run.
-type Config struct {
-	cli.BaseConfig `mapstructure:",squash"` // Puts the base config options in the same place as the connector options
+type ciamConfig struct {
+	Enabled      bool
+	EmailDomains []string
+}
 
-	Domain           string `mapstructure:"domain"`
-	ApiToken         string `mapstructure:"api-token"`
-	OktaClientId     string `mapstructure:"okta-client-id"`
-	OktaPrivateKey   string `mapstructure:"okta-private-key"`
-	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
-	SyncInactiveApps bool   `mapstructure:"sync-inactive-apps"`
-	OktaProvisioning bool   `mapstructure:"provisioning"`
+type Config struct {
+	Domain           string
+	ApiToken         string
+	OktaClientId     string
+	OktaPrivateKey   string
+	OktaPrivateKeyId string
+	SyncInactiveApps bool
+	OktaProvisioning bool
+	Ciam             bool
+	CiamEmailDomains []string
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -88,6 +92,12 @@ var (
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
+	if o.ciamConfig.Enabled {
+		return []connectorbuilder.ResourceSyncer{
+			ciamUserBuilder(o.domain, o.apiToken, o.client, o.ciamConfig.EmailDomains),
+			ciamBuilder(o.client),
+		}
+	}
 	return []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.domain, o.apiToken, o.client),
 		userBuilder(o.domain, o.apiToken, o.client),
@@ -197,5 +207,9 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		domain:           cfg.Domain,
 		apiToken:         cfg.ApiToken,
 		syncInactiveApps: cfg.SyncInactiveApps,
+		ciamConfig: &ciamConfig{
+			Enabled:      cfg.Ciam,
+			EmailDomains: cfg.CiamEmailDomains,
+		},
 	}, nil
 }

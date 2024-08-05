@@ -30,6 +30,8 @@ type userResourceType struct {
 	domain       string
 	apiToken     string
 	client       *okta.Client
+	ciamMode     bool
+	emailFilters []string
 }
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -41,6 +43,10 @@ func (o *userResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
+	// If we are in ciam mode, and there are no email filters specified, don't sync users.
+	if o.ciamMode && len(o.emailFilters) == 0 {
+		return nil, "", nil, nil
+	}
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
@@ -65,6 +71,9 @@ func (o *userResourceType) List(
 	}
 
 	for _, user := range users {
+		if o.ciamMode && !shouldIncludeOktaUser(user, o.emailFilters) {
+			continue
+		}
 		resource, err := userResource(ctx, user)
 		if err != nil {
 			return nil, "", nil, err
@@ -79,6 +88,40 @@ func (o *userResourceType) List(
 	}
 
 	return rv, pageToken, annos, nil
+}
+
+func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
+	if len(emailDomainFilters) == 0 {
+		return false
+	}
+
+	var userEmails []string
+	oktaProfile := *u.Profile
+	if email, ok := oktaProfile["email"].(string); ok {
+		userEmails = append(userEmails, email)
+	}
+	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok {
+		userEmails = append(userEmails, secondEmail)
+	}
+
+	if login, ok := oktaProfile["login"].(string); ok {
+		if strings.Contains(login, "@") {
+			userEmails = append(userEmails, login)
+		}
+	}
+
+	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
+}
+
+func shouldIncludeUserByEmails(userEmails []string, emailDomainFilters []string) bool {
+	for _, filter := range emailDomainFilters {
+		for _, ue := range userEmails {
+			if strings.HasSuffix(strings.ToLower(ue), "@"+filter) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *userResourceType) Entitlements(
@@ -125,6 +168,21 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 		return nil, nil, err
 	}
 	return oktaUsers, respCtx, nil
+}
+
+func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string) *userResourceType {
+	var loweredFilters []string
+	for _, ef := range emailFilters {
+		loweredFilters = append(loweredFilters, strings.ToLower(ef))
+	}
+	return &userResourceType{
+		resourceType: resourceTypeUser,
+		domain:       domain,
+		apiToken:     apiToken,
+		client:       client,
+		ciamMode:     true,
+		emailFilters: loweredFilters,
+	}
 }
 
 func userBuilder(domain string, apiToken string, client *okta.Client) *userResourceType {
