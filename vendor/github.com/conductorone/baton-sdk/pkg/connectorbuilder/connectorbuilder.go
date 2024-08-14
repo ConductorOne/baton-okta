@@ -2,6 +2,7 @@ package connectorbuilder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -86,6 +87,7 @@ type builderImpl struct {
 	eventFeed              EventProvider
 	cb                     ConnectorBuilder
 	ticketManager          TicketManager
+	ticketingEnabled       bool
 	m                      *metrics.M
 	nowFunc                func() time.Time
 }
@@ -139,6 +141,7 @@ func (b *builderImpl) CreateTicket(ctx context.Context, request *v2.TicketsServi
 		Type:         reqBody.GetType(),
 		Labels:       reqBody.GetLabels(),
 		CustomFields: reqBody.GetCustomFields(),
+		RequestedFor: reqBody.GetRequestedFor(),
 	}
 
 	ticket, annos, err := b.ticketManager.CreateTicket(ctx, cTicket, request.GetSchema())
@@ -288,6 +291,16 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 }
 
 type Opt func(b *builderImpl) error
+
+func WithTicketingEnabled() Opt {
+	return func(b *builderImpl) error {
+		if _, ok := b.cb.(TicketManager); ok {
+			b.ticketingEnabled = true
+			return nil
+		}
+		return errors.New("external ticketing not supported")
+	}
+}
 
 func WithMetricsHandler(h metrics.Handler) Opt {
 	return func(b *builderImpl) error {
@@ -440,6 +453,12 @@ func (b *builderImpl) GetMetadata(ctx context.Context, request *v2.ConnectorServ
 	}
 
 	md.Capabilities = getCapabilities(ctx, b)
+
+	annos := annotations.Annotations(md.Annotations)
+	if b.ticketManager != nil {
+		annos.Append(&v2.ExternalTicketSettings{Enabled: b.ticketingEnabled})
+	}
+	md.Annotations = annos
 
 	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
 	return &v2.ConnectorServiceGetMetadataResponse{Metadata: md}, nil

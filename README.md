@@ -76,19 +76,24 @@ Available Commands:
   help               Help about any command
 
 Flags:
-      --api-token string             The API token for the service account.  ($BATON_API_TOKEN)
+      --api-token string             The API token for the service account ($BATON_API_TOKEN)
+      --ciam                         Whether to run in CIAM mode or not. In CIAM mode, only roles and the users assigned to roles are synced ($BATON_CIAM)
+      --ciam-email-domains strings   The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role ($BATON_CIAM_EMAIL_DOMAINS)
       --client-id string             The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
       --client-secret string         The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
-      --domain string                The URL for the Okta organization. ($BATON_DOMAIN)
+      --domain string                required: The URL for the Okta organization ($BATON_DOMAIN)
   -f, --file string                  The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
   -h, --help                         help for baton-okta
       --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
       --log-level string             The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
-      --okta-client-id string        The Okta Client ID. ($BATON_OKTA_CLIENT_ID)
-      --okta-private-key string      The Okta Private Key. This can be the whole private key or the path to the private key. ($BATON_OKTA_PRIVATE_KEY)
-      --okta-private-key-id string   The Okta Private Key ID. ($BATON_OKTA_PRIVATE_KEY_ID)
-  -p, --provisioning                 This must be set in order for provisioning actions to be enabled. ($BATON_PROVISIONING)
-      --sync-inactive-apps           Whether to sync inactive apps or not.  ($BATON_SYNC_INACTIVE_APPS) (default true)
+      --okta-client-id string        The Okta Client ID ($BATON_OKTA_CLIENT_ID)
+      --okta-private-key string      The Okta Private Key. This can be the whole private key or the path to the private key ($BATON_OKTA_PRIVATE_KEY)
+      --okta-private-key-id string   The Okta Private Key ID ($BATON_OKTA_PRIVATE_KEY_ID)
+      --okta-provisioning            ($BATON_OKTA_PROVISIONING)
+  -p, --provisioning                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
+      --skip-full-sync               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
+      --sync-inactive-apps           Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
+      --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
   -v, --version                      version for baton-okta
 
 Use "baton-okta [command] --help" for more information about a command.

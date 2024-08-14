@@ -16,6 +16,7 @@ import (
 )
 
 var ErrFieldNil = errors.New("error: field is nil")
+var ErrTicketValidationError = errors.New("create ticket request is not valid")
 
 // CustomFieldForSchemaField returns a typed custom field for a given schema field.
 func CustomFieldForSchemaField(id string, schema *v2.TicketSchema, value interface{}) (*v2.TicketCustomField, error) {
@@ -244,39 +245,36 @@ func GetCustomFieldValue(field *v2.TicketCustomField) (interface{}, error) {
 func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Ticket) (bool, error) {
 	l := ctxzap.Extract(ctx)
 
-	// Look for a matching status
-	foundMatch := false
-	for _, status := range schema.GetStatuses() {
-		// Status is not required
-		if ticket.Status == nil {
-			foundMatch = true
-			break
-		}
-
-		if ticket.Status.GetId() == status.GetId() {
-			foundMatch = true
-			break
+	// Validate the ticket status is one defined in the schema
+	// Ticket status is not required so if a ticket doesn't have a status
+	// we don't need to validate, skip the loop in this case
+	validTicketStatus := ticket.Status == nil
+	if !validTicketStatus {
+		for _, status := range schema.GetStatuses() {
+			if ticket.Status.GetId() == status.GetId() {
+				validTicketStatus = true
+				break
+			}
 		}
 	}
-
-	if !foundMatch {
+	if !validTicketStatus {
 		l.Debug("error: invalid ticket: could not find status", zap.String("status_id", ticket.Status.GetId()))
 		return false, nil
 	}
 
-	// Look for a matching ticket type
-	foundMatch = false
-	for _, tType := range schema.GetTypes() {
-		if ticket.Type == nil {
-			return false, nil
-		}
-		if ticket.Type.GetId() == tType.GetId() {
-			foundMatch = true
-			break
+	// Validate the ticket type is one defined in the schema
+	// Ticket type is not required so if a ticket doesn't have a type
+	// we don't need to validate, skip the loop in this case
+	validTicketType := ticket.Type == nil
+	if !validTicketType {
+		for _, tType := range schema.GetTypes() {
+			if ticket.Type.GetId() == tType.GetId() {
+				validTicketType = true
+				break
+			}
 		}
 	}
-
-	if !foundMatch {
+	if !validTicketType {
 		l.Debug("error: invalid ticket: could not find ticket type", zap.String("ticket_type_id", ticket.Type.GetId()))
 		return false, nil
 	}
@@ -304,7 +302,7 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 				return false, nil
 			}
 
-			if cf.Required && tv.StringValue.Value == "" {
+			if cf.Required && tv.StringValue.GetValue() == "" {
 				l.Debug("error: invalid ticket: string value is required but was empty", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
@@ -316,7 +314,7 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 				return false, nil
 			}
 
-			if cf.Required && len(tv.StringValues.Values) == 0 {
+			if cf.Required && len(tv.StringValues.GetValues()) == 0 {
 				l.Debug("error: invalid ticket: string values is required but was empty", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
@@ -335,7 +333,7 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 				return false, nil
 			}
 
-			if cf.Required && tv.TimestampValue.Value == nil {
+			if cf.Required && tv.TimestampValue.GetValue() == nil {
 				l.Debug("error: invalid ticket: expected timestamp value for field but was empty", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
@@ -350,7 +348,13 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 			ticketValue := tv.PickStringValue.GetValue()
 			allowedValues := v.PickStringValue.GetAllowedValues()
 
-			if cf.Required && ticketValue == "" {
+			// String value is empty but custom field is not required, skip further validation
+			if !cf.Required && ticketValue == "" {
+				continue
+			}
+
+			// Custom field is required, check if string is empty
+			if ticketValue == "" {
 				l.Debug("error: invalid ticket: expected string value for field but was empty", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
@@ -360,7 +364,7 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 				return false, nil
 			}
 
-			foundMatch = false
+			foundMatch := false
 			for _, m := range allowedValues {
 				if m == ticketValue {
 					foundMatch = true
@@ -387,7 +391,13 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 			ticketValues := tv.PickMultipleStringValues.GetValues()
 			allowedValues := v.PickMultipleStringValues.GetAllowedValues()
 
-			if cf.Required && len(ticketValues) == 0 {
+			// String values are empty but custom field is not required, skip further validation
+			if !cf.Required && len(ticketValues) == 0 {
+				continue
+			}
+
+			// Custom field is required so check if string values are empty
+			if len(ticketValues) == 0 {
 				l.Debug("error: invalid ticket: string values is required but was empty", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
@@ -425,7 +435,13 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 			ticketValue := tv.PickObjectValue.GetValue()
 			allowedValues := v.PickObjectValue.GetAllowedValues()
 
-			if cf.Required && ticketValue == nil || ticketValue.GetId() == "" {
+			// Object value for field is nil, but custom field is not required, skip further validation
+			if !cf.Required && (ticketValue == nil || ticketValue.GetId() == "") {
+				continue
+			}
+
+			// Custom field is required so check if object value for field is nil
+			if ticketValue == nil || ticketValue.GetId() == "" {
 				l.Debug("error: invalid ticket: expected object value for field but was nil", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
@@ -435,7 +451,7 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 				return false, nil
 			}
 
-			foundMatch = false
+			foundMatch := false
 			for _, m := range allowedValues {
 				if m.GetId() == ticketValue.GetId() {
 					foundMatch = true
@@ -462,7 +478,13 @@ func ValidateTicket(ctx context.Context, schema *v2.TicketSchema, ticket *v2.Tic
 			ticketValues := tv.PickMultipleObjectValues.GetValues()
 			allowedValues := v.PickMultipleObjectValues.GetAllowedValues()
 
-			if cf.Required && len(ticketValues) == 0 {
+			// Object values are empty but custom field is not required, skip further validation
+			if !cf.Required && len(ticketValues) == 0 {
+				continue
+			}
+
+			// Custom field is required so check if object values are empty
+			if len(ticketValues) == 0 {
 				l.Debug("error: invalid ticket: object values is required but was empty", zap.String("custom_field_id", cf.Id))
 				return false, nil
 			}
