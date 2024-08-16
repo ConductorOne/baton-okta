@@ -3,10 +3,10 @@ module github.com/conductorone/baton-okta
 go 1.22.2
 
 require (
-	github.com/conductorone/baton-sdk v0.1.43
+	github.com/conductorone/baton-sdk v0.2.18
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/okta/okta-sdk-golang/v2 v2.20.0
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/protobuf v1.34.1
 )
@@ -15,6 +15,7 @@ require (
 	filippo.io/age v1.1.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/allegro/bigcache/v3 v3.1.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.27.1 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.27.17 // indirect
@@ -36,6 +37,7 @@ require (
 	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/doug-martin/goqu/v9 v9.19.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.0.4 // indirect
@@ -68,8 +70,8 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
+	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.14 // indirect
 	github.com/tklauser/numcpus v0.8.0 // indirect

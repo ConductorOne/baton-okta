@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
 	"github.com/conductorone/baton-okta/pkg/connector"
+	configschema "github.com/conductorone/baton-sdk/pkg/config"
 )
 
 var version = "dev"
@@ -19,16 +20,13 @@ var version = "dev"
 func main() {
 	ctx := context.Background()
 
-	cfg := &Config{}
-	cmd, err := cli.NewCmd(ctx, "baton-okta", cfg, validateConfig, getConnector)
+	_, cmd, err := configschema.DefineConfiguration(ctx, "baton-okta", getConnector, configuration)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
 	cmd.Version = version
-
-	cmdFlags(cmd)
 
 	err = cmd.Execute()
 	if err != nil {
@@ -37,19 +35,19 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, cfg *Config) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
 
 	ccfg := &connector.Config{
-		Domain:           cfg.Domain,
-		ApiToken:         cfg.ApiToken,
-		OktaClientId:     cfg.OktaClientId,
-		OktaPrivateKey:   cfg.OktaPrivateKey,
-		OktaPrivateKeyId: cfg.OktaPrivateKeyId,
-		SyncInactiveApps: cfg.SyncInactiveApps,
-		OktaProvisioning: cfg.OktaProvisioning,
-		Ciam:             cfg.Ciam,
-		CiamEmailDomains: cfg.CiamEmailDomains,
+		Domain:           v.GetString("domain"),
+		ApiToken:         v.GetString("api-token"),
+		OktaClientId:     v.GetString("okta-client-id"),
+		OktaPrivateKey:   v.GetString("okta-private-key"),
+		OktaPrivateKeyId: v.GetString("okta-private-key-id"),
+		SyncInactiveApps: v.GetBool("sync-inactive-apps"),
+		OktaProvisioning: v.GetBool("okta-provisioning"),
+		Ciam:             v.GetBool("ciam"),
+		CiamEmailDomains: v.GetStringSlice("ciam-email-domains"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)
