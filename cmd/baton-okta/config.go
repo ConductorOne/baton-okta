@@ -18,7 +18,7 @@ var (
 )
 
 var relationships = []field.SchemaFieldRelationship{
-	field.FieldsRequiredTogether(oktaPrivateKeyId, oktaPrivateKey),
+	field.FieldsDependentOn([]field.SchemaField{oktaPrivateKey, oktaPrivateKey}, []field.SchemaField{oktaClientId}),
 	field.FieldsMutuallyExclusive(apiToken, oktaClientId),
 	field.FieldsAtLeastOneUsed(apiToken, oktaClientId),
 }
