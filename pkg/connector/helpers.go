@@ -24,7 +24,7 @@ type responseContext struct {
 	requestID string
 
 	status     string
-	statusCode uint32
+	statusCode int
 
 	hasRateLimit       bool
 	rateLimit          int64
@@ -77,7 +77,7 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 		token:        token,
 		requestID:    resp.Header.Get(oktaRequestIDHeader),
 		status:       resp.Status,
-		statusCode:   uint32(resp.StatusCode),
+		statusCode:   resp.StatusCode,
 		OktaResponse: resp,
 	}
 
