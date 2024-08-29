@@ -37,6 +37,9 @@ type Config struct {
 	OktaProvisioning bool
 	Ciam             bool
 	CiamEmailDomains []string
+	Cache            bool
+	CacheTti         int32
+	CacheTtl         int32
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -177,7 +180,9 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
 			okta.WithToken(cfg.ApiToken),
 			okta.WithHttpClientPtr(client),
-			okta.WithCache(false),
+			okta.WithCache(cfg.Cache),
+			okta.WithCacheTti(cfg.CacheTti),
+			okta.WithCacheTtl(cfg.CacheTtl),
 		)
 		if err != nil {
 			return nil, err
@@ -195,7 +200,9 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithScopes(scopes),
 			okta.WithPrivateKey(cfg.OktaPrivateKey),
 			okta.WithPrivateKeyId(cfg.OktaPrivateKeyId),
-			okta.WithCache(false),
+			okta.WithCache(cfg.Cache),
+			okta.WithCacheTti(cfg.CacheTti),
+			okta.WithCacheTtl(cfg.CacheTtl),
 		)
 		if err != nil {
 			return nil, err
