@@ -49,8 +49,8 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		Ciam:             v.GetBool("ciam"),
 		CiamEmailDomains: v.GetStringSlice("ciam-email-domains"),
 		Cache:            v.GetBool("cache"),
-		CacheTti:         v.GetInt32("cache-tti"),
-		CacheTtl:         v.GetInt32("cache-ttl"),
+		CacheTTI:         v.GetInt32("cache-tti"),
+		CacheTTL:         v.GetInt32("cache-ttl"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)

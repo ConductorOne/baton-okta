@@ -38,8 +38,8 @@ type Config struct {
 	Ciam             bool
 	CiamEmailDomains []string
 	Cache            bool
-	CacheTti         int32
-	CacheTtl         int32
+	CacheTTI         int32
+	CacheTTL         int32
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -181,8 +181,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithToken(cfg.ApiToken),
 			okta.WithHttpClientPtr(client),
 			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTti),
-			okta.WithCacheTtl(cfg.CacheTtl),
+			okta.WithCacheTti(cfg.CacheTTI),
+			okta.WithCacheTtl(cfg.CacheTTL),
 		)
 		if err != nil {
 			return nil, err
@@ -201,8 +201,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithPrivateKey(cfg.OktaPrivateKey),
 			okta.WithPrivateKeyId(cfg.OktaPrivateKeyId),
 			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTti),
-			okta.WithCacheTtl(cfg.CacheTtl),
+			okta.WithCacheTti(cfg.CacheTTI),
+			okta.WithCacheTtl(cfg.CacheTTL),
 		)
 		if err != nil {
 			return nil, err
