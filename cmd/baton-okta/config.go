@@ -21,7 +21,7 @@ var (
 )
 
 var relationships = []field.SchemaFieldRelationship{
-	field.FieldsDependentOn([]field.SchemaField{oktaPrivateKey, oktaPrivateKey}, []field.SchemaField{oktaClientId}),
+	field.FieldsDependentOn([]field.SchemaField{oktaPrivateKeyId, oktaPrivateKey}, []field.SchemaField{oktaClientId}),
 	field.FieldsMutuallyExclusive(apiToken, oktaClientId),
 	field.FieldsAtLeastOneUsed(apiToken, oktaClientId),
 }
