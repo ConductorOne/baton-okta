@@ -199,6 +199,8 @@ func userResource(ctx context.Context, user *okta.User) (*v2.Resource, error) {
 	firstName, lastName := userName(user)
 
 	oktaProfile := *user.Profile
+	oktaProfile["c1_okta_raw_user_status"] = user.Status
+
 	options := []resource.UserTraitOption{
 		resource.WithUserProfile(oktaProfile),
 		// TODO?: use the user types API to figure out the account type

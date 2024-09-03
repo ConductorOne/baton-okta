@@ -1,29 +1,13 @@
-package helpers
+package ratelimit
 
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-func SplitFullName(name string) (string, string) {
-	names := strings.SplitN(name, " ", 2)
-	var firstName, lastName string
-
-	switch len(names) {
-	case 1:
-		firstName = names[0]
-	case 2:
-		firstName = names[0]
-		lastName = names[1]
-	}
-
-	return firstName, lastName
-}
 
 var limitHeaders = []string{
 	"X-Ratelimit-Limit",
@@ -140,33 +124,4 @@ func ExtractRateLimitData(statusCode int, header *http.Header) (*v2.RateLimitDes
 		Remaining: remaining,
 		ResetAt:   timestamppb.New(resetAt),
 	}, nil
-}
-
-func IsJSONContentType(contentType string) bool {
-	if !strings.HasPrefix(contentType, "application") {
-		return false
-	}
-
-	if !strings.Contains(contentType, "json") {
-		return false
-	}
-
-	return true
-}
-
-var xmlContentTypes []string = []string{
-	"text/xml",
-	"application/xml",
-}
-
-func IsXMLContentType(contentType string) bool {
-	// there are some janky APIs out there
-	normalizedContentType := strings.TrimSpace(strings.ToLower(contentType))
-
-	for _, xmlContentType := range xmlContentTypes {
-		if strings.HasPrefix(normalizedContentType, xmlContentType) {
-			return true
-		}
-	}
-	return false
 }

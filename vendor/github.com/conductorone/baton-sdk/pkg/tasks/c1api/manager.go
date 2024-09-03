@@ -42,12 +42,13 @@ var (
 )
 
 type c1ApiTaskManager struct {
-	mtx           sync.Mutex
-	started       bool
-	queue         []*v1.Task
-	serviceClient BatonServiceClient
-	tempDir       string
-	skipFullSync  bool
+	mtx               sync.Mutex
+	started           bool
+	queue             []*v1.Task
+	serviceClient     BatonServiceClient
+	tempDir           string
+	skipFullSync      bool
+	runnerShouldDebug bool
 }
 
 // getHeartbeatInterval returns an appropriate heartbeat interval. If the interval is 0, it will return the default heartbeat interval.
@@ -177,6 +178,7 @@ func (c *c1ApiTaskManager) finishTask(ctx context.Context, task *v1.Task, resp p
 	_, rpcErr := c.serviceClient.FinishTask(finishCtx, &v1.BatonServiceFinishTaskRequest{
 		TaskId: task.GetId(),
 		Status: &pbstatus.Status{
+			//nolint:gosec // No risk of overflow because `Code` is a small enum.
 			Code:    int32(statusErr.Code()),
 			Message: statusErr.Message(),
 		},
@@ -193,6 +195,14 @@ func (c *c1ApiTaskManager) finishTask(ctx context.Context, task *v1.Task, resp p
 	}
 
 	return err
+}
+
+func (c *c1ApiTaskManager) GetTempDir() string {
+	return c.tempDir
+}
+
+func (c *c1ApiTaskManager) ShouldDebug() bool {
+	return c.runnerShouldDebug
 }
 
 func (c *c1ApiTaskManager) Process(ctx context.Context, task *v1.Task, cc types.ConnectorClient) error {
@@ -224,25 +234,18 @@ func (c *c1ApiTaskManager) Process(ctx context.Context, task *v1.Task, cc types.
 	switch tasks.GetType(task) {
 	case taskTypes.FullSyncType:
 		handler = newFullSyncTaskHandler(task, tHelpers, c.skipFullSync)
-
 	case taskTypes.HelloType:
 		handler = newHelloTaskHandler(task, tHelpers)
-
 	case taskTypes.GrantType:
 		handler = newGrantTaskHandler(task, tHelpers)
-
 	case taskTypes.RevokeType:
 		handler = newRevokeTaskHandler(task, tHelpers)
-
 	case taskTypes.CreateAccountType:
 		handler = newCreateAccountTaskHandler(task, tHelpers)
-
 	case taskTypes.CreateResourceType:
 		handler = newCreateResourceTaskHandler(task, tHelpers)
-
 	case taskTypes.DeleteResourceType:
 		handler = newDeleteResourceTaskHandler(task, tHelpers)
-
 	case taskTypes.RotateCredentialsType:
 		handler = newRotateCredentialsTaskHandler(task, tHelpers)
 	case taskTypes.CreateTicketType:
@@ -251,6 +254,8 @@ func (c *c1ApiTaskManager) Process(ctx context.Context, task *v1.Task, cc types.
 		handler = newListSchemasTaskHandler(task, tHelpers)
 	case taskTypes.GetTicketType:
 		handler = newGetTicketTaskHandler(task, tHelpers)
+	case taskTypes.StartDebugging:
+		handler = newStartDebugging(c)
 	default:
 		return c.finishTask(ctx, task, nil, nil, errors.New("unsupported task type"))
 	}

@@ -27,7 +27,6 @@ type localCreateTicket struct {
 type ticketTemplate struct {
 	SchemaID       string                 `json:"schema_id"`
 	StatusId       string                 `json:"status_id"`
-	TypeId         string                 `json:"type_id"`
 	DisplayName    string                 `json:"display_name"`
 	Description    string                 `json:"description"`
 	Labels         []string               `json:"labels"`
@@ -48,6 +47,14 @@ func (m *localCreateTicket) loadTicketTemplate(ctx context.Context) (*ticketTemp
 	}
 
 	return template, nil
+}
+
+func (m *localCreateTicket) GetTempDir() string {
+	return ""
+}
+
+func (m *localCreateTicket) ShouldDebug() bool {
+	return false
 }
 
 func (m *localCreateTicket) Next(ctx context.Context) (*v1.Task, time.Duration, error) {
@@ -81,12 +88,6 @@ func (m *localCreateTicket) Process(ctx context.Context, task *v1.Task, cc types
 		DisplayName: template.DisplayName,
 		Description: template.Description,
 		Labels:      template.Labels,
-	}
-
-	if template.TypeId != "" {
-		ticketRequestBody.Type = &v2.TicketType{
-			Id: template.TypeId,
-		}
 	}
 
 	if template.StatusId != "" {
@@ -141,6 +142,14 @@ type localGetTicket struct {
 	ticketId string
 }
 
+func (m *localGetTicket) GetTempDir() string {
+	return ""
+}
+
+func (m *localGetTicket) ShouldDebug() bool {
+	return false
+}
+
 func (m *localGetTicket) Next(ctx context.Context) (*v1.Task, time.Duration, error) {
 	var task *v1.Task
 	m.o.Do(func() {
@@ -179,6 +188,14 @@ func NewGetTicket(ctx context.Context, ticketId string) tasks.Manager {
 
 type localListTicketSchemas struct {
 	o sync.Once
+}
+
+func (m *localListTicketSchemas) GetTempDir() string {
+	return ""
+}
+
+func (m *localListTicketSchemas) ShouldDebug() bool {
+	return false
 }
 
 func (m *localListTicketSchemas) Next(ctx context.Context) (*v1.Task, time.Duration, error) {
