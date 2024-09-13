@@ -214,10 +214,10 @@ func userResource(ctx context.Context, user *okta.User) (*v2.Resource, error) {
 	}
 
 	if user.Created != nil {
-		resource.WithCreatedAt(*user.Created)
+		options = append(options, resource.WithCreatedAt(*user.Created))
 	}
 	if user.LastLogin != nil {
-		resource.WithLastLogin(*user.LastLogin)
+		options = append(options, resource.WithLastLogin(*user.LastLogin))
 	}
 
 	if email, ok := oktaProfile["email"].(string); ok && email != "" {
