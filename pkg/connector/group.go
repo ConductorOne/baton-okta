@@ -87,26 +87,6 @@ func (o *groupResourceType) Entitlements(
 	return rv, "", nil, nil
 }
 
-func (o *groupResourceType) fetchEtags(etagValues *v2.ETagMetadata) (time.Time, bool, error) {
-	if etagValues == nil || etagValues.Metadata == nil {
-		return time.Time{}, false, nil
-	}
-
-	fields := etagValues.Metadata.GetFields()
-
-	lastMembershipUpdated, ok := fields[membershipUpdatedField]
-	if !ok {
-		return time.Time{}, false, nil
-	}
-
-	t, err := time.Parse(time.RFC3339Nano, lastMembershipUpdated.GetStringValue())
-	if err != nil {
-		return time.Time{}, false, err
-	}
-
-	return t, true, nil
-}
-
 func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) {
 	if group.LastMembershipUpdated != nil {
 		data, err := structpb.NewStruct(map[string]interface{}{
@@ -123,67 +103,11 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 	return nil, nil
 }
 
-// shouldSkipGroupGrants parses the resource etag, and returns true if listing grants should be skipped.
-func (o *groupResourceType) shouldSkipGroupGrants(ctx context.Context, resource *v2.Resource) (bool, error) {
-	annos := annotations.Annotations(resource.Annotations)
-	etag := &v2.ETag{}
-	ok, err := annos.Pick(etag)
-	if err != nil {
-		return false, err
-	}
-	// No etag present, continue to do work
-	if !ok || etag.Value == "" {
-		return false, nil
-	}
-
-	etagMd := &v2.ETagMetadata{}
-	ok, err = annos.Pick(etagMd)
-	if err != nil {
-		return false, err
-	}
-
-	// No etag metadata present, continue to do work
-	if !ok || etagMd.Metadata == nil {
-		return false, nil
-	}
-
-	etagTime, err := time.Parse(time.RFC3339Nano, etag.Value)
-	if err != nil {
-		return false, err
-	}
-
-	lastUpdatedAt, ok, err := o.fetchEtags(etagMd)
-	if err != nil {
-		return false, err
-	}
-	// We were unable to get relevant data from the etag metadata, do the work
-	if !ok {
-		return false, nil
-	}
-
-	// The stored etag time is after the lastMembershipUpdated time, so we can skip the work.
-	if etagTime.After(lastUpdatedAt) {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 func (o *groupResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	skip, err := o.shouldSkipGroupGrants(ctx, resource)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	if skip {
-		var respAnnos annotations.Annotations
-		respAnnos.Update(&v2.ETagMatch{})
-		return nil, "", respAnnos, nil
-	}
-
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
