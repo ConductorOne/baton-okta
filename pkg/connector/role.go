@@ -93,23 +93,18 @@ func (o *roleResourceType) List(
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
 		}
-
-		err = bag.Next(nextPageToken)
-		if err != nil {
-			return nil, "", nil, err
-		}
 	case listRoleCustom:
 		rv, err = o.listCustomRoles(ctx, resourceID, token)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
 		}
-
-		err = bag.Next(nextPageToken)
-		if err != nil {
-			return nil, "", nil, err
-		}
 	default:
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type for role: %w", err)
+	}
+
+	err = bag.Next(nextPageToken)
+	if err != nil {
+		return nil, "", nil, err
 	}
 
 	nextPageToken, err = bag.Marshal()
