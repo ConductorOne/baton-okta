@@ -19,7 +19,6 @@ var version = "dev"
 
 func main() {
 	ctx := context.Background()
-
 	_, cmd, err := configschema.DefineConfiguration(ctx, "baton-okta", getConnector, configuration)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -27,7 +26,6 @@ func main() {
 	}
 
 	cmd.Version = version
-
 	err = cmd.Execute()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -37,7 +35,6 @@ func main() {
 
 func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-
 	ccfg := &connector.Config{
 		Domain:           v.GetString("domain"),
 		ApiToken:         v.GetString("api-token"),

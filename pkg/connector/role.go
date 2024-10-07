@@ -63,57 +63,61 @@ const (
 	listRoleCustom   = "custom"
 )
 
-var listRoleTypes = []string{
-	listRoleStandard,
-	listRoleCustom,
-}
-
 func (o *roleResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
+	var nextPageToken string
+	_, bag, err := unmarshalSkipToken(token)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
+	if bag.Current() == nil {
+		// Push onto stack in reverse
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeRole.Id,
+			ResourceID:     listRoleStandard,
+		})
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeRole.Id,
+			ResourceID:     listRoleCustom,
+		})
+	}
+
 	var rv []*v2.Resource
-
 	switch bag.ResourceID() {
-	case "":
-		bag.Pop()
-		for _, listRoleType := range listRoleTypes {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeRole.Id,
-				ResourceID:     listRoleType,
-			})
-		}
-
 	case listRoleStandard:
-		bag.Pop()
 		rv, err = o.listSystemRoles(ctx, resourceID, token)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
 		}
 
+		err = bag.Next(nextPageToken)
+		if err != nil {
+			return nil, "", nil, err
+		}
 	case listRoleCustom:
-		bag.Pop()
 		rv, err = o.listCustomRoles(ctx, resourceID, token)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
 		}
 
+		err = bag.Next(nextPageToken)
+		if err != nil {
+			return nil, "", nil, err
+		}
 	default:
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type for role: %w", err)
 	}
 
-	pageToken, err := bag.Marshal()
+	nextPageToken, err = bag.Marshal()
 	if err != nil {
 		return nil, "", nil, err
 	}
 
-	return rv, pageToken, nil, nil
+	return rv, nextPageToken, nil, nil
 }
 
 func (o *roleResourceType) Entitlements(
@@ -205,8 +209,8 @@ func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource 
 
 func (o *roleResourceType) listSystemRoles(
 	ctx context.Context,
-	resource *v2.ResourceId,
-	token *pagination.Token,
+	_ *v2.ResourceId,
+	_ *pagination.Token,
 ) ([]*v2.Resource, error) {
 	rv := make([]*v2.Resource, 0, len(standardRoleTypes))
 	for _, role := range standardRoleTypes {
@@ -223,7 +227,7 @@ func (o *roleResourceType) listSystemRoles(
 
 func (o *roleResourceType) listCustomRoles(
 	ctx context.Context,
-	resource *v2.ResourceId,
+	_ *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, error) {
 	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
