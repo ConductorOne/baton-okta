@@ -48,6 +48,7 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		Cache:            v.GetBool("cache"),
 		CacheTTI:         v.GetInt32("cache-tti"),
 		CacheTTL:         v.GetInt32("cache-ttl"),
+		SyncCustomRoles:  v.GetBool("sync-custom-roles"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)

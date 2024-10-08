@@ -15,9 +15,10 @@ var (
 	ciam               = field.BoolField("ciam", field.WithDescription("Whether to run in CIAM mode or not. In CIAM mode, only roles and the users assigned to roles are synced"))
 	ciamEmailDomains   = field.StringSliceField("ciam-email-domains",
 		field.WithDescription("The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role"))
-	cache    = field.BoolField("cache", field.WithDescription("Enable response cache"), field.WithDefaultValue(true))
-	cacheTTI = field.IntField("cache-tti", field.WithDescription("Response cache cleanup interval in seconds"), field.WithDefaultValue(60))
-	cacheTTL = field.IntField("cache-ttl", field.WithDescription("Response cache time to live in seconds"), field.WithDefaultValue(300))
+	cache           = field.BoolField("cache", field.WithDescription("Enable response cache"), field.WithDefaultValue(true))
+	cacheTTI        = field.IntField("cache-tti", field.WithDescription("Response cache cleanup interval in seconds"), field.WithDefaultValue(60))
+	cacheTTL        = field.IntField("cache-ttl", field.WithDescription("Response cache time to live in seconds"), field.WithDefaultValue(300))
+	syncCustomRoles = field.BoolField("sync-custom-roles", field.WithDescription("Enable syncing custom roles"), field.WithDefaultValue(false))
 )
 
 var relationships = []field.SchemaFieldRelationship{
@@ -39,4 +40,5 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	cache,
 	cacheTTI,
 	cacheTTL,
+	syncCustomRoles,
 }, relationships...)

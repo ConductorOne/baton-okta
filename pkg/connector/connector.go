@@ -20,6 +20,7 @@ type Okta struct {
 	apiToken         string
 	syncInactiveApps bool
 	ciamConfig       *ciamConfig
+	syncCustomRoles  bool
 }
 
 type ciamConfig struct {
@@ -40,6 +41,7 @@ type Config struct {
 	Cache            bool
 	CacheTTI         int32
 	CacheTTL         int32
+	SyncCustomRoles  bool
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -102,7 +104,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		}
 	}
 	return []connectorbuilder.ResourceSyncer{
-		roleBuilder(o.domain, o.apiToken, o.client),
+		roleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o.domain, o.apiToken, o.client),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),

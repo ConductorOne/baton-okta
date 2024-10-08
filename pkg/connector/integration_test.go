@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -14,12 +15,13 @@ import (
 )
 
 var (
-	batonApiToken = os.Getenv("BATON_API_TOKEN")
-	batonDomain   = os.Getenv("BATON_DOMAIN")
-	ctxTest       = context.Background()
+	batonApiToken           = os.Getenv("BATON_API_TOKEN")
+	batonDomain             = os.Getenv("BATON_DOMAIN")
+	batonSyncCustomRoles, _ = strconv.ParseBool(os.Getenv("BATON_SYNC_CUSTOM_ROLES"))
+	ctxTest                 = context.Background()
 )
 
-func TestRoleResourceTypeList(t *testing.T) {
+func TestSyncStandardRoles(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
 	}
@@ -33,6 +35,33 @@ func TestRoleResourceTypeList(t *testing.T) {
 	r := &roleResourceType{
 		resourceType: resourceTypeRole,
 		client:       cliTest.client,
+	}
+
+	var token = "{}"
+	for len(token) > 0 {
+		_, tk, _, err := r.List(ctxTest, &v2.ResourceId{}, &pagination.Token{
+			Token: token,
+		})
+		require.Nil(t, err)
+		token = tk
+	}
+}
+
+func TestSyncCustomsRoles(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	r := &roleResourceType{
+		resourceType:    resourceTypeRole,
+		client:          cliTest.client,
+		syncCustomRoles: batonSyncCustomRoles,
 	}
 
 	var token = "{}"

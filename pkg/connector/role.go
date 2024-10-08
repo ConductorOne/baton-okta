@@ -41,10 +41,11 @@ var standardRoleTypes = []*okta.Role{
 }
 
 type roleResourceType struct {
-	resourceType *v2.ResourceType
-	domain       string
-	apiToken     string
-	client       *okta.Client
+	resourceType    *v2.ResourceType
+	domain          string
+	apiToken        string
+	client          *okta.Client
+	syncCustomRoles bool
 }
 
 type CustomRoles struct {
@@ -94,9 +95,11 @@ func (o *roleResourceType) List(
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
 		}
 	case listRoleCustom:
-		rv, err = o.listCustomRoles(ctx, resourceID, token)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
+		if o.syncCustomRoles {
+			rv, err = o.listCustomRoles(ctx, resourceID, token)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
+			}
 		}
 	default:
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type for role: %w", err)
@@ -557,11 +560,12 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	return nil, nil
 }
 
-func roleBuilder(domain string, apiToken string, client *okta.Client) *roleResourceType {
+func roleBuilder(domain string, apiToken string, client *okta.Client, syncCustomRoles bool) *roleResourceType {
 	return &roleResourceType{
-		resourceType: resourceTypeRole,
-		domain:       domain,
-		apiToken:     apiToken,
-		client:       client,
+		resourceType:    resourceTypeRole,
+		domain:          domain,
+		apiToken:        apiToken,
+		client:          client,
+		syncCustomRoles: syncCustomRoles,
 	}
 }
