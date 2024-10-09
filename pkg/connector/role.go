@@ -53,7 +53,12 @@ type CustomRoles struct {
 	Links interface{}  `json:"_links,omitempty"`
 }
 
-const NF = -1
+const (
+	apiPathListAdministrators = "/api/internal/administrators"
+	apiPathListIamCustomRoles = "/api/v1/iam/roles"
+	ContentType               = "application/json"
+	NF                        = -1
+)
 
 func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
@@ -252,13 +257,16 @@ func (o *roleResourceType) listCustomRoles(
 }
 
 func listOktaIamCustomRoles(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Role, *responseContext, error) {
-	url := "/api/v1/iam/roles"
+	url := apiPathListIamCustomRoles
 	if qp != nil {
 		url += qp.String()
 	}
 
 	rq := client.CloneRequestExecutor()
-	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, url, nil)
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -312,7 +320,7 @@ type administratorRoleFlags struct {
 }
 
 func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, encodedQueryParams string) ([]*administratorRoleFlags, *responseContext, error) {
-	reqUrl, err := url.Parse("/api/internal/administrators")
+	reqUrl, err := url.Parse(apiPathListAdministrators)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -322,8 +330,10 @@ func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token 
 	}
 
 	rq := client.CloneRequestExecutor()
-
-	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, reqUrl.String(), nil)
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, reqUrl.String(), nil)
 	if err != nil {
 		return nil, nil, err
 	}
