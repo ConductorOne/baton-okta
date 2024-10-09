@@ -21,33 +21,7 @@ var (
 	ctxTest                 = context.Background()
 )
 
-func TestSyncStandardRoles(t *testing.T) {
-	if batonApiToken == "" && batonDomain == "" {
-		t.Skip()
-	}
-
-	cliTest, err := getClietForTesting(ctxTest, &Config{
-		Domain:   batonDomain,
-		ApiToken: batonApiToken,
-	})
-	require.Nil(t, err)
-
-	r := &roleResourceType{
-		resourceType: resourceTypeRole,
-		client:       cliTest.client,
-	}
-
-	var token = "{}"
-	for len(token) > 0 {
-		_, tk, _, err := r.List(ctxTest, &v2.ResourceId{}, &pagination.Token{
-			Token: token,
-		})
-		require.Nil(t, err)
-		token = tk
-	}
-}
-
-func TestSyncCustomsRoles(t *testing.T) {
+func TestSyncRoles(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
 	}
@@ -65,7 +39,7 @@ func TestSyncCustomsRoles(t *testing.T) {
 	}
 
 	var token = "{}"
-	for len(token) > 0 {
+	for token != "" {
 		res, tk, _, err := r.List(ctxTest, &v2.ResourceId{}, &pagination.Token{
 			Token: token,
 		})

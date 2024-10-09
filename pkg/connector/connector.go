@@ -103,6 +103,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 			ciamBuilder(o.client),
 		}
 	}
+
 	return []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 		userBuilder(o.domain, o.apiToken, o.client),
@@ -216,6 +217,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		domain:           cfg.Domain,
 		apiToken:         cfg.ApiToken,
 		syncInactiveApps: cfg.SyncInactiveApps,
+		syncCustomRoles:  cfg.SyncCustomRoles,
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,

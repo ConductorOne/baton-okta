@@ -113,7 +113,6 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 
 func (o *ciamResourceBuilder) Entitlements(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-
 	role := standardRoleFromType(resource.Id.GetResource())
 
 	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
