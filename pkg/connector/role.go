@@ -256,7 +256,12 @@ func (o *roleResourceType) listCustomRoles(
 	return rv, nil
 }
 
-func listOktaIamCustomRoles(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Role, *responseContext, error) {
+func listOktaIamCustomRoles(
+	ctx context.Context,
+	client *okta.Client,
+	token *pagination.Token,
+	qp *query.Params,
+) ([]*okta.Role, *responseContext, error) {
 	url := apiPathListIamCustomRoles
 	if qp != nil {
 		url += qp.String()
@@ -319,7 +324,12 @@ type administratorRoleFlags struct {
 	RolesFromGroup                   []string `json:"rolesFromGroup"`
 }
 
-func listAdministratorRoleFlags(ctx context.Context, client *okta.Client, token *pagination.Token, encodedQueryParams string) ([]*administratorRoleFlags, *responseContext, error) {
+func listAdministratorRoleFlags(
+	ctx context.Context,
+	client *okta.Client,
+	token *pagination.Token,
+	encodedQueryParams string,
+) ([]*administratorRoleFlags, *responseContext, error) {
 	reqUrl, err := url.Parse(apiPathListAdministrators)
 	if err != nil {
 		return nil, nil, err
