@@ -102,7 +102,7 @@ func (o *roleResourceType) List(
 			}
 		}
 	default:
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: -- xxx -- unexpected resource type for role: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource type for role: %w", err)
 	}
 
 	err = bag.Next(nextPageToken)
