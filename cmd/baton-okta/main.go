@@ -51,6 +51,8 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		Cache:            v.GetBool("cache"),
 		CacheTTI:         v.GetInt32("cache-tti"),
 		CacheTTL:         v.GetInt32("cache-ttl"),
+		AWSMode:          v.GetBool("aws-identity-center-mode"),
+		AWSOktaAppId:     v.GetString("aws-okta-app-id"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)

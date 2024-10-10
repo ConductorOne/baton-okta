@@ -2,9 +2,12 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -25,6 +28,7 @@ type groupResourceType struct {
 	domain       string
 	apiToken     string
 	client       *okta.Client
+	awsConfig    *awsConfig
 }
 
 func (o *groupResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -36,18 +40,31 @@ func (o *groupResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Info("************** (o *groupResourceType) List")
+	// TODO(lauren) why is this user?
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	var rv []*v2.Resource
-	qp := queryParams(token.Size, page)
-
-	groups, respCtx, err := o.listGroups(ctx, token, qp)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+	var groups []*okta.Group
+	var respCtx *responseContext
+	if o.awsConfig != nil && o.awsConfig.Enabled {
+		qp := queryParamsExpand(token.Size, page, "group")
+		groups, respCtx, err = o.listApplicationGroups(ctx, token, qp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
+		}
+	} else {
+		qp := queryParams(token.Size, page)
+		groups, respCtx, err = o.listGroups(ctx, token, qp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
+		}
 	}
+
+	var rv []*v2.Resource
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
@@ -71,6 +88,30 @@ func (o *groupResourceType) List(
 	pageToken, err := bag.Marshal()
 	if err != nil {
 		return nil, "", nil, err
+	}
+
+	if pageToken == "" && o.awsConfig != nil && o.awsConfig.Enabled {
+		l.Info("************ HERE")
+		o.awsConfig.accountRoleCache.Range(func(key, value interface{}) bool {
+			l.Info("************ (o *accountResourceType) List MAPPING",
+				zap.Any("makeaccountId", key))
+			accountId, ok := key.(string) // Type assertion to convert interface{} to string
+			if ok {
+				bag.Push(pagination.PageState{
+					ResourceTypeID: resourceTypeAccount.Id,
+					ResourceID:     accountId,
+				})
+
+			}
+			return true // continue iteration
+		})
+
+		bag.Pop()
+
+		bagStr, err := bag.Marshal()
+		l.Info("****************** page token", zap.Error(err), zap.Any("bag", bag), zap.Any("bagStr", bagStr))
+		pageToken = bagStr
+		// TODO(lauren) pop?
 	}
 
 	return rv, pageToken, annos, nil
@@ -108,15 +149,26 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Info("**************** (o *groupResourceType) Grants",
+		zap.Any("resource", resource),
+		zap.Any("token", token))
+
+	// TODO(lauren) why is this user
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
+	l.Info("**************** parsed token",
+		zap.Any("bag", bag),
+		zap.Any("page", page))
 
 	var rv []*v2.Grant
 	qp := queryParams(token.Size, page)
 
-	users, respCtx, err := o.listGroupUsers(ctx, resource.Id.GetResource(), token, qp)
+	groupID := resource.Id.GetResource()
+
+	users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
 	}
@@ -132,7 +184,78 @@ func (o *groupResourceType) Grants(
 	}
 
 	for _, user := range users {
+		l.Info("************* processing user", zap.Any("user", user))
 		rv = append(rv, groupGrant(resource, user))
+
+		var userGroupSet mapset.Set[string]
+		userGroupCachedSet, ok := o.awsConfig.appUserToGroup.Load(user.Id)
+		if !ok {
+			userGroupSet = mapset.NewSet[string](groupID)
+		} else {
+			userGroupSet, ok = userGroupCachedSet.(mapset.Set[string])
+			if !ok {
+				return nil, "", nil, fmt.Errorf("error converting set")
+			}
+			userGroupSet.Add(groupID)
+		}
+		o.awsConfig.appUserToGroup.Store(user.Id, userGroupSet)
+
+		if o.awsConfig.UseGroupMapping {
+			// Cache group grants
+			re, err := regexp.Compile(o.awsConfig.RoleRegex)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("error compiling regex '%s': %w", o.awsConfig.RoleRegex, err)
+			}
+			match := re.FindStringSubmatch(resource.DisplayName)
+
+			l.Info("******* GRANT MATCH", zap.Any("esource.DisplayName", resource.DisplayName),
+				zap.Any("match", match))
+			// TODO(lauren) check exact length
+			if len(match) != 3 {
+				l.Info("******* continuing ", zap.Any("match", match))
+				// TODO(lauren)  error or continue?
+				continue
+			}
+
+			// First element is full string
+			accountId := match[1]
+			role := match[2]
+			cachedAccountGrants, ok := o.awsConfig.accountGrantCache.Load(accountId)
+			if !ok {
+				return nil, "", nil, fmt.Errorf("error getting accounts grant cache '%s'", accountId)
+			}
+			accountGrantsPtr, ok := cachedAccountGrants.(*[]*GroupMappingGrant)
+			if !ok {
+				return nil, "", nil, fmt.Errorf("error casting account grants '%s'", accountId)
+			}
+			accountGrants := *accountGrantsPtr
+			gmg := &GroupMappingGrant{
+				OktaUserID: user.Id,
+				Role:       role,
+			}
+			accountGrants = append(accountGrants, gmg)
+			l.Info("******* account grnats ", zap.Any("gmg", gmg),
+				zap.Any("accountGrants", accountGrants))
+			o.awsConfig.accountGrantCache.Store(accountId, &accountGrants)
+		}
+
+		/*if o.awsConfig.UseGroupMapping {
+			groupRoleCacheVal, ok := o.awsConfig.groupToSamlRoleCache.Load(groupID)
+			if !ok {
+				// TODO(lauren) error or continue?
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get roles for group '%s'", groupID)
+			}
+			groupRoleSet, ok := groupRoleCacheVal.(mapset.Set[string])
+			if !ok {
+				return nil, "", nil, fmt.Errorf("error converting group '%s' role set", group)
+			}
+			// This should only be 1 value
+			//for role := range groupRoleSet.Iterator().C {
+			//
+			//}
+
+		}*/
+
 	}
 
 	pageToken, err := bag.Marshal()
@@ -140,17 +263,64 @@ func (o *groupResourceType) Grants(
 		return nil, "", nil, err
 	}
 
+	l.Info("******** GROUP TOKEN", zap.Any("pageToken", pageToken))
 	if pageToken == "" {
 		etag := &v2.ETag{
 			Value: time.Now().UTC().Format(time.RFC3339Nano),
 		}
 		annos.Update(etag)
+		processedGrants := o.awsConfig.processedGroupGrants.Load()
+
+		if o.awsConfig != nil && o.awsConfig.Enabled {
+			l.Info("******** GROUP TOKEN AWS ENABLED", zap.Any("processedGrants", processedGrants))
+			if !processedGrants {
+				beforeMarshal, err := bag.Marshal()
+				l.Info("******** before", zap.Any("beforeMarshal", beforeMarshal))
+				bag.Push(pagination.PageState{
+					ResourceTypeID: resourceTypeAccount.Id,
+				})
+				/*beforePopMarshal, err := bag.Marshal()
+				l.Info("******** before pop", zap.Any("beforePopMarshal", beforePopMarshal))
+				bag.Pop()
+				l.Info("******** after pop", zap.Any("bag", bag))*/
+				newTokenString, err := bag.Marshal()
+				if err != nil {
+					return nil, "", nil, err
+				}
+				l.Info("******** newTokenString", zap.Any("newTokenString", newTokenString))
+				pageToken = newTokenString
+			}
+			o.awsConfig.processedGroupGrants.Store(true)
+		}
+		// TODO(check empty token)
+		/*
+			f pageToken == "" && o.awsConfig != nil && o.awsConfig.Enabled {
+
+					o.awsConfig.accountRoleCache.Range(func(key, value interface{}) bool {
+						l.Info("************ (o *accountResourceType) List MAPPING",
+							zap.Any("makeaccountId", key))
+						accountId, ok := key.(string) // Type assertion to convert interface{} to string
+						if ok {
+							bag.Push(pagination.PageState{
+								ResourceTypeID: resourceTypeAccount.Id,
+								ResourceID:     accountId,
+							})
+						}
+						return true // continue iteration
+					})
+				}
+		*/
 	}
 
 	return rv, pageToken, annos, nil
 }
 
 func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	//if o.awsConfig != nil && o.awsConfig.Enabled {
+	//	return listApplicationGroups(ctx)
+	//}
+	// TODO(lauren) here
+	//ListApplicationGroupAssignments
 	groups, resp, err := o.client.Group.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
@@ -159,6 +329,107 @@ func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.To
 	reqCtx, err := responseToContext(token, resp)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	return groups, reqCtx, nil
+}
+
+func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	l := ctxzap.Extract(ctx)
+	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, o.client, o.awsConfig.OktaAppId, token, qp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	groups := make([]*okta.Group, 0, len(appGroups))
+
+	for _, appGroup := range appGroups {
+		embedded := appGroup.Embedded
+		if embedded == nil {
+			return nil, nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
+		}
+		embeddedMap, ok := embedded.(map[string]interface{})
+		if !ok {
+			return nil, nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
+		}
+		embeddedGroup, ok := embeddedMap["group"]
+		if !ok {
+			return nil, nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
+		}
+		groupJSON, err := json.Marshal(embeddedGroup)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+		}
+		oktaGroup := &okta.Group{}
+		err = json.Unmarshal(groupJSON, &oktaGroup)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+		}
+		groups = append(groups, oktaGroup)
+
+		appGroupProfile, ok := appGroup.Profile.(map[string]interface{})
+		if !ok {
+			l.Info("*********** error converting app group profile", zap.Any("appGroup", appGroup.Id))
+			return nil, nil, fmt.Errorf("error converting app group profile '%s'", appGroup.Id)
+		}
+		groupSAMLRoles, err := getSAMLRolesMap(appGroupProfile)
+		if err != nil {
+			l.Info("*********** error gettings saml rples")
+			return nil, nil, fmt.Errorf("error getting samlRoles from group profile '%s': %w", appGroup.Id, err)
+		}
+
+		l.Info("*********** group", zap.Any("oktaGroup", oktaGroup), zap.Any("groupSAMLRoles", groupSAMLRoles))
+		o.awsConfig.groupToSamlRoleCache.Store(oktaGroup.Id, groupSAMLRoles)
+
+		if o.awsConfig.UseGroupMapping {
+
+			// TODO(lauren) move gthis to new connector
+			re, err := regexp.Compile(o.awsConfig.RoleRegex)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error compiling regex '%s': %w", o.awsConfig.RoleRegex, err)
+			}
+			match := re.FindStringSubmatch(oktaGroup.Profile.Name)
+
+			l.Info("******* USER GROUP MATCH", zap.Any("match", match))
+			// TODO(lauren) check exact length
+			if len(match) < 3 {
+				l.Info("******* continuing ", zap.Any("match", match))
+				// TODO(lauren)  error or continue?
+				continue
+			}
+
+			// First element is full string
+			accountId := match[1]
+			role := match[2]
+
+			var accountRoleSet mapset.Set[string]
+			accountRoleCachedSet, ok := o.awsConfig.accountRoleCache.Load(accountId)
+			if !ok {
+				//accountRoleSet = mapset.NewSet(role)
+				accountRoleSet = mapset.NewSet[string](role)
+				//accountRoleSet = mapset.NewSet[string](role)
+				l.Info("************ not ok",
+					zap.Any("accountRoleSet", accountRoleSet))
+			} else {
+				accountRoleSet, ok = accountRoleCachedSet.(mapset.Set[string])
+				if !ok {
+					l.Info("******** error converting set")
+					return nil, nil, fmt.Errorf("error converting set")
+				}
+				l.Info("************ OK",
+					zap.Any("accountRoleSet", accountRoleSet))
+				accountRoleSet.Add(role)
+			}
+			o.awsConfig.accountRoleCache.Store(accountId, accountRoleSet)
+
+			l.Info("************ INIT FOR ACCOUNT",
+				zap.Any("accountId", accountId))
+
+			accountGrants := make([]*GroupMappingGrant, 0)
+			// Initialize slice to cache account grants
+			o.awsConfig.accountGrantCache.LoadOrStore(accountId, &accountGrants)
+
+		}
 	}
 
 	return groups, reqCtx, nil
@@ -189,6 +460,11 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(group.Id),
 	})
+	if o.awsConfig != nil && o.awsConfig.Enabled {
+		annos.Update(&v2.ChildResourceType{
+			ResourceTypeId: resourceTypeAccount.Id,
+		})
+	}
 
 	etagMd, err := o.etagMd(group)
 	if err != nil {
@@ -292,11 +568,12 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	return nil, nil
 }
 
-func groupBuilder(domain string, apiToken string, client *okta.Client) *groupResourceType {
+func groupBuilder(domain string, apiToken string, client *okta.Client, awsConfig *awsConfig) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
 		domain:       domain,
 		apiToken:     apiToken,
 		client:       client,
+		awsConfig:    awsConfig,
 	}
 }
