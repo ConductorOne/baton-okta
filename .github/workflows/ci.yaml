@@ -65,21 +65,16 @@ jobs:
         run: ./baton-okta
       - name: Check for grant before revoking
         run: |
-          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
-          baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+          ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
       - name: Revoke grants
         run: |
-          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
-          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }} --revoke-grant ${{ env.CONNECTOR_GRANT }}
+          ./baton-okta && ./baton-okta --revoke-grant ${{ env.CONNECTOR_GRANT }}
       - name: Check grant was revoked
         run: |
-           ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
-           baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource !=\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+           ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource !=\"${{ env.CONNECTOR_PRINCIPAL }}\")"
       - name: Grant entitlement
         run: | 
-          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
-          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }} --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
+          ./baton-okta && ./baton-okta --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
       - name: Check grant was re-granted
         run: |
-          ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
-          baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+          ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
