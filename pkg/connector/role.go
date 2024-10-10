@@ -86,10 +86,12 @@ func (o *roleResourceType) List(
 			ResourceTypeID: resourceTypeRole.Id,
 			ResourceID:     listRoleStandard,
 		})
-		bag.Push(pagination.PageState{
-			ResourceTypeID: resourceTypeRole.Id,
-			ResourceID:     listRoleCustom,
-		})
+		if o.syncCustomRoles {
+			bag.Push(pagination.PageState{
+				ResourceTypeID: resourceTypeRole.Id,
+				ResourceID:     listRoleCustom,
+			})
+		}
 	}
 
 	var rv []*v2.Resource
