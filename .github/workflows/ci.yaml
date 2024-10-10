@@ -62,7 +62,7 @@ jobs:
       - name: Build baton-okta
         run: go build ./cmd/baton-okta
       - name: Run baton-okta
-        run: ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
+        run: ./baton-okta
       - name: Check for grant before revoking
         run: |
           ./baton-okta --api-token ${{ env.BATON_API_TOKEN }} --domain ${{ env.BATON_DOMAIN }}
