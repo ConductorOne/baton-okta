@@ -44,6 +44,7 @@ jobs:
       # Add any environment variables needed to run baton-bitbucket-datacenter
       BATON_API_TOKEN: ${{ secrets.BATON_API_TOKEN }}
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
+      BATON_SYNC_CUSTOM_ROLES: true
       # The following parameters are passed to grant/revoke commands
       CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:access:user:00ug0t0xjvnHRbQuD5d7'
       CONNECTOR_ENTITLEMENT: 'app:0oaf4rf37pg7W4B6a5d7:access'
