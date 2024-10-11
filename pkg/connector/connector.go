@@ -13,6 +13,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
@@ -35,17 +36,23 @@ type ciamConfig struct {
 // "groupFilter": "aws_(?{{accountid}}\\d+)_(?{{role}}[a-zA-Z0-9+=,.@\\-_]+)",
 // arn:aws:iam::${accountid}:saml-provider/OKTA,arn:aws:iam::${accountid}:role/${role}"
 type awsConfig struct {
-	Enabled                  bool
-	OktaAppId                string
+	Enabled                bool
+	OktaAppId              string
+	awsAppConfigCacheMutex sync.Mutex
+	oktaAWSAppSettings     *oktaAWSAppSettings
+}
+
+type oktaAWSAppSettings struct {
 	JoinAllRoles             bool
 	IdentityProviderArn      string
 	RoleRegex                string
 	IdentityProviderArnRegex string
 	UseGroupMapping          bool
-	appUserToGroup           sync.Map // user id (key) to group mapset
-	groupToSamlRoleCache     sync.Map // group id to samlRoles mapset
-	accountRoleCache         sync.Map // key is account id, val is samlRole mapset
-	accountGrantCache        sync.Map // account -> slice of group grants
+	appUserToGroup           sync.Map           // user id (key) to group mapset
+	groupToSamlRoleCache     sync.Map           // group id to samlRoles mapset
+	accountRoleCache         sync.Map           // key is account id, val is samlRole mapset
+	accountGrantCache        sync.Map           // account -> slice of group grants
+	appSamlRoles             mapset.Set[string] // TODO(lauren) Is this safe?
 }
 
 type Config struct {
@@ -133,14 +140,14 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	if o.awsConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
 			userBuilder(o.domain, o.apiToken, o.client),
-			groupBuilder(o.domain, o.apiToken, o.client, o.awsConfig),
-			accountBuilder(o.domain, o.apiToken, o.client, o.awsConfig),
+			groupBuilder(o),
+			accountBuilder(o),
 		}
 	}
 	return []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.domain, o.apiToken, o.client),
 		userBuilder(o.domain, o.apiToken, o.client),
-		groupBuilder(o.domain, o.apiToken, o.client, nil),
+		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 	}
 }
@@ -200,25 +207,10 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 		return nil, err
 	}
 
-	if c.awsConfig.Enabled {
-		if c.awsConfig.OktaAppId == "" {
-			return nil, fmt.Errorf("okta-connector: no app id set")
-		}
-		app, awsAppResp, err := c.client.Application.GetApplication(ctx, c.awsConfig.OktaAppId, okta.NewApplication(), nil)
+	if c.awsConfig != nil && c.awsConfig.Enabled {
+		_, err = c.getAWSApplicationConfig(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: verify failed to fetch aws app: %w", err)
-		}
-		awsAppRespCtx, err := responseToContext(&pagination.Token{}, awsAppResp)
-		if awsAppRespCtx.OktaResponse.StatusCode != http.StatusOK {
-			err := fmt.Errorf("okta-connector: verify returned non-200 for aws app: '%d'", awsAppRespCtx.OktaResponse.StatusCode)
 			return nil, err
-		}
-		oktaApp, err := oktaAppToOktaApplication(ctx, app)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connector: verify failed to convert aws app: %w", err)
-		}
-		if oktaApp.Name != awsApp {
-			return nil, fmt.Errorf("okta-connector: okta app is not aws: %w", err)
 		}
 	}
 
@@ -277,91 +269,6 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		Enabled:   cfg.AWSMode,
 		OktaAppId: cfg.AWSOktaAppId,
 	}
-	if cfg.AWSMode {
-		if cfg.AWSOktaAppId == "" {
-			return nil, fmt.Errorf("okta-connector: no app id set")
-		}
-		app, awsAppResp, err := oktaClient.Application.GetApplication(ctx, awsConfig.OktaAppId, okta.NewApplication(), nil)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connector: verify failed to fetch aws app: %w", err)
-		}
-		// TODO(lauren) do we need to parseResp?
-		awsAppRespCtx, err := responseToContext(&pagination.Token{}, awsAppResp)
-		if awsAppRespCtx.OktaResponse.StatusCode != http.StatusOK {
-			err := fmt.Errorf("okta-connector: verify returned non-200 for aws app: '%d'", awsAppRespCtx.OktaResponse.StatusCode)
-			return nil, err
-		}
-		oktaApp, err := oktaAppToOktaApplication(ctx, app)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connector: verify failed to convert aws app: %w", err)
-		}
-		if oktaApp.Name != awsApp {
-			return nil, fmt.Errorf("okta-connector: okta app is not aws: %w", err)
-		}
-		if oktaApp.Settings == nil {
-			return nil, fmt.Errorf("okta-connector: settings are not present on okta app")
-		}
-		if oktaApp.Settings.App == nil {
-			return nil, fmt.Errorf("okta-connector: app settings are not present on okta app")
-		}
-		appSettings := *oktaApp.Settings.App
-		useGroupMapping, ok := appSettings["useGroupMapping"]
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'useGroupMapping' app setting is not present on okta app settings")
-		}
-		useGroupMappingBool, ok := useGroupMapping.(bool)
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'useGroupMapping' app setting is not boolean")
-		}
-		groupFilter, ok := appSettings["groupFilter"]
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'groupFilter' app setting is not present on okta app settings")
-		}
-		groupFilterString, ok := groupFilter.(string)
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'groupFilter' app setting is not string")
-		}
-		joinAllRoles, ok := appSettings["joinAllRoles"]
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'joinAllRoles' app setting is not present on okta app settings")
-		}
-		joinAllRolesBool, ok := joinAllRoles.(bool)
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'joinAllRoles' app setting is not boolean")
-		}
-		identityProviderArn, ok := appSettings["identityProviderArn"]
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not present on okta app settings")
-		}
-		identityProviderArnString, ok := identityProviderArn.(string)
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not string")
-		}
-		roleValuePattern, ok := appSettings["roleValuePattern"]
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'roleValuePattern' app setting is not present on okta app settings")
-		}
-		roleValuePatternString, ok := roleValuePattern.(string)
-		if !ok {
-			return nil, fmt.Errorf("okta-connector: 'roleValuePattern' app setting is not string")
-		}
-
-		splitPattern := strings.Split(roleValuePatternString, ",")
-		accountPattern := splitPattern[0]
-
-		identityProviderRegex := strings.Replace(accountPattern, "${accountid}", `(\d{12})`, 1)
-		groupFilterRegex := strings.Replace(groupFilterString, `(?{{accountid}}`, `(\d+`, 1)
-		groupFilterRegex = strings.Replace(groupFilterRegex, `(?{{role}}`, `([a-zA-Z0-9+=,.@\\-_]+`, 1)
-
-		// Unescape the groupFilterRegex regex string
-		roleRegex := strings.Replace(groupFilterRegex, `\\`, `\`, -1)
-
-		awsConfig.UseGroupMapping = useGroupMappingBool
-		awsConfig.JoinAllRoles = joinAllRolesBool
-		awsConfig.IdentityProviderArn = identityProviderArnString
-		awsConfig.IdentityProviderArnRegex = identityProviderRegex
-		awsConfig.RoleRegex = roleRegex
-	}
 
 	return &Okta{
 		client:           oktaClient,
@@ -374,4 +281,133 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		},
 		awsConfig: awsConfig,
 	}, nil
+}
+
+func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings, error) {
+	if c.awsConfig == nil {
+		return nil, nil
+	}
+	c.awsConfig.awsAppConfigCacheMutex.Lock()
+	defer c.awsConfig.awsAppConfigCacheMutex.Unlock()
+	if c.awsConfig.oktaAWSAppSettings != nil {
+		return c.awsConfig.oktaAWSAppSettings, nil
+	}
+
+	if c.awsConfig.OktaAppId == "" {
+		return nil, fmt.Errorf("okta-connector: no app id set")
+	}
+
+	app, awsAppResp, err := c.client.Application.GetApplication(ctx, c.awsConfig.OktaAppId, okta.NewApplication(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: verify failed to fetch aws app: %w", err)
+	}
+	// TODO(lauren) do we need to parseResp?
+	awsAppRespCtx, err := responseToContext(&pagination.Token{}, awsAppResp)
+	if awsAppRespCtx.OktaResponse.StatusCode != http.StatusOK {
+		err := fmt.Errorf("okta-connector: verify returned non-200 for aws app: '%d'", awsAppRespCtx.OktaResponse.StatusCode)
+		return nil, err
+	}
+	oktaApp, err := oktaAppToOktaApplication(ctx, app)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: verify failed to convert aws app: %w", err)
+	}
+	if oktaApp.Name != awsApp {
+		return nil, fmt.Errorf("okta-connector: okta app is not aws: %w", err)
+	}
+	if oktaApp.Settings == nil {
+		return nil, fmt.Errorf("okta-connector: settings are not present on okta app")
+	}
+	if oktaApp.Settings.App == nil {
+		return nil, fmt.Errorf("okta-connector: app settings are not present on okta app")
+	}
+	appSettings := *oktaApp.Settings.App
+	useGroupMapping, ok := appSettings["useGroupMapping"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'useGroupMapping' app setting is not present on okta app settings")
+	}
+	useGroupMappingBool, ok := useGroupMapping.(bool)
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'useGroupMapping' app setting is not boolean")
+	}
+	groupFilter, ok := appSettings["groupFilter"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'groupFilter' app setting is not present on okta app settings")
+	}
+	groupFilterString, ok := groupFilter.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'groupFilter' app setting is not string")
+	}
+	joinAllRoles, ok := appSettings["joinAllRoles"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'joinAllRoles' app setting is not present on okta app settings")
+	}
+	joinAllRolesBool, ok := joinAllRoles.(bool)
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'joinAllRoles' app setting is not boolean")
+	}
+	identityProviderArn, ok := appSettings["identityProviderArn"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not present on okta app settings")
+	}
+	identityProviderArnString, ok := identityProviderArn.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not string")
+	}
+	roleValuePattern, ok := appSettings["roleValuePattern"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'roleValuePattern' app setting is not present on okta app settings")
+	}
+	roleValuePatternString, ok := roleValuePattern.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connector: 'roleValuePattern' app setting is not string")
+	}
+
+	splitPattern := strings.Split(roleValuePatternString, ",")
+	accountPattern := splitPattern[0]
+
+	identityProviderRegex := strings.Replace(accountPattern, "${accountid}", `(\d{12})`, 1)
+	groupFilterRegex := strings.Replace(groupFilterString, `(?{{accountid}}`, `(\d+`, 1)
+	groupFilterRegex = strings.Replace(groupFilterRegex, `(?{{role}}`, `([a-zA-Z0-9+=,.@\\-_]+`, 1)
+
+	// Unescape the groupFilterRegex regex string
+	roleRegex := strings.Replace(groupFilterRegex, `\\`, `\`, -1)
+
+	// TODO(lauren) need to check resp?
+	appSamlRoles, _, err := c.listAWSSamlRoles(ctx, c.awsConfig.OktaAppId)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(lauren) track iam roles also?
+	appSamlRolesMap := mapset.NewSet(appSamlRoles.SamlIamRole...)
+
+	oktaAWSAppSettings := &oktaAWSAppSettings{
+		JoinAllRoles:             joinAllRolesBool,
+		IdentityProviderArn:      identityProviderArnString,
+		RoleRegex:                roleRegex,
+		IdentityProviderArnRegex: identityProviderRegex,
+		UseGroupMapping:          useGroupMappingBool,
+		appSamlRoles:             appSamlRolesMap,
+	}
+	c.awsConfig.oktaAWSAppSettings = oktaAWSAppSettings
+	return oktaAWSAppSettings, nil
+}
+
+func (c *Okta) listAWSSamlRoles(ctx context.Context, appID string) (*AWSRoles, *responseContext, error) {
+	apiUrl := fmt.Sprintf("/api/v1/internal/apps/%s/types", appID)
+
+	rq := c.client.CloneRequestExecutor()
+
+	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, apiUrl, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var awsRoles *AWSRoles
+	resp, err := rq.Do(ctx, req, &awsRoles)
+	if err != nil {
+		return nil, nil, err
+	}
+	respCtx, err := responseToContext(&pagination.Token{}, resp)
+
+	return awsRoles, respCtx, nil
 }

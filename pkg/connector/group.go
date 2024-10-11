@@ -25,10 +25,7 @@ const membershipUpdatedField = "lastMembershipUpdated"
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
-	domain       string
-	apiToken     string
-	client       *okta.Client
-	awsConfig    *awsConfig
+	connector    *Okta
 }
 
 func (o *groupResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -48,7 +45,7 @@ func (o *groupResourceType) List(
 
 	var groups []*okta.Group
 	var respCtx *responseContext
-	if o.awsConfig != nil && o.awsConfig.Enabled {
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
 		qp := queryParamsExpand(token.Size, page, "group")
 		groups, respCtx, err = o.listApplicationGroups(ctx, token, qp)
 		if err != nil {
@@ -150,53 +147,61 @@ func (o *groupResourceType) Grants(
 	}
 
 	for _, user := range users {
+		
 		rv = append(rv, groupGrant(resource, user))
 
-		var userGroupSet mapset.Set[string]
-		userGroupCachedSet, ok := o.awsConfig.appUserToGroup.Load(user.Id)
-		if !ok {
-			userGroupSet = mapset.NewSet[string](groupID)
-		} else {
-			userGroupSet, ok = userGroupCachedSet.(mapset.Set[string])
-			if !ok {
-				return nil, "", nil, fmt.Errorf("error converting set")
-			}
-			userGroupSet.Add(groupID)
-		}
-		o.awsConfig.appUserToGroup.Store(user.Id, userGroupSet)
-
-		if o.awsConfig.UseGroupMapping {
-			// Cache group grants
-			re, err := regexp.Compile(o.awsConfig.RoleRegex)
+		if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
+			awsAppSettings, err := o.connector.getAWSApplicationConfig(ctx)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("error compiling regex '%s': %w", o.awsConfig.RoleRegex, err)
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get AWS app settings: %w", err)
 			}
-			match := re.FindStringSubmatch(resource.DisplayName)
-
-			if len(match) != 3 {
-				// TODO(lauren)  error or continue?
-				continue
-			}
-
-			// First element is full string
-			accountId := match[1]
-			role := match[2]
-			cachedAccountGrants, ok := o.awsConfig.accountGrantCache.Load(accountId)
+			var userGroupSet mapset.Set[string]
+			userGroupCachedSet, ok := awsAppSettings.appUserToGroup.Load(user.Id)
 			if !ok {
-				return nil, "", nil, fmt.Errorf("error getting accounts grant cache '%s'", accountId)
+				userGroupSet = mapset.NewSet[string](groupID)
+			} else {
+				userGroupSet, ok = userGroupCachedSet.(mapset.Set[string])
+				if !ok {
+					return nil, "", nil, fmt.Errorf("error converting set")
+				}
+				userGroupSet.Add(groupID)
 			}
-			accountGrantsPtr, ok := cachedAccountGrants.(*[]*GroupMappingGrant)
-			if !ok {
-				return nil, "", nil, fmt.Errorf("error casting account grants '%s'", accountId)
+			awsAppSettings.appUserToGroup.Store(user.Id, userGroupSet)
+
+			if awsAppSettings.UseGroupMapping {
+				// Cache group grants
+				re, err := regexp.Compile(awsAppSettings.RoleRegex)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("error compiling regex '%s': %w", awsAppSettings.RoleRegex, err)
+				}
+				match := re.FindStringSubmatch(resource.DisplayName)
+
+				if len(match) != 3 {
+					// TODO(lauren)  error or continue?
+					continue
+				}
+
+				// First element is full string
+				accountId := match[1]
+				role := match[2]
+				cachedAccountGrants, ok := awsAppSettings.accountGrantCache.Load(accountId)
+				if !ok {
+					return nil, "", nil, fmt.Errorf("error getting accounts grant cache '%s'", accountId)
+				}
+				accountGrantsPtr, ok := cachedAccountGrants.(*[]*GroupMappingGrant)
+				if !ok {
+					return nil, "", nil, fmt.Errorf("error casting account grants '%s'", accountId)
+				}
+				accountGrants := *accountGrantsPtr
+				gmg := &GroupMappingGrant{
+					OktaUserID: user.Id,
+					Role:       role,
+				}
+				accountGrants = append(accountGrants, gmg)
+				awsAppSettings.accountGrantCache.Store(accountId, &accountGrants)
 			}
-			accountGrants := *accountGrantsPtr
-			gmg := &GroupMappingGrant{
-				OktaUserID: user.Id,
-				Role:       role,
-			}
-			accountGrants = append(accountGrants, gmg)
-			o.awsConfig.accountGrantCache.Store(accountId, &accountGrants)
 		}
+
 	}
 
 	pageToken, err := bag.Marshal()
@@ -215,7 +220,7 @@ func (o *groupResourceType) Grants(
 }
 
 func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := o.client.Group.ListGroups(ctx, qp)
+	groups, resp, err := o.connector.client.Group.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
 	}
@@ -229,8 +234,12 @@ func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.To
 }
 
 func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	awsAppSettings, err := o.connector.getAWSApplicationConfig(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	l := ctxzap.Extract(ctx)
-	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, o.client, o.awsConfig.OktaAppId, token, qp)
+	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -272,13 +281,13 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 			return nil, nil, fmt.Errorf("error getting samlRoles from group profile '%s': %w", appGroup.Id, err)
 		}
 
-		o.awsConfig.groupToSamlRoleCache.Store(oktaGroup.Id, groupSAMLRoles)
+		awsAppSettings.groupToSamlRoleCache.Store(oktaGroup.Id, groupSAMLRoles)
 
-		if o.awsConfig.UseGroupMapping {
+		if awsAppSettings.UseGroupMapping {
 			// TODO(lauren) move this to new connector?
-			re, err := regexp.Compile(o.awsConfig.RoleRegex)
+			re, err := regexp.Compile(awsAppSettings.RoleRegex)
 			if err != nil {
-				return nil, nil, fmt.Errorf("error compiling regex '%s': %w", o.awsConfig.RoleRegex, err)
+				return nil, nil, fmt.Errorf("error compiling regex '%s': %w", awsAppSettings.RoleRegex, err)
 			}
 			match := re.FindStringSubmatch(oktaGroup.Profile.Name)
 			if len(match) != 3 {
@@ -290,7 +299,7 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 			role := match[2]
 
 			var accountRoleSet mapset.Set[string]
-			accountRoleCachedSet, ok := o.awsConfig.accountRoleCache.Load(accountId)
+			accountRoleCachedSet, ok := awsAppSettings.accountRoleCache.Load(accountId)
 			if !ok {
 				accountRoleSet = mapset.NewSet[string](role)
 			} else {
@@ -300,10 +309,10 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 				}
 				accountRoleSet.Add(role)
 			}
-			o.awsConfig.accountRoleCache.Store(accountId, accountRoleSet)
+			awsAppSettings.accountRoleCache.Store(accountId, accountRoleSet)
 			accountGrants := make([]*GroupMappingGrant, 0)
 			// Initialize slice to cache account grants
-			o.awsConfig.accountGrantCache.LoadOrStore(accountId, &accountGrants)
+			awsAppSettings.accountGrantCache.LoadOrStore(accountId, &accountGrants)
 		}
 	}
 
@@ -311,7 +320,7 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 }
 
 func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	users, resp, err := o.client.Group.ListGroupUsers(ctx, groupID, qp)
+	users, resp, err := o.connector.client.Group.ListGroupUsers(ctx, groupID, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
 	}
@@ -349,7 +358,7 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(group.Id),
 	})
-	if o.awsConfig != nil && o.awsConfig.Enabled {
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
 		annos.Update(&v2.ChildResourceType{
 			ResourceTypeId: resourceTypeAccount.Id,
 		})
@@ -417,7 +426,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
 
-	response, err := g.client.Group.AddUserToGroup(ctx, groupId, userId)
+	response, err := g.connector.client.Group.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +454,7 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
 
-	response, err := g.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
+	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -457,12 +466,9 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	return nil, nil
 }
 
-func groupBuilder(domain string, apiToken string, client *okta.Client, awsConfig *awsConfig) *groupResourceType {
+func groupBuilder(connector *Okta) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
-		domain:       domain,
-		apiToken:     apiToken,
-		client:       client,
-		awsConfig:    awsConfig,
+		connector:    connector,
 	}
 }
