@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -43,14 +42,10 @@ type awsConfig struct {
 	RoleRegex                string
 	IdentityProviderArnRegex string
 	UseGroupMapping          bool
-	GroupFilter              string
-	appUserToGroup           sync.Map // user id (key) to group set?
-	groupToSamlRoleCache     sync.Map // group id to samlRoles set?
-	accountRoleCache         sync.Map // key is account id, val is samlRole set
-
-	accountGrantCache sync.Map // account -> slice of group grants
-
-	processedGroupGrants atomic.Bool
+	appUserToGroup           sync.Map // user id (key) to group mapset
+	groupToSamlRoleCache     sync.Map // group id to samlRoles mapset
+	accountRoleCache         sync.Map // key is account id, val is samlRole mapset
+	accountGrantCache        sync.Map // account -> slice of group grants
 }
 
 type Config struct {
@@ -362,7 +357,6 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		roleRegex := strings.Replace(groupFilterRegex, `\\`, `\`, -1)
 
 		awsConfig.UseGroupMapping = useGroupMappingBool
-		awsConfig.GroupFilter = groupFilterString
 		awsConfig.JoinAllRoles = joinAllRolesBool
 		awsConfig.IdentityProviderArn = identityProviderArnString
 		awsConfig.IdentityProviderArnRegex = identityProviderRegex
