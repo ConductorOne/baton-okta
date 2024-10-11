@@ -130,19 +130,26 @@ func (o *roleResourceType) Entitlements(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	var rv []*v2.Entitlement
-	role := standardRoleFromType(resource.Id.GetResource())
-	if role != nil {
-		en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
-			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
-			sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
-			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
-				Id: V1MembershipEntitlementID(role.Type),
-			}),
-			sdkEntitlement.WithGrantableTo(resourceTypeUser),
-		)
-		rv = append(rv, en)
+	var (
+		rv   []*v2.Entitlement
+		role *okta.Role
+	)
+	role = standardRoleFromType(resource.Id.GetResource())
+	if role == nil {
+		role = &okta.Role{
+			Label: resource.DisplayName,
+			Type:  resource.Id.Resource,
+		}
 	}
+	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
+		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
+			Id: V1MembershipEntitlementID(role.Type),
+		}),
+		sdkEntitlement.WithGrantableTo(resourceTypeUser),
+	)
+	rv = append(rv, en)
 
 	return rv, "", nil, nil
 }
