@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -43,6 +42,7 @@ func (o *groupResourceType) List(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
+	var rv []*v2.Resource
 	var groups []*okta.Group
 	var respCtx *responseContext
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
@@ -58,8 +58,6 @@ func (o *groupResourceType) List(
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
 		}
 	}
-
-	var rv []*v2.Resource
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
@@ -147,61 +145,7 @@ func (o *groupResourceType) Grants(
 	}
 
 	for _, user := range users {
-		
 		rv = append(rv, groupGrant(resource, user))
-
-		if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
-			awsAppSettings, err := o.connector.getAWSApplicationConfig(ctx)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get AWS app settings: %w", err)
-			}
-			var userGroupSet mapset.Set[string]
-			userGroupCachedSet, ok := awsAppSettings.appUserToGroup.Load(user.Id)
-			if !ok {
-				userGroupSet = mapset.NewSet[string](groupID)
-			} else {
-				userGroupSet, ok = userGroupCachedSet.(mapset.Set[string])
-				if !ok {
-					return nil, "", nil, fmt.Errorf("error converting set")
-				}
-				userGroupSet.Add(groupID)
-			}
-			awsAppSettings.appUserToGroup.Store(user.Id, userGroupSet)
-
-			if awsAppSettings.UseGroupMapping {
-				// Cache group grants
-				re, err := regexp.Compile(awsAppSettings.RoleRegex)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("error compiling regex '%s': %w", awsAppSettings.RoleRegex, err)
-				}
-				match := re.FindStringSubmatch(resource.DisplayName)
-
-				if len(match) != 3 {
-					// TODO(lauren)  error or continue?
-					continue
-				}
-
-				// First element is full string
-				accountId := match[1]
-				role := match[2]
-				cachedAccountGrants, ok := awsAppSettings.accountGrantCache.Load(accountId)
-				if !ok {
-					return nil, "", nil, fmt.Errorf("error getting accounts grant cache '%s'", accountId)
-				}
-				accountGrantsPtr, ok := cachedAccountGrants.(*[]*GroupMappingGrant)
-				if !ok {
-					return nil, "", nil, fmt.Errorf("error casting account grants '%s'", accountId)
-				}
-				accountGrants := *accountGrantsPtr
-				gmg := &GroupMappingGrant{
-					OktaUserID: user.Id,
-					Role:       role,
-				}
-				accountGrants = append(accountGrants, gmg)
-				awsAppSettings.accountGrantCache.Store(accountId, &accountGrants)
-			}
-		}
-
 	}
 
 	pageToken, err := bag.Marshal()
@@ -234,18 +178,102 @@ func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.To
 }
 
 func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	awsAppSettings, err := o.connector.getAWSApplicationConfig(ctx)
+	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	l := ctxzap.Extract(ctx)
+
 	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	groups := make([]*okta.Group, 0, len(appGroups))
+	for _, appGroup := range appGroups {
+		oktaAppGroup, err := o.oktaAppGroup(ctx, appGroup)
+		if err != nil {
+			return nil, nil, err
+		}
+		groups = append(groups, oktaAppGroup.oktaGroup)
+		awsConfig.appGroupCache.Store(appGroup.Id, oktaAppGroup)
+	}
 
+	return groups, reqCtx, nil
+}
+
+func (o *groupResourceType) oktaAppGroup(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
+	embedded := appGroup.Embedded
+	if embedded == nil {
+		return nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
+	}
+	embeddedMap, ok := embedded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
+	}
+	embeddedGroup, ok := embeddedMap["group"]
+	if !ok {
+		return nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
+	}
+	groupJSON, err := json.Marshal(embeddedGroup)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+	}
+	oktaGroup := &okta.Group{}
+	err = json.Unmarshal(groupJSON, &oktaGroup)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+	}
+
+	appGroupProfile, ok := appGroup.Profile.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error converting app group profile '%s'", appGroup.Id)
+	}
+
+	awsAppSettings, err := o.connector.getAWSApplicationConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	samlRoles := make([]string, 0)
+	accountId := awsAppSettings.IdentityProviderArnAccountID
+	var roleName string
+	matchesRolePattern := false
+
+	if awsAppSettings.UseGroupMapping {
+		accountId, roleName, matchesRolePattern, err = parseAccountIDAndRoleFromGroupName(ctx, awsAppSettings.RoleRegex, oktaGroup.Profile.Name)
+		if err != nil {
+			return nil, err
+		}
+		if matchesRolePattern {
+			samlRoles = append(samlRoles, roleName)
+		}
+	} else {
+		samlRoles, err = getSAMLRoles(appGroupProfile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &OktaAppGroupWrapper{
+		oktaGroup: oktaGroup,
+		samlRoles: samlRoles,
+		accountID: accountId,
+	}, nil
+}
+
+// TODO(lauren) move shared code into helper
+func listApplicationGroupsHelper(
+	ctx context.Context,
+	client *okta.Client,
+	appID string,
+	token *pagination.Token,
+	qp *query.Params,
+) ([]*okta.Group, *responseContext, error) {
+	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, client, appID, token, qp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	groups := make([]*okta.Group, 0, len(appGroups))
 	for _, appGroup := range appGroups {
 		embedded := appGroup.Embedded
 		if embedded == nil {
@@ -269,54 +297,26 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 			return nil, nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
 		}
 		groups = append(groups, oktaGroup)
-
-		appGroupProfile, ok := appGroup.Profile.(map[string]interface{})
-		if !ok {
-			l.Info("error converting app group profile", zap.String("groupId", appGroup.Id), zap.Error(err))
-			return nil, nil, fmt.Errorf("error converting app group profile '%s'", appGroup.Id)
-		}
-		groupSAMLRoles, err := getSAMLRolesMap(appGroupProfile)
-		if err != nil {
-			l.Info("error getting samlRoles from group profile", zap.String("groupId", appGroup.Id), zap.Error(err))
-			return nil, nil, fmt.Errorf("error getting samlRoles from group profile '%s': %w", appGroup.Id, err)
-		}
-
-		awsAppSettings.groupToSamlRoleCache.Store(oktaGroup.Id, groupSAMLRoles)
-
-		if awsAppSettings.UseGroupMapping {
-			// TODO(lauren) move this to new connector?
-			re, err := regexp.Compile(awsAppSettings.RoleRegex)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error compiling regex '%s': %w", awsAppSettings.RoleRegex, err)
-			}
-			match := re.FindStringSubmatch(oktaGroup.Profile.Name)
-			if len(match) != 3 {
-				continue
-			}
-
-			// First element is full string
-			accountId := match[1]
-			role := match[2]
-
-			var accountRoleSet mapset.Set[string]
-			accountRoleCachedSet, ok := awsAppSettings.accountRoleCache.Load(accountId)
-			if !ok {
-				accountRoleSet = mapset.NewSet[string](role)
-			} else {
-				accountRoleSet, ok = accountRoleCachedSet.(mapset.Set[string])
-				if !ok {
-					return nil, nil, fmt.Errorf("error converting set")
-				}
-				accountRoleSet.Add(role)
-			}
-			awsAppSettings.accountRoleCache.Store(accountId, accountRoleSet)
-			accountGrants := make([]*GroupMappingGrant, 0)
-			// Initialize slice to cache account grants
-			awsAppSettings.accountGrantCache.LoadOrStore(accountId, &accountGrants)
-		}
 	}
 
 	return groups, reqCtx, nil
+}
+
+func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, groupName string) (string, string, bool, error) {
+	// TODO(lauren) move to get app config
+	re, err := regexp.Compile(roleRegex)
+	if err != nil {
+		return "", "", false, fmt.Errorf("error compiling regex '%s': %w", roleRegex, err)
+	}
+	match := re.FindStringSubmatch(groupName)
+	if len(match) != 3 {
+		return "", "", false, nil
+	}
+	// First element is full string
+	accountId := match[1]
+	role := match[2]
+
+	return accountId, role, true, nil
 }
 
 func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
