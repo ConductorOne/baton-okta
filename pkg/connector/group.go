@@ -190,7 +190,7 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 
 	groups := make([]*okta.Group, 0, len(appGroups))
 	for _, appGroup := range appGroups {
-		oktaAppGroup, err := o.oktaAppGroup(ctx, appGroup)
+		oktaAppGroup, err := awsConfig.oktaAppGroup(ctx, appGroup)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -202,24 +202,7 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 }
 
 func (o *groupResourceType) oktaAppGroup(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
-	embedded := appGroup.Embedded
-	if embedded == nil {
-		return nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
-	}
-	embeddedMap, ok := embedded.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
-	}
-	embeddedGroup, ok := embeddedMap["group"]
-	if !ok {
-		return nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
-	}
-	groupJSON, err := json.Marshal(embeddedGroup)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
-	}
-	oktaGroup := &okta.Group{}
-	err = json.Unmarshal(groupJSON, &oktaGroup)
+	oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
 	}
@@ -275,27 +258,11 @@ func listApplicationGroupsHelper(
 
 	groups := make([]*okta.Group, 0, len(appGroups))
 	for _, appGroup := range appGroups {
-		embedded := appGroup.Embedded
-		if embedded == nil {
-			return nil, nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
-		}
-		embeddedMap, ok := embedded.(map[string]interface{})
-		if !ok {
-			return nil, nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
-		}
-		embeddedGroup, ok := embeddedMap["group"]
-		if !ok {
-			return nil, nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
-		}
-		groupJSON, err := json.Marshal(embeddedGroup)
+		oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+			return nil, nil, err
 		}
-		oktaGroup := &okta.Group{}
-		err = json.Unmarshal(groupJSON, &oktaGroup)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
-		}
+
 		groups = append(groups, oktaGroup)
 	}
 
@@ -358,11 +325,6 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(group.Id),
 	})
-	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
-		annos.Update(&v2.ChildResourceType{
-			ResourceTypeId: resourceTypeAccount.Id,
-		})
-	}
 
 	etagMd, err := o.etagMd(group)
 	if err != nil {
@@ -464,6 +426,31 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	)
 
 	return nil, nil
+}
+
+func embeddedOktaGroupFromAppGroup(appGroup *okta.ApplicationGroupAssignment) (*okta.Group, error) {
+	embedded := appGroup.Embedded
+	if embedded == nil {
+		return nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
+	}
+	embeddedMap, ok := embedded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
+	}
+	embeddedGroup, ok := embeddedMap["group"]
+	if !ok {
+		return nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
+	}
+	groupJSON, err := json.Marshal(embeddedGroup)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+	}
+	oktaGroup := &okta.Group{}
+	err = json.Unmarshal(groupJSON, &oktaGroup)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+	}
+	return oktaGroup, nil
 }
 
 func groupBuilder(connector *Okta) *groupResourceType {

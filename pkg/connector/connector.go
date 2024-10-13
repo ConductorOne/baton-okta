@@ -371,19 +371,19 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	roleRegex := strings.Replace(groupFilterRegex, `\\`, `\`, -1)
 
 	// TODO(lauren) only do this if use group mapping not enabled?
-	re, err := regexp.Compile(strings.ToLower(identityProviderRegex))
+	identityProvideArnAccountIDRegex, err := regexp.Compile(strings.ToLower(identityProviderRegex))
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: error compiling 'identityProviderRegex' regex")
 	}
-	match := re.FindStringSubmatch(strings.ToLower(identityProviderArnString))
+	identityProviderArnAccountID := identityProvideArnAccountIDRegex.FindStringSubmatch(strings.ToLower(identityProviderArnString))
 
 	// First element is full string
-	if len(match) != 2 {
+	if len(identityProviderArnAccountID) != 2 {
 		if err != nil {
 			return nil, fmt.Errorf("okta-aws-connector: error getting account id from identityProviderArn")
 		}
 	}
-	accountId := match[1]
+	accountId := identityProviderArnAccountID[1]
 
 	oktaAWSAppSettings := &oktaAWSAppSettings{
 		JoinAllRoles:                 joinAllRolesBool,
@@ -439,4 +439,42 @@ func (a *oktaAWSAppSettings) checkIfNotAppGroupFromCache(ctx context.Context, gr
 		return false, fmt.Errorf("error converting not a app group bool '%s' ", notAppGroup)
 	}
 	return notAppGroup, nil
+}
+
+func (a *oktaAWSAppSettings) oktaAppGroup(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
+	oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
+	if err != nil {
+		return nil, err
+	}
+
+	appGroupProfile, ok := appGroup.Profile.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error converting app group profile '%s'", appGroup.Id)
+	}
+
+	samlRoles := make([]string, 0)
+	accountId := a.IdentityProviderArnAccountID
+	var roleName string
+	matchesRolePattern := false
+
+	if a.UseGroupMapping {
+		accountId, roleName, matchesRolePattern, err = parseAccountIDAndRoleFromGroupName(ctx, a.RoleRegex, oktaGroup.Profile.Name)
+		if err != nil {
+			return nil, err
+		}
+		if matchesRolePattern {
+			samlRoles = append(samlRoles, roleName)
+		}
+	} else {
+		samlRoles, err = getSAMLRoles(appGroupProfile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &OktaAppGroupWrapper{
+		oktaGroup: oktaGroup,
+		samlRoles: samlRoles,
+		accountID: accountId,
+	}, nil
 }
