@@ -171,7 +171,27 @@ func (o *roleResourceType) Grants(
 		if errors.Is(err, errMissingRolePermissions) {
 			return nil, "", nil, nil
 		}
+
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+	}
+
+	if o.syncCustomRoles {
+		users, _, err := listUsers(ctx, o.client, token, &query.Params{})
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		}
+
+		for _, user := range users {
+			userId := user.Id
+			roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+			if err != nil {
+				return nil, "", nil, err
+			}
+
+			for _, role := range roles {
+				rv = append(rv, roleGrant(userId, role.Id, resource))
+			}
+		}
 	}
 
 	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
@@ -202,7 +222,6 @@ func (o *roleResourceType) Grants(
 
 func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource *v2.Resource) bool {
 	roleName := strings.ReplaceAll(strings.ToLower(resource.Id.GetResource()), "_", "")
-
 	for _, role := range administratorRoleFlags.RolesFromIndividualAssignments {
 		if strings.ToLower(role) == roleName {
 			return true
