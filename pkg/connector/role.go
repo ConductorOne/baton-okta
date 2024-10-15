@@ -176,7 +176,7 @@ func (o *roleResourceType) Grants(
 	}
 
 	if o.syncCustomRoles {
-		users, _, err := listUsers(ctx, o.client, token, &query.Params{})
+		users, err := listAllUsers(ctx, o.client, &query.Params{})
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 		}
