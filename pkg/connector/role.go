@@ -176,20 +176,47 @@ func (o *roleResourceType) Grants(
 	}
 
 	if o.syncCustomRoles {
-		users, err := listAllUsers(ctx, o.client, &query.Params{})
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-		}
-
-		for _, user := range users {
-			userId := user.Id
-			roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+		pageUserToken := "{}"
+		for pageUserToken != "" {
+			userToken := &pagination.Token{
+				Token: pageUserToken,
+			}
+			bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 			}
 
-			for _, role := range roles {
-				rv = append(rv, roleGrant(userId, role.Id, resource))
+			qp := queryParams(userToken.Size, pageUsers)
+			users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+			}
+
+			nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+			}
+
+			err = bagUsers.Next(nextUserPage)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+			}
+
+			for _, user := range users {
+				userId := user.Id
+				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+				if err != nil {
+					return nil, "", nil, err
+				}
+
+				for _, role := range roles {
+					rv = append(rv, roleGrant(userId, role.Id, resource))
+				}
+			}
+
+			pageUserToken, err = bagUsers.Marshal()
+			if err != nil {
+				return nil, "", nil, err
 			}
 		}
 	}
@@ -207,8 +234,10 @@ func (o *roleResourceType) Grants(
 	for _, administratorRoleFlag := range adminFlags {
 		if userHasRoleAccess(administratorRoleFlag, resource) {
 			userID := administratorRoleFlag.UserId
-			roleID := resource.Id.GetResource()
-			rv = append(rv, roleGrant(userID, roleID, resource))
+			if userID != "" {
+				roleID := resource.Id.GetResource()
+				rv = append(rv, roleGrant(userID, roleID, resource))
+			}
 		}
 	}
 
