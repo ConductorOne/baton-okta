@@ -303,6 +303,19 @@ func oktaAppsToOktaApplications(ctx context.Context, apps []okta.App) ([]*okta.A
 	return applications, nil
 }
 
+func oktaAppToOktaApplication(ctx context.Context, app okta.App) (*okta.Application, error) {
+	var oktaApp okta.Application
+	b, err := json.Marshal(app)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: error marshalling okta app: %w", err)
+	}
+	err = json.Unmarshal(b, &oktaApp)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: error unmarshalling okta app: %w", err)
+	}
+	return &oktaApp, nil
+}
+
 func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, error) {
 	appProfile := map[string]interface{}{
 		"status": app.Status,
