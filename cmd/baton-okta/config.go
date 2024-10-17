@@ -20,7 +20,7 @@ var (
 	cacheTTL              = field.IntField("cache-ttl", field.WithDescription("Response cache time to live in seconds"), field.WithDefaultValue(300))
 	awsIdentityCenterMode = field.BoolField("aws-identity-center-mode",
 		field.WithDescription("Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced"))
-	awsOktaAppId          = field.StringField("aws-okta-app-id", field.WithDescription("The Okta app id for the AWS application"))
+	awsOktaAppId = field.StringField("aws-okta-app-id", field.WithDescription("The Okta app id for the AWS application"))
 )
 
 var relationships = []field.SchemaFieldRelationship{

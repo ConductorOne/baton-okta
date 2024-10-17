@@ -196,7 +196,7 @@ func samlRoleEntitlement(resource *v2.Resource, role string) *v2.Entitlement {
 // Use expand grant if join all roles/use group mapping enabled to get user grants
 // Otherwise:
 // list application users, if direct assignment, give those role, if group scope, look at all the users groups
-// if join all roles also do the above JUST for direct assignments
+// if join all roles also do the above JUST for direct assignments.
 func (o *accountResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -210,8 +210,8 @@ func (o *accountResourceType) Grants(
 
 	// TODO(lauren) what resource type should this be
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resource.Id.ResourceType})
-	//bag, page, err := parsePageToken(token.Token, resource.Id)
-	//bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	// bag, page, err := parsePageToken(token.Token, resource.Id)
+	// bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 	}
@@ -266,7 +266,6 @@ func (o *accountResourceType) Grants(
 				}
 			}
 
-			// TODO(lauren) use ToSlice instead?
 			for samlRole := range appUserSAMLRolesMap.Iterator().C {
 				rv = append(rv, accountGrant(resource, samlRole, appUser.Id))
 			}
@@ -382,6 +381,9 @@ func (o *accountResourceType) listAWSSamlRoles(ctx context.Context) (*AWSRoles, 
 		return nil, nil, err
 	}
 	respCtx, err := responseToContext(&pagination.Token{}, resp)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return awsRoles, respCtx, nil
 }

@@ -19,6 +19,8 @@ import (
 
 const awsApp = "amazon_aws"
 const ResourceNotFoundExceptionErrorCode = "E0000007"
+const ExpectedIdentityProviderArnRegexCaptureGroups = 2
+const ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances = 3
 
 type Okta struct {
 	client           *okta.Client
@@ -34,8 +36,6 @@ type ciamConfig struct {
 	EmailDomains []string
 }
 
-// "groupFilter": "aws_(?{{accountid}}\\d+)_(?{{role}}[a-zA-Z0-9+=,.@\\-_]+)",
-// arn:aws:iam::${accountid}:saml-provider/OKTA,arn:aws:iam::${accountid}:role/${role}"
 type awsConfig struct {
 	Enabled                bool
 	OktaAppId              string
@@ -43,6 +43,26 @@ type awsConfig struct {
 	oktaAWSAppSettings     *oktaAWSAppSettings
 }
 
+/*
+JoinAllRoles: This option enables merging all available roles assigned to a user as follows:
+
+For example, if a user is directly assigned Role1 and Role2 (user to app assignment),
+and the user belongs to group GroupAWS with RoleA and RoleB assigned (group to app assignment), then:
+
+Join all roles OFF: Role1 and Role2 are available upon login to AWS
+Join all roles ON: Role1, Role2, RoleA, and RoleB are available upon login to AWS
+
+UseGroupMapping: Use Group Mapping enables CONNECT OKTA TO MULTIPLE AWS INSTANCES VIA USER GROUPS functionality.
+
+IdentityProviderArnRegex: Uses the "Role Value Pattern" to obtain a regular expression to extract the account id.
+This is only used when UseGroupMapping is not enabled.
+
+Role Value Pattern: This field takes the AWS role and account ID captured within the syntax of your AWS role groups,
+and translates it into the proper syntax AWS requires in Okta’s SAML assertion to allow users to view their accounts and roles when they sign in.
+
+This field should always follow this specific syntax:
+arn:aws:iam::${accountid}:saml-provider/[SAML Provider Name],arn:aws:iam::${accountid}:role/${role}
+*/
 type oktaAWSAppSettings struct {
 	JoinAllRoles                 bool
 	IdentityProviderArn          string
@@ -368,7 +388,7 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	groupFilterRegex = strings.Replace(groupFilterRegex, `(?{{role}}`, `([a-zA-Z0-9+=,.@\\-_]+`, 1)
 
 	// Unescape the groupFilterRegex regex string
-	roleRegex := strings.Replace(groupFilterRegex, `\\`, `\`, -1)
+	roleRegex := strings.ReplaceAll(groupFilterRegex, `\\`, `\`)
 
 	// TODO(lauren) only do this if use group mapping not enabled?
 	identityProvideArnAccountIDRegex, err := regexp.Compile(strings.ToLower(identityProviderRegex))
@@ -378,10 +398,8 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	identityProviderArnAccountID := identityProvideArnAccountIDRegex.FindStringSubmatch(strings.ToLower(identityProviderArnString))
 
 	// First element is full string
-	if len(identityProviderArnAccountID) != 2 {
-		if err != nil {
-			return nil, fmt.Errorf("okta-aws-connector: error getting account id from identityProviderArn")
-		}
+	if len(identityProviderArnAccountID) != ExpectedIdentityProviderArnRegexCaptureGroups {
+		return nil, fmt.Errorf("okta-aws-connector: error getting account id from identityProviderArn")
 	}
 	accountId := identityProviderArnAccountID[1]
 
@@ -397,26 +415,6 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	return oktaAWSAppSettings, nil
 }
 
-func (c *Okta) listAWSSamlRoles(ctx context.Context, appID string) (*AWSRoles, *responseContext, error) {
-	apiUrl := fmt.Sprintf("/api/v1/internal/apps/%s/types", appID)
-
-	rq := c.client.CloneRequestExecutor()
-
-	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, apiUrl, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var awsRoles *AWSRoles
-	resp, err := rq.Do(ctx, req, &awsRoles)
-	if err != nil {
-		return nil, nil, err
-	}
-	respCtx, err := responseToContext(&pagination.Token{}, resp)
-
-	return awsRoles, respCtx, nil
-}
-
 func (a *oktaAWSAppSettings) getAppGroupFromCache(ctx context.Context, groupId string) (*OktaAppGroupWrapper, error) {
 	appGroupCacheVal, ok := a.appGroupCache.Load(groupId)
 	if !ok {
@@ -424,7 +422,7 @@ func (a *oktaAWSAppSettings) getAppGroupFromCache(ctx context.Context, groupId s
 	}
 	oktaAppGroup, ok := appGroupCacheVal.(*OktaAppGroupWrapper)
 	if !ok {
-		return nil, fmt.Errorf("error converting app group '%s' from cache", oktaAppGroup)
+		return nil, fmt.Errorf("error converting app group '%s' from cache", groupId)
 	}
 	return oktaAppGroup, nil
 }
@@ -436,7 +434,7 @@ func (a *oktaAWSAppSettings) checkIfNotAppGroupFromCache(ctx context.Context, gr
 	}
 	notAppGroup, ok := notAppGroupCacheVal.(bool)
 	if !ok {
-		return false, fmt.Errorf("error converting not a app group bool '%s' ", notAppGroup)
+		return false, fmt.Errorf("error converting not a app group bool for group '%s' ", groupId)
 	}
 	return notAppGroup, nil
 }

@@ -201,49 +201,6 @@ func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pa
 	return groups, reqCtx, nil
 }
 
-func (o *groupResourceType) oktaAppGroup(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
-	oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
-	}
-
-	appGroupProfile, ok := appGroup.Profile.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("error converting app group profile '%s'", appGroup.Id)
-	}
-
-	awsAppSettings, err := o.connector.getAWSApplicationConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-	samlRoles := make([]string, 0)
-	accountId := awsAppSettings.IdentityProviderArnAccountID
-	var roleName string
-	matchesRolePattern := false
-
-	if awsAppSettings.UseGroupMapping {
-		accountId, roleName, matchesRolePattern, err = parseAccountIDAndRoleFromGroupName(ctx, awsAppSettings.RoleRegex, oktaGroup.Profile.Name)
-		if err != nil {
-			return nil, err
-		}
-		if matchesRolePattern {
-			samlRoles = append(samlRoles, roleName)
-		}
-	} else {
-		samlRoles, err = getSAMLRoles(appGroupProfile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &OktaAppGroupWrapper{
-		oktaGroup: oktaGroup,
-		samlRoles: samlRoles,
-		accountID: accountId,
-	}, nil
-}
-
-// TODO(lauren) move shared code into helper
 func listApplicationGroupsHelper(
 	ctx context.Context,
 	client *okta.Client,
@@ -269,6 +226,20 @@ func listApplicationGroupsHelper(
 	return groups, reqCtx, nil
 }
 
+/*
+This filter field uses a regular expression to filter AWS-related groups and extract the accountid and role.
+
+If you use the default AWS role group syntax (aws#[account alias]#[role name]#[account #]), then you can use this Regex string:
+^aws\#\S+\#(?{{role}}[\w\-]+)\#(?{{accountid}}\d+)$
+
+This Regex expression logically equates to:
+find groups that start with AWS, then #, then a string of text, then #, then the AWS role, then #, then the AWS account ID.
+
+You can also use this Regex expression:
+aws_(?{{accountid}}\d+)_(?{{role}}[a-zA-Z0-9+=,.@\-_]+)
+If you don't use a default Regex expression, create on that properly filters your AWS role groups.
+The expression should capture the AWS role name and account ID within two distinct Regex groups named {{role}} and {{accountid}}.
+*/
 func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, groupName string) (string, string, bool, error) {
 	// TODO(lauren) move to get app config
 	re, err := regexp.Compile(roleRegex)
@@ -276,7 +247,7 @@ func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, g
 		return "", "", false, fmt.Errorf("error compiling regex '%s': %w", roleRegex, err)
 	}
 	match := re.FindStringSubmatch(groupName)
-	if len(match) != 3 {
+	if len(match) != ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances {
 		return "", "", false, nil
 	}
 	// First element is full string
