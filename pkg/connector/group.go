@@ -2,7 +2,9 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"go.uber.org/zap"
@@ -22,9 +24,7 @@ const membershipUpdatedField = "lastMembershipUpdated"
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
-	domain       string
-	apiToken     string
-	client       *okta.Client
+	connector    *Okta
 }
 
 func (o *groupResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -36,17 +36,27 @@ func (o *groupResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
+	// TODO(lauren) why is this user?
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
-	qp := queryParams(token.Size, page)
-
-	groups, respCtx, err := o.listGroups(ctx, token, qp)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+	var groups []*okta.Group
+	var respCtx *responseContext
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
+		qp := queryParamsExpand(token.Size, page, "group")
+		groups, respCtx, err = o.listApplicationGroups(ctx, token, qp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
+		}
+	} else {
+		qp := queryParams(token.Size, page)
+		groups, respCtx, err = o.listGroups(ctx, token, qp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
+		}
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
@@ -108,6 +118,7 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	// TODO(lauren) why is this user
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
@@ -116,7 +127,9 @@ func (o *groupResourceType) Grants(
 	var rv []*v2.Grant
 	qp := queryParams(token.Size, page)
 
-	users, respCtx, err := o.listGroupUsers(ctx, resource.Id.GetResource(), token, qp)
+	groupID := resource.Id.GetResource()
+
+	users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
 	}
@@ -151,7 +164,7 @@ func (o *groupResourceType) Grants(
 }
 
 func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := o.client.Group.ListGroups(ctx, qp)
+	groups, resp, err := o.connector.client.Group.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
 	}
@@ -164,13 +177,107 @@ func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.To
 	return groups, reqCtx, nil
 }
 
+func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	groups := make([]*okta.Group, 0, len(appGroups))
+	for _, appGroup := range appGroups {
+		oktaAppGroup, err := awsConfig.oktaAppGroup(ctx, appGroup)
+		if err != nil {
+			return nil, nil, err
+		}
+		groups = append(groups, oktaAppGroup.oktaGroup)
+		awsConfig.appGroupCache.Store(appGroup.Id, oktaAppGroup)
+	}
+
+	return groups, reqCtx, nil
+}
+
+func listApplicationGroupsHelper(
+	ctx context.Context,
+	client *okta.Client,
+	appID string,
+	token *pagination.Token,
+	qp *query.Params,
+) ([]*okta.Group, *responseContext, error) {
+	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, client, appID, token, qp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	groups := make([]*okta.Group, 0, len(appGroups))
+	for _, appGroup := range appGroups {
+		oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		groups = append(groups, oktaGroup)
+	}
+
+	return groups, reqCtx, nil
+}
+
+/*
+This filter field uses a regular expression to filter AWS-related groups and extract the accountid and role.
+
+If you use the default AWS role group syntax (aws#[account alias]#[role name]#[account #]), then you can use this Regex string:
+^aws\#\S+\#(?{{role}}[\w\-]+)\#(?{{accountid}}\d+)$
+
+This Regex expression logically equates to:
+find groups that start with AWS, then #, then a string of text, then #, then the AWS role, then #, then the AWS account ID.
+
+You can also use this Regex expression:
+aws_(?{{accountid}}\d+)_(?{{role}}[a-zA-Z0-9+=,.@\-_]+)
+If you don't use a default Regex expression, create on that properly filters your AWS role groups.
+The expression should capture the AWS role name and account ID within two distinct Regex groups named {{role}} and {{accountid}}.
+*/
+func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, groupName string) (string, string, bool, error) {
+	// TODO(lauren) move to get app config
+	re, err := regexp.Compile(roleRegex)
+	if err != nil {
+		return "", "", false, fmt.Errorf("error compiling regex '%s': %w", roleRegex, err)
+	}
+	match := re.FindStringSubmatch(groupName)
+	if len(match) != ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances {
+		return "", "", false, nil
+	}
+	// First element is full string
+	accountId := match[1]
+	role := match[2]
+
+	return accountId, role, true, nil
+}
+
 func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	users, resp, err := o.client.Group.ListGroupUsers(ctx, groupID, qp)
+	users, resp, err := o.connector.client.Group.ListGroupUsers(ctx, groupID, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
 	}
 
 	reqCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return users, reqCtx, nil
+}
+
+func listUsersGroupsClient(ctx context.Context, client *okta.Client, userId string) ([]*okta.Group, *responseContext, error) {
+	users, resp, err := client.User.ListUserGroups(ctx, userId)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
+	}
+
+	reqCtx, err := responseToContext(&pagination.Token{}, resp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -252,7 +359,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
 
-	response, err := g.client.Group.AddUserToGroup(ctx, groupId, userId)
+	response, err := g.connector.client.Group.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +387,7 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
 
-	response, err := g.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
+	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -292,11 +399,34 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	return nil, nil
 }
 
-func groupBuilder(domain string, apiToken string, client *okta.Client) *groupResourceType {
+func embeddedOktaGroupFromAppGroup(appGroup *okta.ApplicationGroupAssignment) (*okta.Group, error) {
+	embedded := appGroup.Embedded
+	if embedded == nil {
+		return nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
+	}
+	embeddedMap, ok := embedded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
+	}
+	embeddedGroup, ok := embeddedMap["group"]
+	if !ok {
+		return nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
+	}
+	groupJSON, err := json.Marshal(embeddedGroup)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+	}
+	oktaGroup := &okta.Group{}
+	err = json.Unmarshal(groupJSON, &oktaGroup)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
+	}
+	return oktaGroup, nil
+}
+
+func groupBuilder(connector *Okta) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
-		domain:       domain,
-		apiToken:     apiToken,
-		client:       client,
+		connector:    connector,
 	}
 }
