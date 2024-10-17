@@ -170,15 +170,6 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	return oktaUsers, respCtx, nil
 }
 
-func listAllUsers(ctx context.Context, client *okta.Client, qp *query.Params) ([]*okta.User, error) {
-	oktaUsers, _, err := client.User.ListUsers(ctx, qp)
-	if err != nil {
-		return nil, err
-	}
-
-	return oktaUsers, nil
-}
-
 func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string) *userResourceType {
 	var loweredFilters []string
 	for _, ef := range emailFilters {
