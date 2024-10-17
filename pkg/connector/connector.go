@@ -318,9 +318,12 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 
 	app, awsAppResp, err := c.client.Application.GetApplication(ctx, c.awsConfig.OktaAppId, okta.NewApplication(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: verify failed to fetch aws app: %w", err)
+		return nil, fmt.Errorf("okta-aws-connector: verify failed to fetch aws app: %w", err)
 	}
 	awsAppRespCtx, err := responseToContext(&pagination.Token{}, awsAppResp)
+	if err != nil {
+		return nil, fmt.Errorf("okta-aws-connector: verify failed to convert get aws app response: %w", err)
+	}
 	if awsAppRespCtx.OktaResponse.StatusCode != http.StatusOK {
 		err := fmt.Errorf("okta-connector: verify returned non-200 for aws app: '%d'", awsAppRespCtx.OktaResponse.StatusCode)
 		return nil, err
