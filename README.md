@@ -77,6 +77,8 @@ Available Commands:
 
 Flags:
       --api-token string             The API token for the service account ($BATON_API_TOKEN)
+      --aws-identity-center-mode     Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced ($BATON_AWS_IDENTITY_CENTER_MODE)
+      --aws-okta-app-id string       The Okta app id for the AWS application ($BATON_AWS_OKTA_APP_ID)
       --cache                        Enable response cache ($BATON_CACHE) (default true)
       --cache-tti int                Response cache cleanup interval in seconds ($BATON_CACHE_TTI) (default 60)
       --cache-ttl int                Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
@@ -95,6 +97,7 @@ Flags:
       --okta-provisioning            ($BATON_OKTA_PROVISIONING)
   -p, --provisioning                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
       --skip-full-sync               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
+      --sync-custom-roles            Enable syncing custom roles ($BATON_SYNC_CUSTOM_ROLES)
       --sync-inactive-apps           Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
       --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
   -v, --version                      version for baton-okta
