@@ -28,6 +28,7 @@ type Okta struct {
 	apiToken         string
 	syncInactiveApps bool
 	ciamConfig       *ciamConfig
+	syncCustomRoles  bool
 	awsConfig        *awsConfig
 }
 
@@ -87,6 +88,7 @@ type Config struct {
 	Cache            bool
 	CacheTTI         int32
 	CacheTTL         int32
+	SyncCustomRoles  bool
 	AWSMode          bool
 	AWSOktaAppId     string
 }
@@ -134,6 +136,11 @@ var (
 		DisplayName: "Account",
 		Annotations: v1AnnotationsForResourceType("account", false),
 	}
+	resourceTypeResourceSets = &v2.ResourceType{
+		Id:          "resourcesets",
+		DisplayName: "Resource Sets",
+		Annotations: v1AnnotationsForResourceType("resourcesets", false),
+	}
 	defaultScopes = []string{
 		"okta.users.read",
 		"okta.groups.read",
@@ -156,6 +163,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 			ciamBuilder(o.client),
 		}
 	}
+
 	if o.awsConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
 			userBuilder(o.domain, o.apiToken, o.client),
@@ -163,11 +171,13 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 			accountBuilder(o),
 		}
 	}
+
 	return []connectorbuilder.ResourceSyncer{
-		roleBuilder(o.domain, o.apiToken, o.client),
+		roleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
+		resourceSetsBuilder(o.client),
 	}
 }
 
@@ -294,6 +304,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		domain:           cfg.Domain,
 		apiToken:         cfg.ApiToken,
 		syncInactiveApps: cfg.SyncInactiveApps,
+		syncCustomRoles:  cfg.SyncCustomRoles,
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,
