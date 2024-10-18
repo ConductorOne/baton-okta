@@ -65,8 +65,7 @@ func (o *accountResourceType) List(
 		}
 		return []*v2.Resource{resource}, "", nil, nil
 	} else {
-		// TODO(lauren) what resource type should this be
-		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeAccount.Id})
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 		}
@@ -142,8 +141,7 @@ func (o *accountResourceType) Entitlements(
 		}
 		return rv, "", annos, nil
 	} else {
-		// TODO(lauren) what resource type should this be
-		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeAccount.Id})
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 		}
@@ -202,16 +200,14 @@ func (o *accountResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("error getting aws app settings config")
 	}
 	var rv []*v2.Grant
 
-	// TODO(lauren) what resource type should this be
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resource.Id.ResourceType})
-	// bag, page, err := parsePageToken(token.Token, resource.Id)
-	// bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 	}
@@ -229,11 +225,13 @@ func (o *accountResourceType) Grants(
 
 			if appUser.Scope == "USER" {
 				if appUser.Profile == nil {
+					l.Error("app user profile was nil", zap.Any("userId", appUser.Id))
 					// TODO(lauren) continue or error?
 					continue
 				}
 				appUserProfile, ok := appUser.Profile.(map[string]interface{})
 				if !ok {
+					l.Error("error casting app user profile", zap.Any("userId", appUser.Id))
 					// TODO(lauren) continue or error?
 					continue
 				}
