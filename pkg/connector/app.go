@@ -101,7 +101,6 @@ func (o *appResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-
 	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access",
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Access", resource.DisplayName)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName)),
