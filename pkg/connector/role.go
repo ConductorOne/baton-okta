@@ -210,7 +210,20 @@ func (o *roleResourceType) Grants(
 				}
 
 				for _, role := range roles {
-					rv = append(rv, roleGrant(userId, role.Id, resource))
+					if role.Status == "INACTIVE" {
+						continue
+					}
+					if role.AssignmentType != "USER" {
+						continue
+					}
+					if role.Type != "CUSTOM" {
+						continue
+					}
+
+					// It's a custom role. We need to match the label to the display name
+					if role.Label == resource.GetDisplayName() {
+						rv = append(rv, roleGrant(userId, role.Id, resource))
+					}
 				}
 			}
 
