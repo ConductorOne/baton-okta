@@ -136,6 +136,11 @@ var (
 		DisplayName: "Account",
 		Annotations: v1AnnotationsForResourceType("account", false),
 	}
+	resourceTypeResourceSets = &v2.ResourceType{
+		Id:          "resourcesets",
+		DisplayName: "Resource Sets",
+		Annotations: v1AnnotationsForResourceType("resourcesets", false),
+	}
 	defaultScopes = []string{
 		"okta.users.read",
 		"okta.groups.read",
@@ -172,6 +177,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
+		resourceSetsBuilder(o.client),
 	}
 }
 
