@@ -8,6 +8,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
@@ -115,12 +116,21 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 	return rv, pageToken, nil, nil
 }
 
-// Entitlements always returns an empty slice for users.
 func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+	return []*v2.Entitlement{
+		sdkEntitlement.NewAssignmentEntitlement(
+			resource,
+			"member",
+			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
+				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
+			}),
+			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
+			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Sets Member", resource.DisplayName)),
+			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s group in Okta", resource.DisplayName)),
+		),
+	}, "", nil, nil
 }
 
-// Grants always returns an empty slice for users since they don't have any entitlements.
 func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	return nil, "", nil, nil
 }
