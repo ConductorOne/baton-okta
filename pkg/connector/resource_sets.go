@@ -4,19 +4,36 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
 
 type resourceSetsResourceType struct {
-	resourceType *v2.ResourceType
-	client       *okta.Client
+	resourceType    *v2.ResourceType
+	client          *okta.Client
+	syncCustomRoles bool
+}
+
+type Roles struct {
+	Links          interface{} `json:"_links,omitempty"`
+	AssignmentType string      `json:"assignmentType,omitempty"`
+	Created        *time.Time  `json:"created,omitempty"`
+	Description    string      `json:"description,omitempty"`
+	Id             string      `json:"id,omitempty"`
+	Label          string      `json:"label,omitempty"`
+	LastUpdated    *time.Time  `json:"lastUpdated,omitempty"`
+	Status         string      `json:"status,omitempty"`
+	Type           string      `json:"type,omitempty"`
+	ResourceSet    string      `json:"resource-set,omitempty"`
+	Role           string      `json:"role,omitempty"`
 }
 
 const apiPathListIamResourceSets = "/api/v1/iam/resource-sets"
@@ -120,7 +137,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
-			"member",
+			"assigned",
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
@@ -131,13 +148,109 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	}, "", nil, nil
 }
 
-func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+	url := fmt.Sprintf("/api/v1/users/%v/roles", userId)
+	if qp != nil {
+		url = url + qp.String()
+	}
+
+	rq := rs.client.CloneRequestExecutor()
+	req, err := rq.WithAccept("application/json").
+		WithContentType("application/json").
+		NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var role []*Roles
+	resp, err := rq.Do(ctx, req, &role)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return role, resp, nil
 }
 
-func resourceSetsBuilder(client *okta.Client) *resourceSetsResourceType {
+func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+	var rv []*v2.Grant
+	bag, _, err := parsePageToken(pToken.Token, resource.Id)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+	}
+
+	if rs.syncCustomRoles {
+		pageUserToken := "{}"
+		for pageUserToken != "" {
+			userToken := &pagination.Token{
+				Token: pageUserToken,
+			}
+			bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+			}
+
+			qp := queryParams(userToken.Size, pageUsers)
+			users, respUserCtx, err := listUsers(ctx, rs.client, userToken, qp)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+			}
+
+			nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+			}
+
+			err = bagUsers.Next(nextUserPage)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+			}
+
+			for _, user := range users {
+				userId := user.Id
+				roles, _, err := rs.ListAssignedRolesForUser(ctx, userId, nil)
+				if err != nil {
+					return nil, "", nil, err
+				}
+
+				for _, role := range roles {
+					if role.Status == "INACTIVE" || role.Type != "CUSTOM" {
+						continue
+					}
+
+					rl := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: role.Role}}
+					gr := sdkGrant.NewGrant(resource, "assigned", rl,
+						sdkGrant.WithAnnotation(&v2.V1Identifier{
+							Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+						}),
+					)
+					rv = append(rv, gr)
+				}
+			}
+
+			pageUserToken, err = bagUsers.Marshal()
+			if err != nil {
+				return nil, "", nil, err
+			}
+		}
+	}
+
+	err = bag.Next(bag.PageToken())
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+	}
+
+	pageToken, err := bag.Marshal()
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	return rv, pageToken, nil, nil
+}
+
+func resourceSetsBuilder(client *okta.Client, syncCustomRoles bool) *resourceSetsResourceType {
 	return &resourceSetsResourceType{
-		resourceType: resourceTypeResourceSets,
-		client:       client,
+		resourceType:    resourceTypeResourceSets,
+		client:          client,
+		syncCustomRoles: syncCustomRoles,
 	}
 }

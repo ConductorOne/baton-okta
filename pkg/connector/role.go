@@ -210,13 +210,7 @@ func (o *roleResourceType) Grants(
 				}
 
 				for _, role := range roles {
-					if role.Status == "INACTIVE" {
-						continue
-					}
-					if role.AssignmentType != "USER" {
-						continue
-					}
-					if role.Type != "CUSTOM" {
+					if role.Status == "INACTIVE" || role.AssignmentType != "USER" || role.Type != "CUSTOM" {
 						continue
 					}
 
