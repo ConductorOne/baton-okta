@@ -151,7 +151,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
 	url := fmt.Sprintf("/api/v1/users/%v/roles", userId)
 	if qp != nil {
-		url = url + qp.String()
+		url += qp.String()
 	}
 
 	rq := rs.client.CloneRequestExecutor()
