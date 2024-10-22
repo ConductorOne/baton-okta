@@ -213,7 +213,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 				}
 
 				for _, role := range roles {
-					if role.Status == "INACTIVE" || role.Type != "CUSTOM" {
+					if role.Status == "INACTIVE" || role.Type != "CUSTOM" || role.ResourceSet != resource.Id.Resource {
 						continue
 					}
 
