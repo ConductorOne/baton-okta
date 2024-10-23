@@ -12,8 +12,10 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 )
 
 type resourceSetsResourceType struct {
@@ -143,7 +145,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 			}),
 			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
 			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Sets Member", resource.DisplayName)),
-			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s group in Okta", resource.DisplayName)),
+			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-sets in Okta", resource.DisplayName)),
 		),
 	}, "", nil, nil
 }
@@ -155,9 +157,9 @@ func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context
 	}
 
 	rq := rs.client.CloneRequestExecutor()
-	req, err := rq.WithAccept("application/json").
-		WithContentType("application/json").
-		NewRequest("GET", url, nil)
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,6 +171,28 @@ func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context
 	}
 
 	return role, resp, nil
+}
+
+func (rs *resourceSetsResourceType) RemoveAssignedRolesForResourceSets(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
+	url := fmt.Sprintf("%s/%s/bindings/%s", apiPathListIamResourceSets, resourceSetId, roleId)
+	if qp != nil {
+		url += qp.String()
+	}
+
+	rq := rs.client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rq.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
 }
 
 func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
@@ -245,6 +269,49 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 	}
 
 	return rv, pageToken, nil, nil
+}
+
+func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	if principal.Id.ResourceType != resourceTypeResourceSets.Id {
+		l.Warn(
+			"okta-connector: only custom roles can be granted role membership",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector: only custom roles can be granted repo membership")
+	}
+
+	return nil, nil
+}
+
+func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	entitlement := grant.Entitlement
+	principal := grant.Principal
+	if principal.Id.ResourceType != resourceTypeRole.Id {
+		l.Warn(
+			"okta-connector: only custom roles can have role membership revoked",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("okta-connector:only custom roles can have role membership revoked")
+	}
+
+	resourceSetId := entitlement.Resource.Id.Resource
+	customRoleId := principal.Id.Resource
+	response, err := rs.RemoveAssignedRolesForResourceSets(ctx, resourceSetId, customRoleId, nil)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
+	}
+
+	if response.StatusCode == http.StatusNoContent {
+		l.Warn("Membership has been revoked",
+			zap.String("Status", response.Status),
+		)
+	}
+
+	return nil, nil
 }
 
 func resourceSetsBuilder(client *okta.Client, syncCustomRoles bool) *resourceSetsResourceType {
