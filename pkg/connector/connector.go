@@ -177,7 +177,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
-		resourceSetsBuilder(o.client),
+		resourceSetsBuilder(o.client, o.syncCustomRoles),
 	}
 }
 
