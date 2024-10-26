@@ -154,15 +154,67 @@ func (o *roleResourceType) Entitlements(
 	return rv, "", nil, nil
 }
 
+func (o *roleResourceType) ListGroupAssignedRoles(ctx context.Context, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+	url := fmt.Sprintf("/api/v1/groups/%v/roles", groupId)
+	if qp != nil {
+		url += qp.String()
+	}
+
+	rq := o.client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var role []*Roles
+	resp, err := rq.Do(ctx, req, &role)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return role, resp, nil
+}
+
+func (o *roleResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	groups, resp, err := o.client.Group.ListGroups(ctx, qp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
+	}
+
+	reqCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return groups, reqCtx, nil
+}
+
 func (o *roleResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var rv []*v2.Grant
-	bag, page, err := parsePageToken(token.Token, resource.Id)
+	_, page, err := parsePageToken(token.Token, resource.Id)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+	}
+
+	_, bag, err := unmarshalSkipToken(token)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	if bag.Current() == nil {
+		// Push onto stack in reverse
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeGroup.Id,
+		})
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeUser.Id,
+		})
 	}
 
 	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, page)
@@ -176,55 +228,111 @@ func (o *roleResourceType) Grants(
 	}
 
 	if o.syncCustomRoles {
-		pageUserToken := "{}"
-		for pageUserToken != "" {
-			userToken := &pagination.Token{
-				Token: pageUserToken,
-			}
-			bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-			}
+		switch bag.ResourceTypeID() {
+		case resourceTypeGroup.Id:
+			pageGroupToken := "{}"
+			for pageGroupToken != "" {
+				groupToken := &pagination.Token{
+					Token: pageGroupToken,
+				}
+				bagGroups, pageGroups, err := parsePageToken(groupToken.Token, resource.Id)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+				}
 
-			qp := queryParams(userToken.Size, pageUsers)
-			users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-			}
+				qp := queryParams(groupToken.Size, pageGroups)
+				groups, respGroupCtx, err := o.listGroups(ctx, groupToken, qp)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
+				}
 
-			nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-			}
+				nextGroupPage, _, err := parseResp(respGroupCtx.OktaResponse)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+				}
 
-			err = bagUsers.Next(nextUserPage)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-			}
+				err = bagGroups.Next(nextGroupPage)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+				}
 
-			for _, user := range users {
-				userId := user.Id
-				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+				for _, group := range groups {
+					groupId := group.Id
+					roles, _, err := o.ListGroupAssignedRoles(ctx, groupId, nil)
+					if err != nil {
+						return nil, "", nil, err
+					}
+
+					for _, role := range roles {
+						if role.Status == "INACTIVE" || role.AssignmentType != "GROUP" || role.Type != "CUSTOM" {
+							continue
+						}
+
+						// It's a custom role. We need to match the label to the display name
+						if role.Label == resource.GetDisplayName() {
+							rv = append(rv, roleGroupGrant(groupId, resource))
+						}
+					}
+				}
+
+				pageGroupToken, err = bagGroups.Marshal()
 				if err != nil {
 					return nil, "", nil, err
 				}
+			}
+		case resourceTypeUser.Id:
+			pageUserToken := "{}"
+			for pageUserToken != "" {
+				userToken := &pagination.Token{
+					Token: pageUserToken,
+				}
+				bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+				}
 
-				for _, role := range roles {
-					if role.Status == "INACTIVE" || role.AssignmentType != "USER" || role.Type != "CUSTOM" {
-						continue
+				qp := queryParams(userToken.Size, pageUsers)
+				users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+				}
+
+				nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+				}
+
+				err = bagUsers.Next(nextUserPage)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+				}
+
+				for _, user := range users {
+					userId := user.Id
+					roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+					if err != nil {
+						return nil, "", nil, err
 					}
 
-					// It's a custom role. We need to match the label to the display name
-					if role.Label == resource.GetDisplayName() {
-						rv = append(rv, roleGrant(userId, role.Id, resource))
+					for _, role := range roles {
+						if role.Status == "INACTIVE" || role.AssignmentType != "USER" || role.Type != "CUSTOM" {
+							continue
+						}
+
+						// It's a custom role. We need to match the label to the display name
+						if role.Label == resource.GetDisplayName() {
+							rv = append(rv, roleGrant(userId, resource))
+						}
 					}
 				}
-			}
 
-			pageUserToken, err = bagUsers.Marshal()
-			if err != nil {
-				return nil, "", nil, err
+				pageUserToken, err = bagUsers.Marshal()
+				if err != nil {
+					return nil, "", nil, err
+				}
 			}
+		default:
+			return nil, "", nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
 		}
 	}
 
@@ -242,8 +350,7 @@ func (o *roleResourceType) Grants(
 		if userHasRoleAccess(administratorRoleFlag, resource) {
 			userID := administratorRoleFlag.UserId
 			if userID != "" {
-				roleID := resource.Id.GetResource()
-				rv = append(rv, roleGrant(userID, roleID, resource))
+				rv = append(rv, roleGrant(userID, resource))
 			}
 		}
 	}
@@ -464,12 +571,22 @@ func roleResource(ctx context.Context, role *okta.Role) (*v2.Resource, error) {
 	)
 }
 
-func roleGrant(userID string, roleID string, resource *v2.Resource) *v2.Grant {
+func roleGrant(userID string, resource *v2.Resource) *v2.Grant {
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 
 	return sdkGrant.NewGrant(resource, "assigned", ur,
 		sdkGrant.WithAnnotation(&v2.V1Identifier{
 			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
+		}),
+	)
+}
+
+func roleGroupGrant(groupID string, resource *v2.Resource) *v2.Grant {
+	gr := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
+
+	return sdkGrant.NewGrant(resource, "assigned", gr,
+		sdkGrant.WithAnnotation(&v2.V1Identifier{
+			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 		}),
 	)
 }

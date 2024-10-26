@@ -38,7 +38,11 @@ type Roles struct {
 	Role           string      `json:"role,omitempty"`
 }
 
-const apiPathListIamResourceSets = "/api/v1/iam/resource-sets"
+const (
+	apiPathListIamResourceSets = "/api/v1/iam/resource-sets"
+	roleTypeCustom             = "CUSTOM"
+	roleStatusInactive         = "INACTIVE"
+)
 
 func (rs *resourceSetsResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
 	return rs.resourceType
@@ -237,7 +241,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 				}
 
 				for _, role := range roles {
-					if role.Status == "INACTIVE" || role.Type != "CUSTOM" || role.ResourceSet != resource.Id.Resource {
+					if role.Status == roleStatusInactive || role.Type != roleTypeCustom || role.ResourceSet != resource.Id.Resource {
 						continue
 					}
 

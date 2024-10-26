@@ -158,8 +158,7 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	for _, administratorRoleFlag := range adminFlags {
 		if userHasRoleAccess(administratorRoleFlag, resource) {
 			userID := administratorRoleFlag.UserId
-			roleID := resource.Id.GetResource()
-			rv = append(rv, roleGrant(userID, roleID, resource))
+			rv = append(rv, roleGrant(userID, resource))
 		}
 	}
 

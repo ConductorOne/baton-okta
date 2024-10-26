@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
@@ -132,17 +133,19 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 
 	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "09876"}
 	gr := grant.NewGrant(&v2.Resource{
-		Id:          principalID,
-		DisplayName: "",
-		Description: "",
+		Id: principalID,
 	}, "member", principalID)
 
-	grants, _, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{})
-	if err != nil {
-		panic(err)
+	gr.Principal.DisplayName = "Custom Role Admin"
+	var token = "{}"
+	for token != "" {
+		grants, tk, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{
+			Token: token,
+		})
+		require.Nil(t, err)
+		require.NotNil(t, grants)
+		token = tk
 	}
-
-	log.Println(grants)
 }
 
 func TestRoleResourceTypeGrant(t *testing.T) {
@@ -158,7 +161,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	require.Nil(t, err)
 
 	// --grant-entitlement "role:READ_ONLY_ADMIN:assigned"
-	grantEntitlement := "role:READ_ONLY_ADMIN:assigned"
+	grantEntitlement := "role:CUSTOM:assigned"
 	// --grant-principal-type user
 	grantPrincipalType := "user"
 	// --grant-principal "00ujp5a9z0rMTsPRW697"
@@ -186,6 +189,36 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestResourcSetRevoke(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	// --revoke-grant "resourcesets:iamju0t17k506Mo3x697:assigned:role:cr0kbyv36hiiDqOKC697"
+	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "cr0kbyv36hiiDqOKC697"}
+	resource, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test_res", "Resource Sets")
+	require.Nil(t, err)
+
+	gr := grant.NewGrant(resource, "assigned", principalID)
+	annos := annotations.Annotations(gr.Annotations)
+	gr.Annotations = annos
+	require.NotNil(t, gr)
+
+	r := &resourceSetsResourceType{
+		resourceType:    resourceTypeResourceSets,
+		client:          cliTest.client,
+		syncCustomRoles: batonSyncCustomRoles,
+	}
+	_, err = r.Revoke(ctxTest, gr)
+	require.Nil(t, err)
+}
+
 func parseEntitlementID(id string) (*v2.ResourceId, []string, error) {
 	parts := strings.Split(id, ":")
 	// Need to be at least 3 parts type:entitlement_id:slug
@@ -209,6 +242,14 @@ func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string)
 	})
 }
 
+func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
+	return resourceSetsResource(ctxTest, &ResourceSets{
+		ID:          id,
+		Label:       label,
+		Description: ctype,
+	}, nil)
+}
+
 func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitlement string) *v2.Entitlement {
 	options := []ent.EntitlementOption{
 		ent.WithGrantableTo(resourceTypeRole),
@@ -217,4 +258,53 @@ func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitl
 	}
 
 	return ent.NewAssignmentEntitlement(resource, entitlement, options...)
+}
+
+func TestResourceSetsList(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	o := &resourceSetsResourceType{
+		resourceType: resourceTypeUser,
+		client:       cliTest.client,
+	}
+	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
+	require.Nil(t, err)
+	require.NotNil(t, res)
+}
+
+func TestResourceSetGrants(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	resource := &resourceSetsResourceType{
+		resourceType:    resourceTypeResourceSets,
+		client:          cliTest.client,
+		syncCustomRoles: true,
+	}
+
+	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "cr0jp5dxwvYn1PzzU697"}
+	gr := grant.NewGrant(&v2.Resource{
+		Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: "iamju0t17k506Mo3x697"},
+	}, "member", principalID)
+
+	gr.Principal.DisplayName = "Custom Role Admin"
+	grants, _, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{})
+	require.Nil(t, err)
+
+	log.Println(grants)
 }
