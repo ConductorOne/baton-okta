@@ -1,9 +1,11 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -42,6 +44,8 @@ const (
 	apiPathListIamResourceSets = "/api/v1/iam/resource-sets"
 	roleTypeCustom             = "CUSTOM"
 	roleStatusInactive         = "INACTIVE"
+	usersUrl                   = "/api/v1/users"
+	groupsUrl                  = "/api/v1/groups"
 )
 
 func (rs *resourceSetsResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -155,15 +159,20 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 }
 
 func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
-	url := fmt.Sprintf("/api/v1/users/%v/roles", userId)
-	if qp != nil {
-		url += qp.String()
+	apiPath, err := url.JoinPath(usersUrl, userId, "roles")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reqUrl, err := url.Parse(apiPath)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	rq := rs.client.CloneRequestExecutor()
 	req, err := rq.WithAccept(ContentType).
 		WithContentType(ContentType).
-		NewRequest(http.MethodGet, url, nil)
+		NewRequest(http.MethodGet, reqUrl.String(), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -177,16 +186,55 @@ func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context
 	return role, resp, nil
 }
 
-func (rs *resourceSetsResourceType) RemoveAssignedRolesForResourceSets(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
-	url := fmt.Sprintf("%s/%s/bindings/%s", apiPathListIamResourceSets, resourceSetId, roleId)
-	if qp != nil {
-		url += qp.String()
+func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId, memberId string, qp *query.Params) (*okta.Response, error) {
+	body := []byte(fmt.Sprintf(`{
+		"role": "%s",
+		"members": [
+			"https://trial-4018719-admin.okta.com/api/v1/users/00ujp5a9z0rMTsPRW697"
+		]
+	}`, roleId))
+
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
+	if err != nil {
+		return nil, err
+	}
+
+	reqUrl, err := url.Parse(apiPath)
+	if err != nil {
+		return nil, err
 	}
 
 	rq := rs.client.CloneRequestExecutor()
 	req, err := rq.WithAccept(ContentType).
 		WithContentType(ContentType).
-		NewRequest(http.MethodDelete, url, nil)
+		NewRequest(http.MethodPost, reqUrl.String(), bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rq.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
+}
+
+func (rs *resourceSetsResourceType) RemoveAssignedRolesForResourceSets(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", roleId)
+	if err != nil {
+		return nil, err
+	}
+
+	reqUrl, err := url.Parse(apiPath)
+	if err != nil {
+		return nil, err
+	}
+
+	rq := rs.client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodDelete, reqUrl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -275,20 +323,39 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 	return rv, pageToken, nil, nil
 }
 
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
 func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
-	if principal.Id.ResourceType != resourceTypeResourceSets.Id {
+	if principal.Id.ResourceType != resourceTypeRole.Id {
 		l.Warn(
 			"okta-connector: only custom roles can be granted role membership",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector: only custom roles can be granted repo membership")
+		return nil, fmt.Errorf("okta-connector: only custom roles can be granted role membership")
+	}
+
+	resourceSetId := entitlement.Resource.Id.Resource
+	customRoleId := principal.Id.Resource
+	response, err := rs.assignMembersForResourceSets(ctx,
+		resourceSetId,
+		customRoleId,
+		"00ujp5a9z0rMTsPRW697",
+		nil)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s %s", err.Error(), response.Body)
+	}
+
+	if response.StatusCode == http.StatusOK {
+		l.Warn("Membership role has been granted",
+			zap.String("Status", response.Status),
+		)
 	}
 
 	return nil, nil
 }
 
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
 func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
@@ -310,7 +377,7 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 	}
 
 	if response.StatusCode == http.StatusNoContent {
-		l.Warn("Membership has been revoked",
+		l.Warn("Membership role has been revoked",
 			zap.String("Status", response.Status),
 		)
 	}

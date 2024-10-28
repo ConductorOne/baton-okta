@@ -155,15 +155,20 @@ func (o *roleResourceType) Entitlements(
 }
 
 func (o *roleResourceType) ListGroupAssignedRoles(ctx context.Context, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
-	url := fmt.Sprintf("/api/v1/groups/%v/roles", groupId)
-	if qp != nil {
-		url += qp.String()
+	apiPath, err := url.JoinPath(groupsUrl, groupId, "roles")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reqUrl, err := url.Parse(apiPath)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	rq := o.client.CloneRequestExecutor()
 	req, err := rq.WithAccept(ContentType).
 		WithContentType(ContentType).
-		NewRequest(http.MethodGet, url, nil)
+		NewRequest(http.MethodGet, reqUrl.String(), nil)
 	if err != nil {
 		return nil, nil, err
 	}
