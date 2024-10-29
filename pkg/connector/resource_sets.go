@@ -24,6 +24,7 @@ type resourceSetsResourceType struct {
 	resourceType    *v2.ResourceType
 	client          *okta.Client
 	syncCustomRoles bool
+	domain          string
 }
 
 type Roles struct {
@@ -46,6 +47,7 @@ const (
 	roleStatusInactive         = "INACTIVE"
 	usersUrl                   = "/api/v1/users"
 	groupsUrl                  = "/api/v1/groups"
+	defaultProtocol            = "https:"
 )
 
 func (rs *resourceSetsResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -186,13 +188,13 @@ func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context
 	return role, resp, nil
 }
 
-func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId, memberId string, qp *query.Params) (*okta.Response, error) {
+func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId string, memberId string, qp *query.Params) (*okta.Response, error) {
 	body := []byte(fmt.Sprintf(`{
 		"role": "%s",
 		"members": [
-			"https://trial-4018719-admin.okta.com/api/v1/users/00ujp5a9z0rMTsPRW697"
+			"%s"
 		]
-	}`, roleId))
+	}`, roleId, memberId))
 
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
 	if err != nil {
@@ -328,19 +330,25 @@ func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Res
 	l := ctxzap.Extract(ctx)
 	if principal.Id.ResourceType != resourceTypeRole.Id {
 		l.Warn(
-			"okta-connector: only custom roles can be granted role membership",
+			"okta-connector: only users or groups can be granted resource-sets membership",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector: only custom roles can be granted role membership")
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted resource-sets membership")
 	}
 
 	resourceSetId := entitlement.Resource.Id.Resource
 	customRoleId := principal.Id.Resource
+	userId := "00ujp5a9z0rMTsPRW697"
+	memberUrl, err := url.JoinPath(defaultProtocol, rs.domain, usersUrl, userId)
+	if err != nil {
+		return nil, err
+	}
+
 	response, err := rs.assignMembersForResourceSets(ctx,
 		resourceSetId,
 		customRoleId,
-		"00ujp5a9z0rMTsPRW697",
+		memberUrl,
 		nil)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s %s", err.Error(), response.Body)
@@ -385,9 +393,10 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 	return nil, nil
 }
 
-func resourceSetsBuilder(client *okta.Client, syncCustomRoles bool) *resourceSetsResourceType {
+func resourceSetsBuilder(domain string, client *okta.Client, syncCustomRoles bool) *resourceSetsResourceType {
 	return &resourceSetsResourceType{
 		resourceType:    resourceTypeResourceSets,
+		domain:          domain,
 		client:          client,
 		syncCustomRoles: syncCustomRoles,
 	}
