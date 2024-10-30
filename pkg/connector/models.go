@@ -69,3 +69,28 @@ type _Links struct {
 	ResourceSet ResourceSet `json:"resource-set,omitempty"`
 	Self        Self        `json:"self,omitempty"`
 }
+
+type resourceSetBindingsAPIData struct {
+	Members []MembersDetails `json:"members,omitempty"`
+	Links   LinksSelfBinding `json:"_links,omitempty"`
+}
+
+type MembersDetails struct {
+	ID          string    `json:"id,omitempty"`
+	Created     time.Time `json:"created,omitempty"`
+	LastUpdated time.Time `json:"lastUpdated,omitempty"`
+	Links       LinksSelf `json:"_links,omitempty"`
+}
+
+type LinksSelfBinding struct {
+	Self    Self    `json:"self,omitempty"`
+	Binding Binding `json:"binding,omitempty"`
+}
+
+type LinksSelf struct {
+	Self Self `json:"self,omitempty"`
+}
+
+type Binding struct {
+	Href string `json:"href,omitempty"`
+}

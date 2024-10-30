@@ -113,6 +113,7 @@ func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
 }
 
 func TestRoleResourceTypeGrants(t *testing.T) {
+	var displayName = "Custom Role Admin"
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
 	}
@@ -135,8 +136,7 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 	gr := grant.NewGrant(&v2.Resource{
 		Id: principalID,
 	}, "member", principalID)
-
-	gr.Principal.DisplayName = "Custom Role Admin"
+	gr.Principal.DisplayName = displayName
 	var token = "{}"
 	for token != "" {
 		grants, tk, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{
@@ -188,7 +188,6 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	}, entitlement)
 	require.Nil(t, err)
 }
-
 func TestResourcSetRevoke(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
@@ -280,6 +279,25 @@ func TestResourceSetsList(t *testing.T) {
 	require.NotNil(t, res)
 }
 
+func TestResourceSetsBindingsList(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	o := &resourceSetsBindingsResourceType{
+		resourceType: resourceTypeUser,
+		client:       cliTest.client,
+	}
+	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
+	require.Nil(t, err)
+	require.NotNil(t, res)
+}
 func TestResourceSetGrants(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
@@ -298,6 +316,35 @@ func TestResourceSetGrants(t *testing.T) {
 	}
 
 	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "cr0jp5dxwvYn1PzzU697"}
+	gr := grant.NewGrant(&v2.Resource{
+		Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: "iamju0t17k506Mo3x697"},
+	}, "member", principalID)
+
+	gr.Principal.DisplayName = "Custom Role Admin"
+	grants, _, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{})
+	require.Nil(t, err)
+
+	log.Println(grants)
+}
+
+func TestResourceSetBindingsGrants(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	resource := &resourceSetsBindingsResourceType{
+		resourceType:    resourceTypeResourceSets,
+		client:          cliTest.client,
+		syncCustomRoles: true,
+	}
+
+	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "iamju0t17k506Mo3x697:cr0jp5dxwvYn1PzzU697"}
 	gr := grant.NewGrant(&v2.Resource{
 		Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: "iamju0t17k506Mo3x697"},
 	}, "member", principalID)

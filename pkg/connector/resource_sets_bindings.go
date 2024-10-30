@@ -19,6 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	entitlementName = "member"
+	resourceUsers   = "users"
+	resourceGroups  = "groups"
+)
+
 type resourceSetsBindingsResourceType struct {
 	resourceType    *v2.ResourceType
 	client          *okta.Client
@@ -102,13 +108,13 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
-			"members",
+			entitlementName,
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
 			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
 			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding Member", resource.DisplayName)),
-			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set-binding in Okta", resource.DisplayName)),
+			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set-binding member in Okta", resource.DisplayName)),
 		),
 	}, "", nil, nil
 }
@@ -139,6 +145,31 @@ func (rsb *resourceSetsBindingsResourceType) ListAssignedRolesForUser(ctx contex
 	}
 
 	return role, resp, nil
+}
+
+func (rsb *resourceSetsBindingsResourceType) ListResourceSetsBindingMembers(ctx context.Context,
+	client *okta.Client,
+	resourceSetId, customRoleId string,
+	qp *query.Params) ([]MembersDetails, *okta.Response, error) {
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members")
+	if err != nil {
+		return nil, nil, err
+	}
+	rq := client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, apiPath, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var resourceSetBindings *resourceSetBindingsAPIData
+	resp, err := rq.Do(ctx, req, &resourceSetBindings)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return resourceSetBindings.Members, resp, nil
 }
 
 func (rsb *resourceSetsBindingsResourceType) ListResourceSetsBindings(ctx context.Context,
@@ -230,65 +261,46 @@ func (rsb *resourceSetsBindingsResourceType) RemoveAssignedRolesForResourceSets(
 }
 
 func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
-	var rv []*v2.Grant
+	var (
+		rv []*v2.Grant
+		rl *v2.Resource
+		gr *v2.Grant
+	)
 	bag, _, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	if rsb.syncCustomRoles {
-		pageUserToken := "{}"
-		for pageUserToken != "" {
-			userToken := &pagination.Token{
-				Token: pageUserToken,
-			}
-			bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-			}
+		resourceIDs := strings.Split(resource.Id.Resource, ":")
+		resourceSetId := resourceIDs[0]
+		customRoleId := resourceIDs[1]
+		members, _, err := rsb.ListResourceSetsBindingMembers(ctx, rsb.client, resourceSetId, customRoleId, nil)
+		if err != nil {
+			return nil, "", nil, err
+		}
 
-			qp := queryParams(userToken.Size, pageUsers)
-			users, respUserCtx, err := listUsers(ctx, rsb.client, userToken, qp)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		for _, member := range members {
+			memberHref := strings.Split(member.Links.Self.Href, "/")
+			resourceType := memberHref[len(memberHref)-2]
+			resourceId := memberHref[len(memberHref)-1]
+			switch resourceType {
+			case resourceUsers:
+				rl = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: resourceId}}
+				gr = sdkGrant.NewGrant(resource, entitlementName, rl,
+					sdkGrant.WithAnnotation(&v2.V1Identifier{
+						Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+					}),
+				)
+			case resourceGroups:
+				rl = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: resourceId}}
+				gr = sdkGrant.NewGrant(resource, entitlementName, rl,
+					sdkGrant.WithAnnotation(&v2.V1Identifier{
+						Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+					}),
+				)
 			}
-
-			nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-			}
-
-			err = bagUsers.Next(nextUserPage)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-			}
-
-			for _, user := range users {
-				userId := user.Id
-				roles, _, err := rsb.ListAssignedRolesForUser(ctx, userId, nil)
-				if err != nil {
-					return nil, "", nil, err
-				}
-
-				for _, role := range roles {
-					if role.Status == roleStatusInactive || role.Type != roleTypeCustom || !strings.Contains(resource.Id.Resource, role.ResourceSet) {
-						continue
-					}
-
-					rl := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.Role}}
-					gr := sdkGrant.NewGrant(resource, "members", rl,
-						sdkGrant.WithAnnotation(&v2.V1Identifier{
-							Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
-						}),
-					)
-					rv = append(rv, gr)
-				}
-			}
-
-			pageUserToken, err = bagUsers.Marshal()
-			if err != nil {
-				return nil, "", nil, err
-			}
+			rv = append(rv, gr)
 		}
 	}
 

@@ -139,7 +139,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
 			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
-			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Member", resource.DisplayName)),
+			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding", resource.DisplayName)),
 			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set in Okta", resource.DisplayName)),
 		),
 	}, "", nil, nil
