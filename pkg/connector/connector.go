@@ -114,10 +114,10 @@ var (
 		Annotations: v1AnnotationsForResourceType("role", false),
 	}
 	resourceTypeCustomRole = &v2.ResourceType{
-		Id:          "custom_role",
+		Id:          "custom-role",
 		DisplayName: "Custom Role",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
-		Annotations: v1AnnotationsForResourceType("custom_role", false),
+		Annotations: v1AnnotationsForResourceType("custom-role", false),
 	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          "user",
@@ -143,14 +143,14 @@ var (
 		Annotations: v1AnnotationsForResourceType("account", false),
 	}
 	resourceTypeResourceSets = &v2.ResourceType{
-		Id:          "resourcesets",
-		DisplayName: "Resource Sets",
-		Annotations: v1AnnotationsForResourceType("resourcesets", false),
+		Id:          "resource-set",
+		DisplayName: "Resource Set",
+		Annotations: v1AnnotationsForResourceType("resource-set", false),
 	}
 	resourceTypeResourceSetsBindings = &v2.ResourceType{
-		Id:          "resourcesets_bindings",
-		DisplayName: "Resource Sets Bindings",
-		Annotations: v1AnnotationsForResourceType("resourcesets_bindings", false),
+		Id:          "resourceset-binding",
+		DisplayName: "Resource Set Binding",
+		Annotations: v1AnnotationsForResourceType("resourceset-binding", false),
 	}
 	defaultScopes = []string{
 		"okta.users.read",

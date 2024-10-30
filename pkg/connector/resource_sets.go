@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -133,13 +134,13 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
-			"member",
+			"bindings",
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
 			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
-			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Sets Member", resource.DisplayName)),
-			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-sets in Okta", resource.DisplayName)),
+			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Member", resource.DisplayName)),
+			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set in Okta", resource.DisplayName)),
 		),
 	}, "", nil, nil
 }
@@ -302,12 +303,12 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 				}
 
 				for _, role := range roles {
-					if role.Status == roleStatusInactive || role.Type != roleTypeCustom || role.ResourceSet != resource.Id.Resource {
+					if role.Status == roleStatusInactive || role.Type != roleTypeCustom || !strings.Contains(resource.Id.Resource, role.ResourceSet) {
 						continue
 					}
 
 					rl := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.Role}}
-					gr := sdkGrant.NewGrant(resource, "member", rl,
+					gr := sdkGrant.NewGrant(resource, "bindings", rl,
 						sdkGrant.WithAnnotation(&v2.V1Identifier{
 							Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
 						}),

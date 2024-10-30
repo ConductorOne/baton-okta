@@ -102,13 +102,13 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
-			"member",
+			"members",
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
 			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
-			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Sets Bindings Member", resource.DisplayName)),
-			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-sets-bindings in Okta", resource.DisplayName)),
+			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding Member", resource.DisplayName)),
+			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set-binding in Okta", resource.DisplayName)),
 		),
 	}, "", nil, nil
 }
@@ -276,7 +276,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 					}
 
 					rl := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.Role}}
-					gr := sdkGrant.NewGrant(resource, "member", rl,
+					gr := sdkGrant.NewGrant(resource, "members", rl,
 						sdkGrant.WithAnnotation(&v2.V1Identifier{
 							Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
 						}),
