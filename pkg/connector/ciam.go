@@ -93,7 +93,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 	case resourceTypeRole.Id:
 		l.Debug("Listing roles", zap.Any("bag", bag))
 		for _, role := range standardRoleTypes {
-			resource, err := roleResource(ctx, role)
+			resource, err := roleResource(ctx, role, resourceTypeRole)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 			}

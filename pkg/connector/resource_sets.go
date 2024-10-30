@@ -1,12 +1,10 @@
 package connector
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -25,20 +23,6 @@ type resourceSetsResourceType struct {
 	client          *okta.Client
 	syncCustomRoles bool
 	domain          string
-}
-
-type Roles struct {
-	Links          interface{} `json:"_links,omitempty"`
-	AssignmentType string      `json:"assignmentType,omitempty"`
-	Created        *time.Time  `json:"created,omitempty"`
-	Description    string      `json:"description,omitempty"`
-	Id             string      `json:"id,omitempty"`
-	Label          string      `json:"label,omitempty"`
-	LastUpdated    *time.Time  `json:"lastUpdated,omitempty"`
-	Status         string      `json:"status,omitempty"`
-	Type           string      `json:"type,omitempty"`
-	ResourceSet    string      `json:"resource-set,omitempty"`
-	Role           string      `json:"role,omitempty"`
 }
 
 const (
@@ -129,12 +113,21 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 	}
 
 	for _, rSet := range rSets {
-		resource, err := resourceSetsResource(ctx, &rSet, nil)
+		rSetCpy := rSet
+		roles, _, err := rs.ListResourceSetsBindings(ctx, rs.client, rSet.ID, nil)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-sets: %w", err)
+			return nil, "", nil, err
 		}
 
-		rv = append(rv, resource)
+		for _, role := range roles {
+			rSetCpy.ID = rSet.ID + ":" + role.ID
+			resource, err := resourceSetsResource(ctx, &rSetCpy, nil)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-sets: %w", err)
+			}
+
+			rv = append(rv, resource)
+		}
 	}
 
 	pageToken, err := bag.Marshal()
@@ -149,7 +142,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
-			"assigned",
+			"member",
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
@@ -188,13 +181,40 @@ func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context
 	return role, resp, nil
 }
 
-func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId string, memberId string, qp *query.Params) (*okta.Response, error) {
-	body := []byte(fmt.Sprintf(`{
-		"role": "%s",
-		"members": [
-			"%s"
-		]
-	}`, roleId, memberId))
+func (rs *resourceSetsResourceType) ListResourceSetsBindings(ctx context.Context,
+	client *okta.Client,
+	resourceSetId string,
+	qp *query.Params) ([]Role, *okta.Response, error) {
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rq := client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, apiPath, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var resourceSetsBindings *ResourceSetsBindingsAPIData
+	resp, err := rq.Do(ctx, req, &resourceSetsBindings)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return resourceSetsBindings.Roles, resp, nil
+}
+
+func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId string, memberId string) (*okta.Response, error) {
+	payload := struct {
+		Role    string   `json:"role"`
+		Members []string `json:"members"`
+	}{
+		Role:    roleId,
+		Members: []string{memberId},
+	}
 
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
 	if err != nil {
@@ -209,7 +229,7 @@ func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Con
 	rq := rs.client.CloneRequestExecutor()
 	req, err := rq.WithAccept(ContentType).
 		WithContentType(ContentType).
-		NewRequest(http.MethodPost, reqUrl.String(), bytes.NewBuffer(body))
+		NewRequest(http.MethodPost, reqUrl.String(), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +369,7 @@ func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Res
 		resourceSetId,
 		customRoleId,
 		memberUrl,
-		nil)
+	)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s %s", err.Error(), response.Body)
 	}

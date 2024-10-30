@@ -113,6 +113,12 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
 		Annotations: v1AnnotationsForResourceType("role", false),
 	}
+	resourceTypeCustomRole = &v2.ResourceType{
+		Id:          "custom_role",
+		DisplayName: "Custom Role",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
+		Annotations: v1AnnotationsForResourceType("custom_role", false),
+	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          "user",
 		DisplayName: "User",
@@ -178,6 +184,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 		resourceSetsBuilder(o.domain, o.client, o.syncCustomRoles),
+		customRoleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 	}
 }
 
