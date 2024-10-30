@@ -37,8 +37,8 @@ type accountResourceType struct {
 }
 
 const (
-	appUserScopeUser  = "USER"
-	appUserScopeGroup = "GROUP"
+	appUserScope  = "USER"
+	appGroupScope = "GROUP"
 )
 
 func (o *accountResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -228,7 +228,7 @@ func (o *accountResourceType) Grants(
 		for _, appUser := range appUsers {
 			appUserSAMLRolesMap := mapset.NewSet[string]()
 
-			if appUser.Scope == appUserScopeUser {
+			if appUser.Scope == appUserScope {
 				if appUser.Profile == nil {
 					l.Error("app user profile was nil", zap.Any("userId", appUser.Id))
 					// TODO(lauren) continue or error?
@@ -250,7 +250,7 @@ func (o *accountResourceType) Grants(
 			// If the user scope is "GROUP", this means the user does not have a direct assignment
 			// We want to get the union of the group's samlRoles that the user is assigned to
 			// We also want a union of the group's samlRoles if useGroupMapping is enabled
-			if appUser.Scope == appUserScopeGroup && !awsConfig.JoinAllRoles {
+			if appUser.Scope == appGroupScope && !awsConfig.JoinAllRoles {
 				userGroups, _, err := listUsersGroupsClient(ctx, o.connector.client, appUser.Id)
 				if err != nil {
 					return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to groups for user '%s': %w", appUser.Id, err)
