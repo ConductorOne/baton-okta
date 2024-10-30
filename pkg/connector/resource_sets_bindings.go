@@ -198,6 +198,7 @@ func (rsb *resourceSetsBindingsResourceType) ListResourceSetsBindings(ctx contex
 	return resourceSetsBindings.Roles, resp, nil
 }
 
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/createResourceSetBinding
 func (rsb *resourceSetsBindingsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId string, memberId string) (*okta.Response, error) {
 	payload := struct {
 		Role    string   `json:"role"`
@@ -317,22 +318,37 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	return rv, pageToken, nil, nil
 }
 
-// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/createResourceSetBinding
 func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	var (
+		apiUrl    = usersUrl
+		firstItem = 0
+		lastItem  = 1
+	)
 	l := ctxzap.Extract(ctx)
-	if principal.Id.ResourceType != resourceTypeRole.Id {
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
-			"okta-connector: only users or groups can be granted resource-sets membership",
+			"okta-connector: only users or groups can be granted resource-sets xxx membership",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector: only users or groups can be granted resource-sets membership")
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted resource-sets xxx membership")
 	}
 
-	resourceSetId := entitlement.Resource.Id.Resource
-	customRoleId := principal.Id.Resource
-	userId := ""
-	memberUrl, err := url.JoinPath(defaultProtocol, rs.domain, usersUrl, userId)
+	entitlementId := entitlement.Resource.Id.Resource
+	resourceId := principal.Id.Resource
+	resourceIDs := strings.Split(entitlementId, ":")
+	if len(resourceIDs) != 2 {
+		return nil, fmt.Errorf("okta-connector: invalid resourceset-binding-id")
+	}
+
+	resourceSetId := resourceIDs[firstItem]
+	customRoleId := resourceIDs[lastItem]
+	if principal.Id.ResourceType == resourceTypeGroup.Id {
+		apiUrl = groupsUrl
+	}
+
+	memberUrl, err := url.JoinPath(defaultProtocol, rs.domain, apiUrl, resourceId)
 	if err != nil {
 		return nil, err
 	}
