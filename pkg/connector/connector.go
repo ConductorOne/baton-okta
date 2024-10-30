@@ -147,6 +147,11 @@ var (
 		DisplayName: "Resource Sets",
 		Annotations: v1AnnotationsForResourceType("resourcesets", false),
 	}
+	resourceTypeResourceSetsBindings = &v2.ResourceType{
+		Id:          "resourcesets_bindings",
+		DisplayName: "Resource Sets Bindings",
+		Annotations: v1AnnotationsForResourceType("resourcesets_bindings", false),
+	}
 	defaultScopes = []string{
 		"okta.users.read",
 		"okta.groups.read",
@@ -184,6 +189,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 		resourceSetsBuilder(o.domain, o.client, o.syncCustomRoles),
+		resourceSetsBindingsBuilder(o.domain, o.client, o.syncCustomRoles),
 		customRoleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 	}
 }
