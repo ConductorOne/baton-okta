@@ -239,7 +239,7 @@ func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string)
 		Id:    id,
 		Label: label,
 		Type:  ctype,
-	})
+	}, resourceTypeRole)
 }
 
 func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
@@ -307,4 +307,25 @@ func TestResourceSetGrants(t *testing.T) {
 	require.Nil(t, err)
 
 	log.Println(grants)
+}
+
+func TestResourceSetsResourceTypeListResourceSetsBindings(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	rs := &resourceSetsResourceType{
+		resourceType: resourceTypeUser,
+		client:       cliTest.client,
+	}
+	resourceSetId := "iamju0t17k506Mo3x697"
+	res, _, err := rs.ListResourceSetsBindings(ctxTest, cliTest.client, resourceSetId, nil)
+	require.Nil(t, err)
+	require.NotNil(t, res)
 }
