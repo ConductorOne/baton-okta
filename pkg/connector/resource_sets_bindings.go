@@ -261,6 +261,34 @@ func (rsb *resourceSetsBindingsResourceType) RemoveAssignedRolesForResourceSets(
 	return resp, nil
 }
 
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/unassignMemberFromBinding
+func (rsb *resourceSetsBindingsResourceType) UnassignResourceSetBindiingMember(ctx context.Context, resourceSetId, customRoleId, memberId string, qp *query.Params) (*okta.Response, error) {
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members", memberId)
+	if err != nil {
+		return nil, err
+	}
+
+	reqUrl, err := url.Parse(apiPath)
+	if err != nil {
+		return nil, err
+	}
+
+	rq := rsb.client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodDelete, reqUrl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rq.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
+}
+
 func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var (
 		rv []*v2.Grant
@@ -328,11 +356,11 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 	l := ctxzap.Extract(ctx)
 	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
-			"okta-connector: only users or groups can be granted resource-sets xxx membership",
+			"okta-connector: only users or groups can be granted resource-sets membership",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector: only users or groups can be granted resource-sets xxx membership")
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted resource-sets membership")
 	}
 
 	entitlementId := entitlement.Resource.Id.Resource
@@ -372,30 +400,62 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 }
 
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
-func (rs *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	var (
+		firstItem = 0
+		lastItem  = 1
+		memberId  = ""
+	)
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
 	principal := grant.Principal
-	if principal.Id.ResourceType != resourceTypeRole.Id {
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
-			"okta-connector: only custom roles can have role membership revoked",
+			"okta-connector: only users or groups can have role membership revoked",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector:only custom roles can have role membership revoked")
+		return nil, fmt.Errorf("okta-connector:only users or groups can have role membership revoked")
 	}
 
-	resourceSetId := entitlement.Resource.Id.Resource
-	customRoleId := principal.Id.Resource
-	response, err := rs.RemoveAssignedRolesForResourceSets(ctx, resourceSetId, customRoleId, nil)
+	entitlementId := entitlement.Resource.Id.Resource
+	resourceIDs := strings.Split(entitlementId, ":")
+	if len(resourceIDs) != 2 {
+		return nil, fmt.Errorf("okta-connector: invalid resourceset-binding-id")
+	}
+
+	resourceSetId := resourceIDs[firstItem]
+	customRoleId := resourceIDs[lastItem]
+	members, _, err := rsb.ListResourceSetsBindingMembers(ctx,
+		rsb.client,
+		resourceSetId,
+		customRoleId,
+		nil,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
+		return nil, err
 	}
 
-	if response.StatusCode == http.StatusNoContent {
-		l.Warn("Membership role has been revoked",
-			zap.String("Status", response.Status),
-		)
+	for _, member := range members {
+		memberHref := strings.Split(member.Links.Self.Href, "/")
+		resourceId := memberHref[len(memberHref)-1]
+		if principal.Id.Resource == resourceId {
+			memberId = member.ID
+			break
+		}
+	}
+
+	if memberId != "" {
+		response, err := rsb.UnassignResourceSetBindiingMember(ctx, resourceSetId, customRoleId, memberId, nil)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
+		}
+
+		if response.StatusCode == http.StatusNoContent {
+			l.Warn("Membership role has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
 	}
 
 	return nil, nil
