@@ -33,6 +33,7 @@ const (
 	usersUrl                   = "/api/v1/users"
 	groupsUrl                  = "/api/v1/groups"
 	defaultProtocol            = "https:"
+	bindingEntitlement         = "bindings"
 )
 
 func (rs *resourceSetsResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -57,7 +58,9 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 	)
 }
 
-func listOktaIamResourceSets(ctx context.Context,
+// listAllResourceSets. List all Resource Sets.
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleCResourceSet/#tag/RoleCResourceSet/operation/listResourceSets
+func listAllResourceSets(ctx context.Context,
 	client *okta.Client,
 	token *pagination.Token,
 	qp *query.Params,
@@ -89,7 +92,6 @@ func listOktaIamResourceSets(ctx context.Context,
 	return rSets.ResourceSets, respCtx, nil
 }
 
-// List always returns an empty slice, we don't sync users.
 func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	var rv []*v2.Resource
 	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id})
@@ -98,7 +100,7 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 	}
 
 	qp := queryParams(pToken.Size, page)
-	rSets, respCtx, err := listOktaIamResourceSets(ctx, rs.client, pToken, qp)
+	resourceSets, respCtx, err := listAllResourceSets(ctx, rs.client, pToken, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
 	}
@@ -113,8 +115,8 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, rSet := range rSets {
-		resource, err := resourceSetsResource(ctx, &rSet, nil)
+	for _, resourceSet := range resourceSets {
+		resource, err := resourceSetsResource(ctx, &resourceSet, nil)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-sets: %w", err)
 		}
@@ -134,7 +136,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
-			"bindings",
+			bindingEntitlement,
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
@@ -145,7 +147,9 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	}, "", nil, nil
 }
 
-func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+// listAllUserRoleAssignments. List all user role assignments.
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentAUser/#tag/RoleAssignmentAUser/operation/listAssignedRolesForUser
+func (rs *resourceSetsResourceType) listAllUserRoleAssignments(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
 	apiPath, err := url.JoinPath(usersUrl, userId, "roles")
 	if err != nil {
 		return nil, nil, err
@@ -173,10 +177,12 @@ func (rs *resourceSetsResourceType) ListAssignedRolesForUser(ctx context.Context
 	return role, resp, nil
 }
 
-func (rs *resourceSetsResourceType) ListResourceSetsBindings(ctx context.Context,
+// listResourceSetsBindings. List all Role Resource Set Bindings.
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/listBindings
+func (rs *resourceSetsResourceType) listResourceSetsBindings(ctx context.Context,
 	client *okta.Client,
 	resourceSetId string,
-	qp *query.Params) ([]Role, *okta.Response, error) {
+	_ *query.Params) ([]Role, *okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
 	if err != nil {
 		return nil, nil, err
@@ -199,42 +205,9 @@ func (rs *resourceSetsResourceType) ListResourceSetsBindings(ctx context.Context
 	return resourceSetsBindings.Roles, resp, nil
 }
 
-func (rs *resourceSetsResourceType) assignMembersForResourceSets(ctx context.Context, resourceSetId, roleId string, memberId string) (*okta.Response, error) {
-	payload := struct {
-		Role    string   `json:"role"`
-		Members []string `json:"members"`
-	}{
-		Role:    roleId,
-		Members: []string{memberId},
-	}
-
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
-	if err != nil {
-		return nil, err
-	}
-
-	reqUrl, err := url.Parse(apiPath)
-	if err != nil {
-		return nil, err
-	}
-
-	rq := rs.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodPost, reqUrl.String(), payload)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := rq.Do(ctx, req, nil)
-	if err != nil {
-		return resp, err
-	}
-
-	return resp, nil
-}
-
-func (rs *resourceSetsResourceType) RemoveAssignedRolesForResourceSets(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
+// deleteRoleResourceSetBinding. Delete a Role Resource Set Binding
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
+func (rs *resourceSetsResourceType) deleteRoleResourceSetBinding(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", roleId)
 	if err != nil {
 		return nil, err
@@ -297,7 +270,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 
 			for _, user := range users {
 				userId := user.Id
-				roles, _, err := rs.ListAssignedRolesForUser(ctx, userId, nil)
+				roles, _, err := rs.listAllUserRoleAssignments(ctx, userId, nil)
 				if err != nil {
 					return nil, "", nil, err
 				}
@@ -307,8 +280,8 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 						continue
 					}
 
-					rl := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.Role}}
-					gr := sdkGrant.NewGrant(resource, "bindings", rl,
+					principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.Role}}
+					gr := sdkGrant.NewGrant(resource, bindingEntitlement, principal,
 						sdkGrant.WithAnnotation(&v2.V1Identifier{
 							Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
 						}),
@@ -337,67 +310,34 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 	return rv, pageToken, nil, nil
 }
 
-// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
 func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
-	if principal.Id.ResourceType != resourceTypeRole.Id {
-		l.Warn(
-			"okta-connector: only users or groups can be granted resource-sets membership",
-			zap.String("principal_type", principal.Id.ResourceType),
-			zap.String("principal_id", principal.Id.Resource),
-		)
-		return nil, fmt.Errorf("okta-connector: only users or groups can be granted resource-sets membership")
-	}
-
-	resourceSetId := entitlement.Resource.Id.Resource
-	customRoleId := principal.Id.Resource
-	userId := "00ujp5a9z0rMTsPRW697"
-	memberUrl, err := url.JoinPath(defaultProtocol, rs.domain, usersUrl, userId)
-	if err != nil {
-		return nil, err
-	}
-
-	response, err := rs.assignMembersForResourceSets(ctx,
-		resourceSetId,
-		customRoleId,
-		memberUrl,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s %s", err.Error(), response.Body)
-	}
-
-	if response.StatusCode == http.StatusOK {
-		l.Warn("Membership role has been granted",
-			zap.String("Status", response.Status),
-		)
-	}
-
+	// Creating a Binding for the Resource Set, requires Custom Role, and members (Users or Groups)
+	// Because of that, We added resource-set-bindings
 	return nil, nil
 }
 
-// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
 func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
 	principal := grant.Principal
 	if principal.Id.ResourceType != resourceTypeCustomRole.Id {
 		l.Warn(
-			"okta-connector: only custom roles can have role membership revoked",
+			"okta-connector: only custom roles can have role resource-set membership revoked",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector:only custom roles can have role membership revoked")
+		return nil, fmt.Errorf("okta-connector:only custom roles can have resource-set membership revoked")
 	}
 
 	resourceSetId := entitlement.Resource.Id.Resource
 	customRoleId := principal.Id.Resource
-	response, err := rs.RemoveAssignedRolesForResourceSets(ctx, resourceSetId, customRoleId, nil)
+	response, err := rs.deleteRoleResourceSetBinding(ctx, resourceSetId, customRoleId, nil)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
 	}
 
 	if response.StatusCode == http.StatusNoContent {
-		l.Warn("Membership role has been revoked",
+		l.Warn("Resource Set Membership has been revoked",
 			zap.String("Status", response.Status),
 		)
 	}
