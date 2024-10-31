@@ -26,6 +26,10 @@ var (
 )
 
 func TestSyncRoles(t *testing.T) {
+	var (
+		token = "{}"
+		empty = ""
+	)
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
 	}
@@ -42,8 +46,7 @@ func TestSyncRoles(t *testing.T) {
 		syncCustomRoles: batonSyncCustomRoles,
 	}
 
-	var token = "{}"
-	for token != "" {
+	for token != empty {
 		res, tk, _, err := r.List(ctxTest, &v2.ResourceId{}, &pagination.Token{
 			Token: token,
 		})
@@ -78,41 +81,11 @@ func TestUserResourceTypeList(t *testing.T) {
 	require.NotNil(t, oktaUsers)
 }
 
-func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
-	var oktaClient *okta.Client
-	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
-	if err != nil {
-		return nil, err
-	}
-
-	if cfg.ApiToken != "" && cfg.Domain != "" {
-		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
-			okta.WithToken(cfg.ApiToken),
-			okta.WithHttpClientPtr(client),
-			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &Okta{
-		client:           oktaClient,
-		domain:           cfg.Domain,
-		apiToken:         cfg.ApiToken,
-		syncInactiveApps: cfg.SyncInactiveApps,
-		ciamConfig: &ciamConfig{
-			Enabled:      cfg.Ciam,
-			EmailDomains: cfg.CiamEmailDomains,
-		},
-	}, nil
-}
-
 func TestRoleResourceTypeGrants(t *testing.T) {
-	var displayName = "Custom Role Admin"
+	var (
+		empty = ""
+		token = "{}"
+	)
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
 	}
@@ -130,15 +103,11 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 		client:          cliTest.client,
 		syncCustomRoles: true,
 	}
+	rs, err := getRoleResourceForTesting(ctxTest, "READ_ONLY_ADMIN", "test", "")
+	require.Nil(t, err)
 
-	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "09876"}
-	gr := grant.NewGrant(&v2.Resource{
-		Id: principalID,
-	}, "member", principalID)
-	gr.Principal.DisplayName = displayName
-	var token = "{}"
-	for token != "" {
-		grants, tk, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{
+	for token != empty {
+		grants, tk, _, err := resource.Grants(ctxTest, rs, &pagination.Token{
 			Token: token,
 		})
 		require.Nil(t, err)
@@ -159,8 +128,8 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	// --grant-entitlement "role:READ_ONLY_ADMIN:assigned"
-	grantEntitlement := "role:CUSTOM:assigned"
+	// --grant-entitlement role:READ_ONLY_ADMIN:assigned
+	grantEntitlement := "role:READ_ONLY_ADMIN:assigned"
 	// --grant-principal-type user
 	grantPrincipalType := "user"
 	// --grant-principal "00ujp5a9z0rMTsPRW697"
@@ -199,12 +168,12 @@ func TestResourcSetRevoke(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	// --revoke-grant "resource-set:iamkp1zkzcO7LJxud697:bindings:custom-role:cr0kp21kkuhjwMgRP697 "
-	principalID := &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: "cr0kp21kkuhjwMgRP697"}
-	resource, err := getResourceSetForTesting(ctxTest, "iamkp1zkzcO7LJxud697", "rs_test", "Resource Sets")
+	// resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697
+	principalID := &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: "cr0kuwv5507zJCtSy697"}
+	resource, err := getResourceSetForTesting(ctxTest, "iamkuwy3gqcfNexfQ697", "resourceset_local", "resourceset_local Resource Set Binding ")
 	require.Nil(t, err)
 
-	gr := grant.NewGrant(resource, "bindings", principalID)
+	gr := grant.NewGrant(resource, bindingEntitlement, principalID)
 	annos := annotations.Annotations(gr.Annotations)
 	gr.Annotations = annos
 	require.NotNil(t, gr)
@@ -214,72 +183,9 @@ func TestResourcSetRevoke(t *testing.T) {
 		client:          cliTest.client,
 		syncCustomRoles: batonSyncCustomRoles,
 	}
+	// it removes everything associated to custom-role-id
 	_, err = r.Revoke(ctxTest, gr)
 	require.Nil(t, err)
-}
-
-func parseEntitlementID(id string) (*v2.ResourceId, []string, error) {
-	parts := strings.Split(id, ":")
-	// Need to be at least 3 parts type:entitlement_id:slug
-	if len(parts) < 3 || len(parts) > 3 {
-		return nil, nil, fmt.Errorf("okta-connector: invalid resource id")
-	}
-
-	resourceId := &v2.ResourceId{
-		ResourceType: parts[0],
-		Resource:     strings.Join(parts[1:len(parts)-1], ":"),
-	}
-
-	return resourceId, parts, nil
-}
-
-func parseBindingEntitlementID(id string) (*v2.ResourceId, []string, error) {
-	parts := strings.Split(id, ":")
-	// Need to be at least 3 parts type:entitlement_id:slug
-	if len(parts) < 4 || len(parts) > 4 {
-		return nil, nil, fmt.Errorf("okta-connector: invalid resource id")
-	}
-
-	resourceId := &v2.ResourceId{
-		ResourceType: parts[0],
-		Resource:     strings.Join(parts[1:len(parts)-1], ":"),
-	}
-
-	return resourceId, parts, nil
-}
-
-func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
-	return roleResource(ctxTest, &okta.Role{
-		Id:    id,
-		Label: label,
-		Type:  ctype,
-	}, resourceTypeRole)
-}
-
-func getResourceSetResourceForTesting(ctxTest context.Context, id, label, description string) (*v2.Resource, error) {
-	return resourceSetsBindingsResource(ctxTest, &ResourceSets{
-		ID:          id,
-		Label:       label,
-		Description: description,
-	}, nil)
-}
-
-func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
-	return resourceSetsResource(ctxTest, &ResourceSets{
-		ID:          id,
-		Label:       label,
-		Description: ctype,
-	}, nil)
-}
-
-func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitlement string) *v2.Entitlement {
-	options := []ent.EntitlementOption{
-		ent.WithGrantableTo(resourceTypeRole),
-		ent.WithDisplayName(fmt.Sprintf("%s resource %s", resourceDisplayName, entitlement)),
-		ent.WithDescription(fmt.Sprintf("%s of %s okta", entitlement, resourceDisplayName)),
-	}
-
-	return ent.NewAssignmentEntitlement(resource, entitlement, options...)
 }
 
 func TestResourceSetsList(t *testing.T) {
@@ -339,7 +245,7 @@ func TestResourceSetGrants(t *testing.T) {
 		syncCustomRoles: true,
 	}
 
-	rs, err := getResourceSetResourceForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
+	rs, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
 	require.Nil(t, err)
 
 	grants, _, _, err := o.Grants(ctxTest, rs, &pagination.Token{})
@@ -365,7 +271,7 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 		syncCustomRoles: true,
 	}
 
-	rs, err := getResourceSetResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
+	rs, err := getResourceSetBindingsResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
 	require.Nil(t, err)
 
 	grants, _, _, err := o.Grants(ctxTest, rs, &pagination.Token{})
@@ -417,7 +323,7 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 	require.NotNil(t, data)
 
 	entitlementName = data[3]
-	resource, err := getResourceSetResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
+	resource, err := getResourceSetBindingsResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
 	require.Nil(t, err)
 
 	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
@@ -459,7 +365,7 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 	require.NotNil(t, data)
 
 	entitlementName = data[3]
-	resource, err := getResourceSetResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
+	resource, err := getResourceSetBindingsResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
 	require.Nil(t, err)
 
 	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
@@ -476,4 +382,101 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 		},
 	}, entitlement)
 	require.Nil(t, err)
+}
+
+func parseEntitlementID(id string) (*v2.ResourceId, []string, error) {
+	parts := strings.Split(id, ":")
+	// Need to be at least 3 parts type:entitlement_id:slug
+	if len(parts) < 3 || len(parts) > 3 {
+		return nil, nil, fmt.Errorf("okta-connector: invalid resource id")
+	}
+
+	resourceId := &v2.ResourceId{
+		ResourceType: parts[0],
+		Resource:     strings.Join(parts[1:len(parts)-1], ":"),
+	}
+
+	return resourceId, parts, nil
+}
+
+func parseBindingEntitlementID(id string) (*v2.ResourceId, []string, error) {
+	parts := strings.Split(id, ":")
+	// Need to be at least 3 parts type:entitlement_id:slug
+	if len(parts) < 4 || len(parts) > 4 {
+		return nil, nil, fmt.Errorf("okta-connector: invalid resource id")
+	}
+
+	resourceId := &v2.ResourceId{
+		ResourceType: parts[0],
+		Resource:     strings.Join(parts[1:len(parts)-1], ":"),
+	}
+
+	return resourceId, parts, nil
+}
+
+func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
+	return roleResource(ctxTest, &okta.Role{
+		Id:    id,
+		Label: label,
+		Type:  ctype,
+	}, resourceTypeRole)
+}
+
+func getResourceSetBindingsResourceForTesting(ctxTest context.Context, id, label, description string) (*v2.Resource, error) {
+	return resourceSetsBindingsResource(ctxTest, &ResourceSets{
+		ID:          id,
+		Label:       label,
+		Description: description,
+	}, nil)
+}
+
+func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
+	return resourceSetsResource(ctxTest, &ResourceSets{
+		ID:          id,
+		Label:       label,
+		Description: ctype,
+	}, nil)
+}
+
+func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitlement string) *v2.Entitlement {
+	options := []ent.EntitlementOption{
+		ent.WithGrantableTo(resourceTypeRole),
+		ent.WithDisplayName(fmt.Sprintf("%s resource %s", resourceDisplayName, entitlement)),
+		ent.WithDescription(fmt.Sprintf("%s of %s okta", entitlement, resourceDisplayName)),
+	}
+
+	return ent.NewAssignmentEntitlement(resource, entitlement, options...)
+}
+
+func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
+	var oktaClient *okta.Client
+	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.ApiToken != "" && cfg.Domain != "" {
+		_, oktaClient, err = okta.NewClient(ctx,
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
+			okta.WithToken(cfg.ApiToken),
+			okta.WithHttpClientPtr(client),
+			okta.WithCache(cfg.Cache),
+			okta.WithCacheTti(cfg.CacheTTI),
+			okta.WithCacheTtl(cfg.CacheTTL),
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &Okta{
+		client:           oktaClient,
+		domain:           cfg.Domain,
+		apiToken:         cfg.ApiToken,
+		syncInactiveApps: cfg.SyncInactiveApps,
+		ciamConfig: &ciamConfig{
+			Enabled:      cfg.Ciam,
+			EmailDomains: cfg.CiamEmailDomains,
+		},
+	}, nil
 }
