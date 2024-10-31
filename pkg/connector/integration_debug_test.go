@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -188,6 +187,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	}, entitlement)
 	require.Nil(t, err)
 }
+
 func TestResourcSetRevoke(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
@@ -199,12 +199,12 @@ func TestResourcSetRevoke(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	// --revoke-grant "resourcesets:iamju0t17k506Mo3x697:assigned:role:cr0kbyv36hiiDqOKC697"
-	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "cr0kbyv36hiiDqOKC697"}
-	resource, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test_res", "Resource Sets")
+	// --revoke-grant "resource-set:iamkp1zkzcO7LJxud697:bindings:custom-role:cr0kp21kkuhjwMgRP697 "
+	principalID := &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: "cr0kp21kkuhjwMgRP697"}
+	resource, err := getResourceSetForTesting(ctxTest, "iamkp1zkzcO7LJxud697", "rs_test", "Resource Sets")
 	require.Nil(t, err)
 
-	gr := grant.NewGrant(resource, "assigned", principalID)
+	gr := grant.NewGrant(resource, "bindings", principalID)
 	annos := annotations.Annotations(gr.Annotations)
 	gr.Annotations = annos
 	require.NotNil(t, gr)
@@ -222,7 +222,22 @@ func parseEntitlementID(id string) (*v2.ResourceId, []string, error) {
 	parts := strings.Split(id, ":")
 	// Need to be at least 3 parts type:entitlement_id:slug
 	if len(parts) < 3 || len(parts) > 3 {
-		return nil, nil, fmt.Errorf("tailscale-connector: invalid resource id")
+		return nil, nil, fmt.Errorf("okta-connector: invalid resource id")
+	}
+
+	resourceId := &v2.ResourceId{
+		ResourceType: parts[0],
+		Resource:     strings.Join(parts[1:len(parts)-1], ":"),
+	}
+
+	return resourceId, parts, nil
+}
+
+func parseBindingEntitlementID(id string) (*v2.ResourceId, []string, error) {
+	parts := strings.Split(id, ":")
+	// Need to be at least 3 parts type:entitlement_id:slug
+	if len(parts) < 4 || len(parts) > 4 {
+		return nil, nil, fmt.Errorf("okta-connector: invalid resource id")
 	}
 
 	resourceId := &v2.ResourceId{
@@ -241,6 +256,14 @@ func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string)
 	}, resourceTypeRole)
 }
 
+func getResourceSetResourceForTesting(ctxTest context.Context, id, label, description string) (*v2.Resource, error) {
+	return resourceSetsBindingsResource(ctxTest, &ResourceSets{
+		ID:          id,
+		Label:       label,
+		Description: description,
+	}, nil)
+}
+
 func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
 	return resourceSetsResource(ctxTest, &ResourceSets{
 		ID:          id,
@@ -253,7 +276,7 @@ func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitl
 	options := []ent.EntitlementOption{
 		ent.WithGrantableTo(resourceTypeRole),
 		ent.WithDisplayName(fmt.Sprintf("%s resource %s", resourceDisplayName, entitlement)),
-		ent.WithDescription(fmt.Sprintf("%s of %s okta role", entitlement, resourceDisplayName)),
+		ent.WithDescription(fmt.Sprintf("%s of %s okta", entitlement, resourceDisplayName)),
 	}
 
 	return ent.NewAssignmentEntitlement(resource, entitlement, options...)
@@ -298,6 +321,7 @@ func TestResourceSetsBindingsList(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, res)
 }
+
 func TestResourceSetGrants(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
@@ -309,22 +333,18 @@ func TestResourceSetGrants(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	resource := &resourceSetsResourceType{
+	o := &resourceSetsResourceType{
 		resourceType:    resourceTypeResourceSets,
 		client:          cliTest.client,
 		syncCustomRoles: true,
 	}
 
-	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "cr0jp5dxwvYn1PzzU697"}
-	gr := grant.NewGrant(&v2.Resource{
-		Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: "iamju0t17k506Mo3x697"},
-	}, "member", principalID)
-
-	gr.Principal.DisplayName = "Custom Role Admin"
-	grants, _, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{})
+	rs, err := getResourceSetResourceForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
 	require.Nil(t, err)
 
-	log.Println(grants)
+	grants, _, _, err := o.Grants(ctxTest, rs, &pagination.Token{})
+	require.Nil(t, err)
+	require.NotNil(t, grants)
 }
 
 func TestResourceSetBindingsGrants(t *testing.T) {
@@ -338,25 +358,22 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	resource := &resourceSetsBindingsResourceType{
-		resourceType:    resourceTypeResourceSets,
+	o := &resourceSetsBindingsResourceType{
+		resourceType:    resourceTypeResourceSetsBindings,
+		domain:          batonDomain,
 		client:          cliTest.client,
 		syncCustomRoles: true,
 	}
 
-	principalID := &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "iamju0t17k506Mo3x697:cr0jp5dxwvYn1PzzU697"}
-	gr := grant.NewGrant(&v2.Resource{
-		Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: "iamju0t17k506Mo3x697"},
-	}, "member", principalID)
-
-	gr.Principal.DisplayName = "Custom Role Admin"
-	grants, _, _, err := resource.Grants(ctxTest, gr.Principal, &pagination.Token{})
+	rs, err := getResourceSetResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
 	require.Nil(t, err)
 
-	log.Println(grants)
+	grants, _, _, err := o.Grants(ctxTest, rs, &pagination.Token{})
+	require.Nil(t, err)
+	require.NotNil(t, grants)
 }
 
-func TestResourceSetsResourceTypeListResourceSetsBindings(t *testing.T) {
+func TestListResourceSetsBindings(t *testing.T) {
 	if batonApiToken == "" && batonDomain == "" {
 		t.Skip()
 	}
@@ -375,4 +392,88 @@ func TestResourceSetsResourceTypeListResourceSetsBindings(t *testing.T) {
 	res, _, err := rs.ListResourceSetsBindings(ctxTest, cliTest.client, resourceSetId, nil)
 	require.Nil(t, err)
 	require.NotNil(t, res)
+}
+
+func TestResourceSetBidingUserGrant(t *testing.T) {
+	var entitlementName string
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	// --grant-entitlement "resourceset-binding:iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697:member"
+	grantEntitlement := "resourceset-binding:iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697:member"
+	// --grant-principal-type user
+	grantPrincipalType := "user"
+	// --grant-principal "00ujp5a9z0rMTsPRW697"
+	grantPrincipal := "00ujp5atex1LouMvW697"
+	_, data, err := parseBindingEntitlementID(grantEntitlement)
+	require.Nil(t, err)
+	require.NotNil(t, data)
+
+	entitlementName = data[3]
+	resource, err := getResourceSetResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
+	require.Nil(t, err)
+
+	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
+	r := &resourceSetsBindingsResourceType{
+		resourceType:    resourceTypeResourceSetsBindings,
+		domain:          batonDomain,
+		client:          cliTest.client,
+		syncCustomRoles: true,
+	}
+	_, err = r.Grant(ctxTest, &v2.Resource{
+		Id: &v2.ResourceId{
+			ResourceType: grantPrincipalType,
+			Resource:     grantPrincipal,
+		},
+	}, entitlement)
+	require.Nil(t, err)
+}
+
+func TestResourceSetBidingGroupGrant(t *testing.T) {
+	var entitlementName string
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	// --grant-entitlement "resourceset-binding:iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697:member"
+	grantEntitlement := "resourceset-binding:iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697:member"
+	// --grant-principal-type user
+	grantPrincipalType := "group"
+	// --grant-principal "00ujp5a9z0rMTsPRW697"
+	grantPrincipal := "00gjp5attgbHSymFZ697"
+	_, data, err := parseBindingEntitlementID(grantEntitlement)
+	require.Nil(t, err)
+	require.NotNil(t, data)
+
+	entitlementName = data[3]
+	resource, err := getResourceSetResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
+	require.Nil(t, err)
+
+	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
+	r := &resourceSetsBindingsResourceType{
+		resourceType:    resourceTypeResourceSetsBindings,
+		domain:          batonDomain,
+		client:          cliTest.client,
+		syncCustomRoles: true,
+	}
+	_, err = r.Grant(ctxTest, &v2.Resource{
+		Id: &v2.ResourceId{
+			ResourceType: grantPrincipalType,
+			Resource:     grantPrincipal,
+		},
+	}, entitlement)
+	require.Nil(t, err)
 }

@@ -380,7 +380,7 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
 	principal := grant.Principal
-	if principal.Id.ResourceType != resourceTypeRole.Id {
+	if principal.Id.ResourceType != resourceTypeCustomRole.Id {
 		l.Warn(
 			"okta-connector: only custom roles can have role membership revoked",
 			zap.String("principal_type", principal.Id.ResourceType),
