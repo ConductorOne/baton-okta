@@ -64,7 +64,12 @@ We have also introduced resourceset-bindings(resourcesetID and custom roles ID) 
 
 ## Resourceset-bindings, custom roles and members(Users or Groups) usage:
 
-Creates a Binding for the Resource Set `iamkuwy3gqcfNexfQ697`, Custom Role `cr0kuwv5507zJCtSy697`, and member `00ujp51vjgWd6ylZ6697`
+- Let's use some IDs for this example
+```
+Resource Set `iamkuwy3gqcfNexfQ697`
+Custom Role `cr0kuwv5507zJCtSy697`
+Member `00ujp51vjgWd6ylZ6697`
+```
 
 - Granting custom roles for users.
 ```
