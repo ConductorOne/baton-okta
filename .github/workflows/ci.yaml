@@ -89,4 +89,4 @@ jobs:
         env:
           BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00ug0t0xjvnHRbQuD5d7'
         run: |
-          ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}
+           ./baton-okta && ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}
