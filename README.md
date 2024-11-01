@@ -72,7 +72,7 @@ BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 --grant-entitlement 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member' --grant-principal-type 'user' --grant-principal '00ujp51vjgWd6ylZ6697'
 ```
 
-In the previous example we granted the custom role 'cr0kuwv5507zJCtSy697' to user '00ujp5a9z0rMTsPRW697'.
+In the previous example we granted the custom role `cr0kuwv5507zJCtSy697` to user `00ujp5a9z0rMTsPRW697`.
 
 - Revoking custom role assigment(Unassigns a Member)
 ```
