@@ -63,7 +63,7 @@ func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentRes
 	}
 
 	qp := queryParams(pToken.Size, page)
-	resourceSets, respCtx, err := listAllResourceSets(ctx, rsb.client, pToken, qp)
+	resourceSets, respCtx, err := listResourceSets(ctx, rsb.client, pToken, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
 	}
@@ -80,7 +80,7 @@ func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentRes
 
 	for _, resourceSet := range resourceSets {
 		resourceSetCpy := resourceSet
-		roles, _, err := rsb.listResourceSetsBindings(ctx, rsb.client, resourceSetCpy.ID, nil)
+		roles, _, err := listBindings(ctx, rsb.client, resourceSetCpy.ID, nil)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -119,9 +119,9 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 	}, "", nil, nil
 }
 
-// listResourceSetsBindingMembers. List all Role Resource Set Binding Members
+// listMembersOfBinding. List all Role Resource Set Binding Members
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/listMembersOfBinding
-func (rsb *resourceSetsBindingsResourceType) listResourceSetsBindingMembers(ctx context.Context,
+func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(ctx context.Context,
 	client *okta.Client,
 	resourceSetId, customRoleId string,
 	_ *query.Params) ([]MembersDetails, *okta.Response, error) {
@@ -144,34 +144,6 @@ func (rsb *resourceSetsBindingsResourceType) listResourceSetsBindingMembers(ctx 
 	}
 
 	return resourceSetBindings.Members, resp, nil
-}
-
-// listResourceSetsBindings. List all Role Resource Set Bindings.
-// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/listBindings
-func (rsb *resourceSetsBindingsResourceType) listResourceSetsBindings(ctx context.Context,
-	client *okta.Client,
-	resourceSetId string,
-	_ *query.Params) ([]Role, *okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rq := client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, apiPath, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var resourceSetsBindings *ResourceSetsBindingsAPIData
-	resp, err := rq.Do(ctx, req, &resourceSetsBindings)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return resourceSetsBindings.Roles, resp, nil
 }
 
 // createRoleResourceSetBinding. Create a Role Resource Set Binding.
@@ -211,9 +183,9 @@ func (rsb *resourceSetsBindingsResourceType) createRoleResourceSetBinding(ctx co
 	return resp, nil
 }
 
-// unassignResourceSetBindiingMember. Unassign a Role Resource Set Bindiing Member
+// unassignMemberFromBinding. Unassign a Role Resource Set Bindiing Member
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/unassignMemberFromBinding
-func (rsb *resourceSetsBindingsResourceType) unassignResourceSetBindiingMember(ctx context.Context, resourceSetId, customRoleId, memberId string, qp *query.Params) (*okta.Response, error) {
+func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx context.Context, resourceSetId, customRoleId, memberId string, qp *query.Params) (*okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members", memberId)
 	if err != nil {
 		return nil, err
@@ -254,7 +226,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 		resourceIDs := strings.Split(resource.Id.Resource, ":")
 		resourceSetId := resourceIDs[firstItem]
 		customRoleId := resourceIDs[lastItem]
-		members, _, err := rsb.listResourceSetsBindingMembers(ctx, rsb.client, resourceSetId, customRoleId, nil)
+		members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -362,7 +334,7 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
-	members, _, err := rsb.listResourceSetsBindingMembers(ctx,
+	members, _, err := rsb.listMembersOfBinding(ctx,
 		rsb.client,
 		resourceSetId,
 		customRoleId,
@@ -382,7 +354,7 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 	}
 
 	if memberId != "" {
-		response, err := rsb.unassignResourceSetBindiingMember(ctx, resourceSetId, customRoleId, memberId, nil)
+		response, err := rsb.unassignMemberFromBinding(ctx, resourceSetId, customRoleId, memberId, nil)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
 		}

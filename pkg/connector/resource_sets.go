@@ -58,9 +58,9 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 	)
 }
 
-// listAllResourceSets. List all Resource Sets.
+// listResourceSets. List all Resource Sets.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleCResourceSet/#tag/RoleCResourceSet/operation/listResourceSets
-func listAllResourceSets(ctx context.Context,
+func listResourceSets(ctx context.Context,
 	client *okta.Client,
 	token *pagination.Token,
 	qp *query.Params,
@@ -100,7 +100,7 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 	}
 
 	qp := queryParams(pToken.Size, page)
-	resourceSets, respCtx, err := listAllResourceSets(ctx, rs.client, pToken, qp)
+	resourceSets, respCtx, err := listResourceSets(ctx, rs.client, pToken, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
 	}
@@ -147,9 +147,9 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	}, "", nil, nil
 }
 
-// listAllUserRoleAssignments. List all user role assignments.
+// listAssignedRolesForUser. List all user role assignments.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentAUser/#tag/RoleAssignmentAUser/operation/listAssignedRolesForUser
-func (rs *resourceSetsResourceType) listAllUserRoleAssignments(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+func (rs *resourceSetsResourceType) listAssignedRolesForUser(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
 	apiPath, err := url.JoinPath(usersUrl, userId, "roles")
 	if err != nil {
 		return nil, nil, err
@@ -177,9 +177,9 @@ func (rs *resourceSetsResourceType) listAllUserRoleAssignments(ctx context.Conte
 	return role, resp, nil
 }
 
-// listResourceSetsBindings. List all Role Resource Set Bindings.
+// listBindings. List all Role Resource Set Bindings.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/listBindings
-func (rs *resourceSetsResourceType) listResourceSetsBindings(ctx context.Context,
+func listBindings(ctx context.Context,
 	client *okta.Client,
 	resourceSetId string,
 	_ *query.Params) ([]Role, *okta.Response, error) {
@@ -205,9 +205,9 @@ func (rs *resourceSetsResourceType) listResourceSetsBindings(ctx context.Context
 	return resourceSetsBindings.Roles, resp, nil
 }
 
-// deleteRoleResourceSetBinding. Delete a Role Resource Set Binding
+// deleteBinding. Delete a Role Resource Set Binding
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
-func (rs *resourceSetsResourceType) deleteRoleResourceSetBinding(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
+func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", roleId)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 
 			for _, user := range users {
 				userId := user.Id
-				roles, _, err := rs.listAllUserRoleAssignments(ctx, userId, nil)
+				roles, _, err := rs.listAssignedRolesForUser(ctx, userId, nil)
 				if err != nil {
 					return nil, "", nil, err
 				}
@@ -331,7 +331,7 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 
 	resourceSetId := entitlement.Resource.Id.Resource
 	customRoleId := principal.Id.Resource
-	response, err := rs.deleteRoleResourceSetBinding(ctx, resourceSetId, customRoleId, nil)
+	response, err := rs.deleteBinding(ctx, resourceSetId, customRoleId, nil)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
 	}

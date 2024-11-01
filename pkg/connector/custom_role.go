@@ -99,7 +99,9 @@ func (o *customRoleResourceType) Entitlements(
 	return rv, "", nil, nil
 }
 
-func (o *customRoleResourceType) ListGroupAssignedRoles(ctx context.Context, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+// listGroupAssignedRoles. List all group role assignments
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentBGroup/#tag/RoleAssignmentBGroup/operation/listGroupAssignedRoles
+func (o *customRoleResourceType) listGroupAssignedRoles(ctx context.Context, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
 	apiPath, err := url.JoinPath(groupsUrl, groupId, "roles")
 	if err != nil {
 		return nil, nil, err
@@ -208,7 +210,7 @@ func (o *customRoleResourceType) Grants(
 
 				for _, group := range groups {
 					groupId := group.Id
-					roles, _, err := o.ListGroupAssignedRoles(ctx, groupId, nil)
+					roles, _, err := o.listGroupAssignedRoles(ctx, groupId, nil)
 					if err != nil {
 						return nil, "", nil, err
 					}

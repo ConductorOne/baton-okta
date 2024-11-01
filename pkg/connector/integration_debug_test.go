@@ -290,12 +290,8 @@ func TestListResourceSetsBindings(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	rs := &resourceSetsResourceType{
-		resourceType: resourceTypeUser,
-		client:       cliTest.client,
-	}
 	resourceSetId := "iamju0t17k506Mo3x697"
-	res, _, err := rs.listResourceSetsBindings(ctxTest, cliTest.client, resourceSetId, nil)
+	res, _, err := listBindings(ctxTest, cliTest.client, resourceSetId, nil)
 	require.Nil(t, err)
 	require.NotNil(t, res)
 }
