@@ -52,14 +52,15 @@ baton resources
 - Groups
 - Roles
 - Users
-- custom-roles
-- resource-sets
-- resourceset-bindings
+- Custom-Roles
+- Resource-Sets
+- Resourceset-Bindings
 
 By default, `baton-okta` will sync information for inactive applications. You can exclude inactive applications setting the `--sync-inactive-apps` flag to `false`.
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
-We introduced resourceset-bindings for provisioning custom roles and resource-sets.
+
+We have also introduced resourceset-bindings for provisioning custom roles and resource-sets.
 
 # Resourceset-bindings, custom roles and members(Users or Groups) usage:
 
