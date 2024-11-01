@@ -66,7 +66,7 @@ We have also introduced resourceset-bindings(resourcesetID and custom roles ID) 
 
 Creates a Binding for the Resource Set `iamkuwy3gqcfNexfQ697`, Custom Role `cr0kuwv5507zJCtSy697`, and member `00ujp51vjgWd6ylZ6697`
 
-- Granting resourceset-bindings and custom roles for users.
+- Granting custom roles for users.
 ```
 BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 --grant-entitlement 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member' --grant-principal-type 'user' --grant-principal '00ujp51vjgWd6ylZ6697'
@@ -74,7 +74,7 @@ BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 
 In the previous example we granted the custom role `cr0kuwv5507zJCtSy697` to user `00ujp5a9z0rMTsPRW697`.
 
-- Revoking custom role assigment(Unassigns a Member)
+- Revoking custom role grants(Unassigns a Member)
 ```
 BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 --revoke-grant 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member:user:00ujp51vjgWd6ylZ6697' 
