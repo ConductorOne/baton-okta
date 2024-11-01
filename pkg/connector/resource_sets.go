@@ -65,21 +65,18 @@ func listResourceSets(ctx context.Context,
 	token *pagination.Token,
 	qp *query.Params,
 ) ([]ResourceSets, *responseContext, error) {
-	url := apiPathListIamResourceSets
+	uri := apiPathListIamResourceSets
 	if qp != nil {
-		url += qp.String()
+		uri += qp.String()
 	}
 
-	rq := client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, url, nil)
+	reqUrl, err := url.Parse(uri)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var rSets *ResourceSetsAPIData
-	resp, err := rq.Do(ctx, req, &rSets)
+	var resourceSets *ResourceSetsAPIData
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &resourceSets, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -89,7 +86,7 @@ func listResourceSets(ctx context.Context,
 		return nil, nil, err
 	}
 
-	return rSets.ResourceSets, respCtx, nil
+	return resourceSets.ResourceSets, respCtx, nil
 }
 
 func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
@@ -160,18 +157,10 @@ func (rs *resourceSetsResourceType) listAssignedRolesForUser(ctx context.Context
 		return nil, nil, err
 	}
 
-	rq := rs.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	var role []*Roles
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, rs.client)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	var role []*Roles
-	resp, err := rq.Do(ctx, req, &role)
-	if err != nil {
-		return nil, resp, err
 	}
 
 	return role, resp, nil
@@ -188,21 +177,30 @@ func listBindings(ctx context.Context,
 		return nil, nil, err
 	}
 
-	rq := client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, apiPath, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	var resourceSetsBindings *ResourceSetsBindingsAPIData
-	resp, err := rq.Do(ctx, req, &resourceSetsBindings)
+	resp, err := doRequest(ctx, apiPath, http.MethodGet, &resourceSetsBindings, client)
 	if err != nil {
 		return nil, resp, err
 	}
 
 	return resourceSetsBindings.Roles, resp, nil
+}
+
+func doRequest(ctx context.Context, url, httpMethod string, res interface{}, client *okta.Client) (*okta.Response, error) {
+	rq := client.CloneRequestExecutor()
+	req, err := rq.WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(httpMethod, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rq.Do(ctx, req, &res)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
 }
 
 // deleteBinding. Delete a Role Resource Set Binding
@@ -218,15 +216,7 @@ func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceS
 		return nil, err
 	}
 
-	rq := rs.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodDelete, reqUrl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := rq.Do(ctx, req, nil)
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodDelete, nil, rs.client)
 	if err != nil {
 		return resp, err
 	}

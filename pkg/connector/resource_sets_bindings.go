@@ -129,18 +129,16 @@ func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(ctx context.Co
 	if err != nil {
 		return nil, nil, err
 	}
-	rq := client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, apiPath, nil)
+
+	reqUrl, err := url.Parse(apiPath)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var resourceSetBindings *resourceSetBindingsAPIData
-	resp, err := rq.Do(ctx, req, &resourceSetBindings)
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &resourceSetBindings, client)
 	if err != nil {
-		return nil, resp, err
+		return nil, nil, err
 	}
 
 	return resourceSetBindings.Members, resp, nil
@@ -196,15 +194,7 @@ func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx conte
 		return nil, err
 	}
 
-	rq := rsb.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodDelete, reqUrl.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := rq.Do(ctx, req, nil)
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodDelete, nil, rsb.client)
 	if err != nil {
 		return resp, err
 	}

@@ -36,17 +36,9 @@ func (o *customRoleResourceType) List(
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
 	var nextPageToken string
-	_, bag, err := unmarshalSkipToken(token)
+	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-	}
-
-	if bag.Current() == nil {
-		if o.syncCustomRoles {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeCustomRole.Id,
-			})
-		}
 	}
 
 	var rv []*v2.Resource
@@ -112,18 +104,10 @@ func (o *customRoleResourceType) listGroupAssignedRoles(ctx context.Context, gro
 		return nil, nil, err
 	}
 
-	rq := o.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	var role []*Roles
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, o.client)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	var role []*Roles
-	resp, err := rq.Do(ctx, req, &role)
-	if err != nil {
-		return nil, resp, err
 	}
 
 	return role, resp, nil
