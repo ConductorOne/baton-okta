@@ -61,6 +61,30 @@ By default, `baton-okta` will sync information for inactive applications. You ca
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 We introduced resourceset-bindings for provisioning custom roles and resource-sets.
 
+# Resourceset-bindings, custom roles and members(Users or Groups) usage:
+
+Creates a Binding for the Resource Set(iamkuwy3gqcfNexfQ697), Custom Role(cr0kuwv5507zJCtSy697), and members(00ujp51vjgWd6ylZ6697)
+
+- Granting resourceset-bindings and custom roles for users.
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+--grant-entitlement 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member' --grant-principal-type 'user' --grant-principal '00ujp51vjgWd6ylZ6697'
+```
+
+In the previous example we granted the custom role 'cr0kuwv5507zJCtSy697' to user '00ujp5a9z0rMTsPRW697'.
+
+-- Revoking custom role assigment(Unassigns a Member)
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+--revoke-grant 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member:user:00ujp51vjgWd6ylZ6697' 
+```
+
+-- Revoking everything associated to custom role(Deletes a Binding of a Role)
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697 
+```
+
 # Contributing, Support and Issues
 
 We started Baton because we were tired of taking screenshots and manually building spreadsheets. We welcome contributions, and ideas, no matter how small -- our goal is to make identity and permissions sprawl less painful for everyone. If you have questions, problems, or ideas: Please open a Github Issue!
