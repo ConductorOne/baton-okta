@@ -22,6 +22,25 @@
     },
     {
       "resourceType":  {
+        "id":  "custom-role",
+        "displayName":  "Custom Role",
+        "traits":  [
+          "TRAIT_ROLE"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "custom-role"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ]
+    },
+    {
+      "resourceType":  {
         "id":  "group",
         "displayName":  "Group",
         "traits":  [
@@ -41,17 +60,34 @@
     },
     {
       "resourceType":  {
-        "id":  "resourcesets",
-        "displayName":  "Resource Sets",
+        "id":  "resource-set",
+        "displayName":  "Resource Set",
         "annotations":  [
           {
             "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "resourcesets"
+            "id":  "resource-set"
           }
         ]
       },
       "capabilities":  [
-        "CAPABILITY_SYNC"
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ]
+    },
+    {
+      "resourceType":  {
+        "id":  "resourceset-binding",
+        "displayName":  "Resource Set Binding",
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "resourceset-binding"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
       ]
     },
     {
