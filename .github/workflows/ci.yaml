@@ -63,30 +63,34 @@ jobs:
         run: go build ./cmd/baton-okta
       - name: Run baton-okta
         run: ./baton-okta
-      - name: Check for grant before revoking
+      - name: temporary test
         run: |
-          ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
-      - name: Revoke grants
-        run: |
-          ./baton-okta --revoke-grant ${{ env.CONNECTOR_GRANT }}
-      - name: Check grant was revoked
-        run: |
-           ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource !=\"${{ env.CONNECTOR_PRINCIPAL }}\")"
-      - name: Grant entitlement
-        run: | 
-          ./baton-okta && ./baton-okta --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
-      - name: Check grant was re-granted
-        run: |
-          ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
-      - name: Grant custom roles for users
-        env:
-          BATON_ENTITLEMENT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member'
-          BATON_PRINCIPAL_TYPE: 'user'
-          BATON_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7' 
-        run: | 
-          ./baton-okta && ./baton-okta --grant-entitlement ${{ env.BATON_ENTITLEMENT }} --grant-principal ${{ env.BATON_PRINCIPAL_TYPE }} --grant-principal-type ${{ env.BATON_PRINCIPAL }}
-      - name: Revoke custom role grants
-        env:
-          BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00ug0t0xjvnHRbQuD5d7'
-        run: |
-          ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}
+          baton resources -t user
+          baton grants | grep -e resou
+      # - name: Check for grant before revoking
+      #   run: |
+      #     ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+      # - name: Revoke grants
+      #   run: |
+      #     ./baton-okta --revoke-grant ${{ env.CONNECTOR_GRANT }}
+      # - name: Check grant was revoked
+      #   run: |
+      #      ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource !=\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+      # - name: Grant entitlement
+      #   run: | 
+      #     ./baton-okta && ./baton-okta --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
+      # - name: Check grant was re-granted
+      #   run: |
+      #     ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+      # - name: Grant custom roles for users
+      #   env:
+      #     BATON_ENTITLEMENT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member'
+      #     BATON_PRINCIPAL_TYPE: 'user'
+      #     BATON_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7' 
+      #   run: | 
+      #     ./baton-okta && ./baton-okta --grant-entitlement ${{ env.BATON_ENTITLEMENT }} --grant-principal ${{ env.BATON_PRINCIPAL_TYPE }} --grant-principal-type ${{ env.BATON_PRINCIPAL }}
+      # - name: Revoke custom role grants<aq
+      #   env:
+      #     BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00ug0t0xjvnHRbQuD5d7'
+      #   run: |
+      #     ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}
