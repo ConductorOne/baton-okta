@@ -60,7 +60,7 @@ By default, `baton-okta` will sync information for inactive applications. You ca
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 
-We have also introduced resourceset-bindings for provisioning custom roles and members.
+We have also introduced resourceset-bindings(resourcesetID and custom roles ID) for provisioning custom roles and members.
 
 ## Resourceset-bindings, custom roles and members(Users or Groups) usage:
 
