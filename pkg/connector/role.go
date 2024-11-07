@@ -204,9 +204,9 @@ func (o *roleResourceType) Grants(
 
 			for _, user := range users {
 				userId := user.Id
-				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+				roles, resp, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 				if err != nil {
-					return nil, "", nil, handleTimeoutError(err)
+					return nil, "", nil, handleOktaResponseError(resp, err)
 				}
 
 				for _, role := range roles {
@@ -426,7 +426,7 @@ func listAdministratorRoleFlags(
 			return nil, nil, errMissingRolePermissions
 		}
 
-		return nil, nil, err
+		return nil, nil, handleOktaResponseError(resp, err)
 	}
 
 	respCtx, err := responseToContext(token, resp)

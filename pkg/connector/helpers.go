@@ -121,7 +121,7 @@ func getError(response *okta.Response) (okta.Error, error) {
 	return errOkta, nil
 }
 
-func handleTimeoutError(err error) error {
+func handleOktaResponseError(resp *okta.Response, err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
@@ -130,6 +130,9 @@ func handleTimeoutError(err error) error {
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return status.Error(codes.DeadlineExceeded, "request timeout")
+	}
+	if resp != nil && resp.StatusCode >= 500 {
+		return status.Error(codes.Internal, "server error")
 	}
 	return err
 }
