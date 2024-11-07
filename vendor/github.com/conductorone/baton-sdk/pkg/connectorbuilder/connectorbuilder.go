@@ -21,6 +21,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/conductorone/baton-sdk/pkg/types/tasks"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 )
 
 type ResourceSyncer interface {
@@ -69,6 +70,8 @@ type TicketManager interface {
 	CreateTicket(ctx context.Context, ticket *v2.Ticket, schema *v2.TicketSchema) (*v2.Ticket, annotations.Annotations, error)
 	GetTicketSchema(ctx context.Context, schemaID string) (*v2.TicketSchema, annotations.Annotations, error)
 	ListTicketSchemas(ctx context.Context, pToken *pagination.Token) ([]*v2.TicketSchema, string, annotations.Annotations, error)
+	BulkCreateTickets(context.Context, *v2.TicketsServiceBulkCreateTicketsRequest) (*v2.TicketsServiceBulkCreateTicketsResponse, error)
+	BulkGetTickets(context.Context, *v2.TicketsServiceBulkGetTicketsRequest) (*v2.TicketsServiceBulkGetTicketsResponse, error)
 }
 
 type ConnectorBuilder interface {
@@ -90,6 +93,58 @@ type builderImpl struct {
 	ticketingEnabled       bool
 	m                      *metrics.M
 	nowFunc                func() time.Time
+}
+
+func (b *builderImpl) BulkCreateTickets(ctx context.Context, request *v2.TicketsServiceBulkCreateTicketsRequest) (*v2.TicketsServiceBulkCreateTicketsResponse, error) {
+	start := b.nowFunc()
+	tt := tasks.BulkCreateTicketsType
+	if b.ticketManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: ticket manager not implemented")
+	}
+
+	reqBody := request.GetTicketRequests()
+	if len(reqBody) == 0 {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: request body had no items")
+	}
+
+	ticketsResponse, err := b.ticketManager.BulkCreateTickets(ctx, request)
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: creating tickets failed: %w", err)
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return &v2.TicketsServiceBulkCreateTicketsResponse{
+		Tickets: ticketsResponse.GetTickets(),
+	}, nil
+}
+
+func (b *builderImpl) BulkGetTickets(ctx context.Context, request *v2.TicketsServiceBulkGetTicketsRequest) (*v2.TicketsServiceBulkGetTicketsResponse, error) {
+	start := b.nowFunc()
+	tt := tasks.BulkGetTicketsType
+	if b.ticketManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: ticket manager not implemented")
+	}
+
+	reqBody := request.GetTicketRequests()
+	if len(reqBody) == 0 {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: request body had no items")
+	}
+
+	ticketsResponse, err := b.ticketManager.BulkGetTickets(ctx, request)
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: fetching tickets failed: %w", err)
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return &v2.TicketsServiceBulkGetTicketsResponse{
+		Tickets: ticketsResponse.GetTickets(),
+	}, nil
 }
 
 func (b *builderImpl) ListTicketSchemas(ctx context.Context, request *v2.TicketsServiceListTicketSchemasRequest) (*v2.TicketsServiceListTicketSchemasResponse, error) {
@@ -351,6 +406,13 @@ func (b *builderImpl) ListResourceTypes(
 	tt := tasks.ListResourceTypesType
 	var out []*v2.ResourceType
 
+	l := ctxzap.Extract(ctx)
+	// Clear all http caches at the start of a sync. This must be run in the child process, which is why it's in this function and not in syncer.go
+	err := uhttp.ClearCaches(ctx)
+	if err != nil {
+		l.Warn("error clearing http caches", zap.Error(err))
+	}
+
 	for _, rb := range b.resourceBuilders {
 		out = append(out, rb.ResourceType(ctx))
 	}
@@ -373,21 +435,22 @@ func (b *builderImpl) ListResources(ctx context.Context, request *v2.ResourcesSe
 		Size:  int(request.PageSize),
 		Token: request.PageToken,
 	})
-	if err != nil {
-		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-		return nil, fmt.Errorf("error: listing resources failed: %w", err)
-	}
-	if request.PageToken != "" && request.PageToken == nextPageToken {
-		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-		return nil, fmt.Errorf("error: listing resources failed: next page token is the same as the current page token. this is most likely a connector bug")
-	}
-
-	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
-	return &v2.ResourcesServiceListResourcesResponse{
+	resp := &v2.ResourcesServiceListResourcesResponse{
 		List:          out,
 		NextPageToken: nextPageToken,
 		Annotations:   annos,
-	}, nil
+	}
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return resp, fmt.Errorf("error: listing resources failed: %w", err)
+	}
+	if request.PageToken != "" && request.PageToken == nextPageToken {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return resp, fmt.Errorf("error: listing resources failed: next page token is the same as the current page token. this is most likely a connector bug")
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return resp, nil
 }
 
 // ListEntitlements returns all the entitlements for a given resource.
@@ -404,21 +467,22 @@ func (b *builderImpl) ListEntitlements(ctx context.Context, request *v2.Entitlem
 		Size:  int(request.PageSize),
 		Token: request.PageToken,
 	})
-	if err != nil {
-		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-		return nil, fmt.Errorf("error: listing entitlements failed: %w", err)
-	}
-	if request.PageToken != "" && request.PageToken == nextPageToken {
-		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-		return nil, fmt.Errorf("error: listing entitlements failed: next page token is the same as the current page token. this is most likely a connector bug")
-	}
-
-	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
-	return &v2.EntitlementsServiceListEntitlementsResponse{
+	resp := &v2.EntitlementsServiceListEntitlementsResponse{
 		List:          out,
 		NextPageToken: nextPageToken,
 		Annotations:   annos,
-	}, nil
+	}
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return resp, fmt.Errorf("error: listing entitlements failed: %w", err)
+	}
+	if request.PageToken != "" && request.PageToken == nextPageToken {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return resp, fmt.Errorf("error: listing entitlements failed: next page token is the same as the current page token. this is most likely a connector bug")
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return resp, nil
 }
 
 // ListGrants lists all the grants for a given resource.
@@ -436,23 +500,24 @@ func (b *builderImpl) ListGrants(ctx context.Context, request *v2.GrantsServiceL
 		Size:  int(request.PageSize),
 		Token: request.PageToken,
 	})
+	resp := &v2.GrantsServiceListGrantsResponse{
+		List:          out,
+		NextPageToken: nextPageToken,
+		Annotations:   annos,
+	}
 	if err != nil {
 		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-		return nil, fmt.Errorf("error: listing grants for resource %s/%s failed: %w", rid.ResourceType, rid.Resource, err)
+		return resp, fmt.Errorf("error: listing grants for resource %s/%s failed: %w", rid.ResourceType, rid.Resource, err)
 	}
 	if request.PageToken != "" && request.PageToken == nextPageToken {
 		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-		return nil, fmt.Errorf("error: listing grants for resource %s/%s failed: next page token is the same as the current page token. this is most likely a connector bug",
+		return resp, fmt.Errorf("error: listing grants for resource %s/%s failed: next page token is the same as the current page token. this is most likely a connector bug",
 			rid.ResourceType,
 			rid.Resource)
 	}
 
 	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
-	return &v2.GrantsServiceListGrantsResponse{
-		List:          out,
-		NextPageToken: nextPageToken,
-		Annotations:   annos,
-	}, nil
+	return resp, nil
 }
 
 // GetMetadata gets all metadata for a connector.
@@ -494,6 +559,21 @@ func getCapabilities(ctx context.Context, b *builderImpl) *v2.ConnectorCapabilit
 		} else if _, ok = rb.(ResourceProvisionerV2); ok {
 			resourceTypeCapability.Capabilities = append(resourceTypeCapability.Capabilities, v2.Capability_CAPABILITY_PROVISION)
 			connectorCaps[v2.Capability_CAPABILITY_PROVISION] = struct{}{}
+		}
+		if _, ok := rb.(AccountManager); ok {
+			resourceTypeCapability.Capabilities = append(resourceTypeCapability.Capabilities, v2.Capability_CAPABILITY_ACCOUNT_PROVISIONING)
+			connectorCaps[v2.Capability_CAPABILITY_ACCOUNT_PROVISIONING] = struct{}{}
+		}
+
+		if _, ok := rb.(CredentialManager); ok {
+			resourceTypeCapability.Capabilities = append(resourceTypeCapability.Capabilities, v2.Capability_CAPABILITY_CREDENTIAL_ROTATION)
+			connectorCaps[v2.Capability_CAPABILITY_CREDENTIAL_ROTATION] = struct{}{}
+		}
+
+		if _, ok := rb.(ResourceManager); ok {
+			resourceTypeCapability.Capabilities = append(resourceTypeCapability.Capabilities, v2.Capability_CAPABILITY_RESOURCE_CREATE, v2.Capability_CAPABILITY_RESOURCE_DELETE)
+			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_CREATE] = struct{}{}
+			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_DELETE] = struct{}{}
 		}
 		resourceTypeCapabilities = append(resourceTypeCapabilities, resourceTypeCapability)
 	}
