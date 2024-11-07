@@ -239,7 +239,7 @@ func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, t
 
 	apps, resp, err := client.Application.ListApplications(ctx, qp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch apps from okta: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch apps from okta: %w", handleOktaResponseError(resp, err))
 	}
 
 	reqCtx, err := responseToContext(token, resp)
@@ -258,7 +258,7 @@ func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, t
 func listApplicationGroupAssignments(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *query.Params) ([]*okta.ApplicationGroupAssignment, *responseContext, error) {
 	applicationGroupAssignments, resp, err := client.Application.ListApplicationGroupAssignments(ctx, appID, qp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", handleOktaResponseError(resp, err))
 	}
 
 	reqCtx, err := responseToContext(token, resp)

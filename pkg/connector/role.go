@@ -363,7 +363,7 @@ func listOktaIamCustomRoles(
 func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
 	orgSettings, resp, err := client.OrgSetting.GetOrgSettings(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, handleOktaResponseError(resp, err)
 	}
 
 	respCtx, err := responseToContext(token, resp)
