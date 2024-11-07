@@ -183,15 +183,22 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		}
 	}
 
-	return []connectorbuilder.ResourceSyncer{
+	resourceSyncer := []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
-		resourceSetsBuilder(o.domain, o.client, o.syncCustomRoles),
-		resourceSetsBindingsBuilder(o.domain, o.client, o.syncCustomRoles),
-		customRoleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
 	}
+
+	if o.syncCustomRoles {
+		resourceSyncer = append(resourceSyncer,
+			customRoleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
+			resourceSetsBuilder(o.domain, o.client, o.syncCustomRoles),
+			resourceSetsBindingsBuilder(o.domain, o.client, o.syncCustomRoles),
+		)
+	}
+
+	return resourceSyncer
 }
 
 func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {

@@ -16,11 +16,10 @@ import (
 )
 
 type customRoleResourceType struct {
-	resourceType    *v2.ResourceType
-	domain          string
-	apiToken        string
-	client          *okta.Client
-	syncCustomRoles bool
+	resourceType *v2.ResourceType
+	domain       string
+	apiToken     string
+	client       *okta.Client
 }
 
 func (o *customRoleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -39,11 +38,9 @@ func (o *customRoleResourceType) List(
 	}
 
 	var rv []*v2.Resource
-	if o.syncCustomRoles {
-		rv, err = o.listCustomRoles(ctx, resourceID, token)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
-		}
+	rv, err = o.listCustomRoles(ctx, resourceID, token)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
 	}
 
 	err = bag.Next(nextPageToken)
@@ -160,113 +157,111 @@ func (o *customRoleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
-	if o.syncCustomRoles {
-		switch bag.ResourceTypeID() {
-		case resourceTypeGroup.Id:
-			pageGroupToken := "{}"
-			for pageGroupToken != "" {
-				groupToken := &pagination.Token{
-					Token: pageGroupToken,
-				}
-				bagGroups, pageGroups, err := parsePageToken(groupToken.Token, resource.Id)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-				}
+	switch bag.ResourceTypeID() {
+	case resourceTypeGroup.Id:
+		pageGroupToken := "{}"
+		for pageGroupToken != "" {
+			groupToken := &pagination.Token{
+				Token: pageGroupToken,
+			}
+			bagGroups, pageGroups, err := parsePageToken(groupToken.Token, resource.Id)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+			}
 
-				qp := queryParams(groupToken.Size, pageGroups)
-				groups, respGroupCtx, err := o.listGroups(ctx, groupToken, qp)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
-				}
+			qp := queryParams(groupToken.Size, pageGroups)
+			groups, respGroupCtx, err := o.listGroups(ctx, groupToken, qp)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
+			}
 
-				nextGroupPage, _, err := parseResp(respGroupCtx.OktaResponse)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-				}
+			nextGroupPage, _, err := parseResp(respGroupCtx.OktaResponse)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+			}
 
-				err = bagGroups.Next(nextGroupPage)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-				}
+			err = bagGroups.Next(nextGroupPage)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+			}
 
-				for _, group := range groups {
-					groupId := group.Id
-					roles, _, err := o.listGroupAssignedRoles(ctx, groupId, nil)
-					if err != nil {
-						return nil, "", nil, err
-					}
-
-					for _, role := range roles {
-						if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" || role.Type != roleTypeCustom {
-							continue
-						}
-
-						// It's a custom role. We need to match the label to the display name
-						if role.Label == resource.GetDisplayName() {
-							rv = append(rv, roleGroupGrant(groupId, resource))
-						}
-					}
-				}
-
-				pageGroupToken, err = bagGroups.Marshal()
+			for _, group := range groups {
+				groupId := group.Id
+				roles, _, err := o.listGroupAssignedRoles(ctx, groupId, nil)
 				if err != nil {
 					return nil, "", nil, err
 				}
-			}
-		case resourceTypeUser.Id:
-			pageUserToken := "{}"
-			for pageUserToken != "" {
-				userToken := &pagination.Token{
-					Token: pageUserToken,
-				}
-				bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-				}
 
-				qp := queryParams(userToken.Size, pageUsers)
-				users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-				}
-
-				nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-				}
-
-				err = bagUsers.Next(nextUserPage)
-				if err != nil {
-					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-				}
-
-				for _, user := range users {
-					userId := user.Id
-					roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
-					if err != nil {
-						return nil, "", nil, err
+				for _, role := range roles {
+					if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" || role.Type != roleTypeCustom {
+						continue
 					}
 
-					for _, role := range roles {
-						if role.Status == roleStatusInactive || role.AssignmentType != "USER" || role.Type != roleTypeCustom {
-							continue
-						}
-
-						// It's a custom role. We need to match the label to the display name
-						if role.Label == resource.GetDisplayName() {
-							rv = append(rv, roleGrant(userId, resource))
-						}
+					// It's a custom role. We need to match the label to the display name
+					if role.Label == resource.GetDisplayName() {
+						rv = append(rv, roleGroupGrant(groupId, resource))
 					}
 				}
-
-				pageUserToken, err = bagUsers.Marshal()
-				if err != nil {
-					return nil, "", nil, err
-				}
 			}
-		default:
-			return nil, "", nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
+
+			pageGroupToken, err = bagGroups.Marshal()
+			if err != nil {
+				return nil, "", nil, err
+			}
 		}
+	case resourceTypeUser.Id:
+		pageUserToken := "{}"
+		for pageUserToken != "" {
+			userToken := &pagination.Token{
+				Token: pageUserToken,
+			}
+			bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+			}
+
+			qp := queryParams(userToken.Size, pageUsers)
+			users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+			}
+
+			nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+			}
+
+			err = bagUsers.Next(nextUserPage)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+			}
+
+			for _, user := range users {
+				userId := user.Id
+				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+				if err != nil {
+					return nil, "", nil, err
+				}
+
+				for _, role := range roles {
+					if role.Status == roleStatusInactive || role.AssignmentType != "USER" || role.Type != roleTypeCustom {
+						continue
+					}
+
+					// It's a custom role. We need to match the label to the display name
+					if role.Label == resource.GetDisplayName() {
+						rv = append(rv, roleGrant(userId, resource))
+					}
+				}
+			}
+
+			pageUserToken, err = bagUsers.Marshal()
+			if err != nil {
+				return nil, "", nil, err
+			}
+		}
+	default:
+		return nil, "", nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
 	}
 
 	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
@@ -327,10 +322,9 @@ func (o *customRoleResourceType) listCustomRoles(
 
 func customRoleBuilder(domain string, apiToken string, client *okta.Client, syncCustomRoles bool) *customRoleResourceType {
 	return &customRoleResourceType{
-		resourceType:    resourceTypeCustomRole,
-		domain:          domain,
-		apiToken:        apiToken,
-		client:          client,
-		syncCustomRoles: syncCustomRoles,
+		resourceType: resourceTypeCustomRole,
+		domain:       domain,
+		apiToken:     apiToken,
+		client:       client,
 	}
 }

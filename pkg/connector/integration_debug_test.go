@@ -179,9 +179,8 @@ func TestResourcSetRevoke(t *testing.T) {
 	require.NotNil(t, gr)
 
 	r := &resourceSetsResourceType{
-		resourceType:    resourceTypeResourceSets,
-		client:          cliTest.client,
-		syncCustomRoles: batonSyncCustomRoles,
+		resourceType: resourceTypeResourceSets,
+		client:       cliTest.client,
 	}
 	// it removes everything associated to custom-role-id
 	_, err = r.Revoke(ctxTest, gr)
@@ -240,9 +239,8 @@ func TestResourceSetGrants(t *testing.T) {
 	require.Nil(t, err)
 
 	o := &resourceSetsResourceType{
-		resourceType:    resourceTypeResourceSets,
-		client:          cliTest.client,
-		syncCustomRoles: true,
+		resourceType: resourceTypeResourceSets,
+		client:       cliTest.client,
 	}
 
 	rs, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
@@ -265,10 +263,9 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 	require.Nil(t, err)
 
 	o := &resourceSetsBindingsResourceType{
-		resourceType:    resourceTypeResourceSetsBindings,
-		domain:          batonDomain,
-		client:          cliTest.client,
-		syncCustomRoles: true,
+		resourceType: resourceTypeResourceSetsBindings,
+		domain:       batonDomain,
+		client:       cliTest.client,
 	}
 
 	rs, err := getResourceSetBindingsResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
@@ -324,10 +321,9 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 
 	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
 	r := &resourceSetsBindingsResourceType{
-		resourceType:    resourceTypeResourceSetsBindings,
-		domain:          batonDomain,
-		client:          cliTest.client,
-		syncCustomRoles: true,
+		resourceType: resourceTypeResourceSetsBindings,
+		domain:       batonDomain,
+		client:       cliTest.client,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -366,10 +362,9 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 
 	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
 	r := &resourceSetsBindingsResourceType{
-		resourceType:    resourceTypeResourceSetsBindings,
-		domain:          batonDomain,
-		client:          cliTest.client,
-		syncCustomRoles: true,
+		resourceType: resourceTypeResourceSetsBindings,
+		domain:       batonDomain,
+		client:       cliTest.client,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{

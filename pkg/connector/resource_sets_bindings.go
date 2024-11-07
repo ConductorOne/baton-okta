@@ -29,10 +29,9 @@ const (
 )
 
 type resourceSetsBindingsResourceType struct {
-	resourceType    *v2.ResourceType
-	client          *okta.Client
-	syncCustomRoles bool
-	domain          string
+	resourceType *v2.ResourceType
+	client       *okta.Client
+	domain       string
 }
 
 func (rsb *resourceSetsBindingsResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -212,33 +211,31 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	if rsb.syncCustomRoles {
-		resourceIDs := strings.Split(resource.Id.Resource, ":")
-		resourceSetId := resourceIDs[firstItem]
-		customRoleId := resourceIDs[lastItem]
-		members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
-		if err != nil {
-			return nil, "", nil, err
+	resourceIDs := strings.Split(resource.Id.Resource, ":")
+	resourceSetId := resourceIDs[firstItem]
+	customRoleId := resourceIDs[lastItem]
+	members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	for _, member := range members {
+		memberHref := strings.Split(member.Links.Self.Href, "/")
+		resourceType := memberHref[len(memberHref)-resourceMaxLength]
+		resourceId := memberHref[len(memberHref)-lastItem]
+		switch resourceType {
+		case resourceUsers:
+			principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: resourceId}}
+		case resourceGroups:
+			principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: resourceId}}
 		}
 
-		for _, member := range members {
-			memberHref := strings.Split(member.Links.Self.Href, "/")
-			resourceType := memberHref[len(memberHref)-resourceMaxLength]
-			resourceId := memberHref[len(memberHref)-lastItem]
-			switch resourceType {
-			case resourceUsers:
-				principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: resourceId}}
-			case resourceGroups:
-				principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: resourceId}}
-			}
-
-			gr := sdkGrant.NewGrant(resource, entitlementName, principal,
-				sdkGrant.WithAnnotation(&v2.V1Identifier{
-					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
-				}),
-			)
-			rv = append(rv, gr)
-		}
+		gr := sdkGrant.NewGrant(resource, entitlementName, principal,
+			sdkGrant.WithAnnotation(&v2.V1Identifier{
+				Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+			}),
+		)
+		rv = append(rv, gr)
 	}
 
 	err = bag.Next(bag.PageToken())
@@ -361,9 +358,8 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 
 func resourceSetsBindingsBuilder(domain string, client *okta.Client, syncCustomRoles bool) *resourceSetsBindingsResourceType {
 	return &resourceSetsBindingsResourceType{
-		resourceType:    resourceTypeResourceSetsBindings,
-		domain:          domain,
-		client:          client,
-		syncCustomRoles: syncCustomRoles,
+		resourceType: resourceTypeResourceSetsBindings,
+		domain:       domain,
+		client:       client,
 	}
 }
