@@ -545,7 +545,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	return nil, nil
 }
 
-func roleBuilder(domain string, apiToken string, client *okta.Client, syncCustomRoles bool) *roleResourceType {
+func roleBuilder(domain string, apiToken string, client *okta.Client) *roleResourceType {
 	return &roleResourceType{
 		resourceType: resourceTypeRole,
 		domain:       domain,
