@@ -132,7 +132,7 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 		return status.Error(codes.DeadlineExceeded, "request timeout")
 	}
 	if resp != nil && resp.StatusCode >= 500 {
-		return status.Error(codes.Internal, "server error")
+		return status.Error(codes.Unavailable, "server error")
 	}
 	return err
 }
