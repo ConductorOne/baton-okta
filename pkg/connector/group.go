@@ -164,7 +164,7 @@ func (o *groupResourceType) Grants(
 func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
 	groups, resp, err := o.connector.client.Group.ListGroups(ctx, qp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", handleOktaResponseError(resp, err))
 	}
 
 	reqCtx, err := responseToContext(token, resp)
@@ -258,7 +258,7 @@ func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, g
 func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
 	users, resp, err := o.connector.client.Group.ListGroupUsers(ctx, groupID, qp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", handleOktaResponseError(resp, err))
 	}
 
 	reqCtx, err := responseToContext(token, resp)
@@ -272,7 +272,7 @@ func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, 
 func listUsersGroupsClient(ctx context.Context, client *okta.Client, userId string) ([]*okta.Group, *responseContext, error) {
 	users, resp, err := client.User.ListUserGroups(ctx, userId)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", handleOktaResponseError(resp, err))
 	}
 
 	reqCtx, err := responseToContext(&pagination.Token{}, resp)
@@ -359,7 +359,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 
 	response, err := g.connector.client.Group.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
-		return nil, err
+		return nil, handleOktaResponseError(response, err)
 	}
 
 	l.Debug("Membership has been created",
@@ -387,7 +387,7 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 
 	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
-		return nil, err
+		return nil, handleOktaResponseError(response, err)
 	}
 
 	l.Warn("Membership has been revoked",

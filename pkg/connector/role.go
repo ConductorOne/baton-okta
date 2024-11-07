@@ -146,6 +146,63 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
+	pageUserToken := "{}"
+	for pageUserToken != "" {
+		userToken := &pagination.Token{
+			Token: pageUserToken,
+		}
+		bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		}
+
+		qp := queryParams(userToken.Size, pageUsers)
+		users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		}
+
+		nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		err = bagUsers.Next(nextUserPage)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		}
+
+		for _, user := range users {
+			userId := user.Id
+			roles, resp, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+			if err != nil {
+				return nil, "", nil, handleOktaResponseError(resp, err)
+			}
+
+			for _, role := range roles {
+				if role.Status == "INACTIVE" {
+					continue
+				}
+				if role.AssignmentType != "USER" {
+					continue
+				}
+				if role.Type != "CUSTOM" {
+					continue
+				}
+
+				// It's a custom role. We need to match the label to the display name
+				if role.Label == resource.GetDisplayName() {
+					rv = append(rv, roleGrant(userId, resource))
+				}
+			}
+		}
+
+		pageUserToken, err = bagUsers.Marshal()
+		if err != nil {
+			return nil, "", nil, err
+		}
+	}
+
 	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
@@ -245,7 +302,7 @@ func listOktaIamCustomRoles(
 func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
 	orgSettings, resp, err := client.OrgSetting.GetOrgSettings(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, handleOktaResponseError(resp, err)
 	}
 
 	respCtx, err := responseToContext(token, resp)
@@ -308,7 +365,7 @@ func listAdministratorRoleFlags(
 			return nil, nil, errMissingRolePermissions
 		}
 
-		return nil, nil, err
+		return nil, nil, handleOktaResponseError(resp, err)
 	}
 
 	respCtx, err := responseToContext(token, resp)

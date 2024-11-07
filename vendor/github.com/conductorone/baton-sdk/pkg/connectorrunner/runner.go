@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -128,8 +129,9 @@ func (c *connectorRunner) run(ctx context.Context) error {
 
 	waitDuration := time.Second * 0
 	errCount := 0
+	stopForLoop := false
 	var err error
-	for {
+	for !stopForLoop {
 		select {
 		case <-ctx.Done():
 			return c.handleContextCancel(ctx)
@@ -194,7 +196,11 @@ func (c *connectorRunner) run(ctx context.Context) error {
 				defer sem.Release(1)
 				err := c.processTask(ctx, t)
 				if err != nil {
+					if strings.Contains(err.Error(), "grpc: the client connection is closing") {
+						stopForLoop = true
+					}
 					l.Error("runner: error processing task", zap.Error(err), zap.String("task_id", t.Id), zap.String("task_type", tasks.GetType(t).String()))
+					return
 				}
 				l.Debug("runner: task processed", zap.String("task_id", t.Id), zap.String("task_type", tasks.GetType(t).String()))
 			}(nextTask)
@@ -202,6 +208,12 @@ func (c *connectorRunner) run(ctx context.Context) error {
 			l.Debug("runner: dispatched task, waiting for next task", zap.Duration("wait_duration", waitDuration))
 		}
 	}
+
+	if stopForLoop {
+		return fmt.Errorf("Unable to communicate with gRPC server")
+	}
+
+	return nil
 }
 
 func (c *connectorRunner) Close(ctx context.Context) error {
@@ -230,6 +242,10 @@ type getTicketConfig struct {
 type listTicketSchemasConfig struct{}
 
 type createTicketConfig struct {
+	templatePath string
+}
+
+type bulkCreateTicketConfig struct {
 	templatePath string
 }
 
@@ -279,6 +295,7 @@ type runnerConfig struct {
 	deleteResourceConfig    *deleteResourceConfig
 	rotateCredentialsConfig *rotateCredentialsConfig
 	createTicketConfig      *createTicketConfig
+	bulkCreateTicketConfig  *bulkCreateTicketConfig
 	listTicketSchemasConfig *listTicketSchemasConfig
 	getTicketConfig         *getTicketConfig
 	skipFullSync            bool
@@ -473,6 +490,16 @@ func WithCreateTicket(templatePath string) Option {
 	}
 }
 
+func WithBulkCreateTicket(templatePath string) Option {
+	return func(ctx context.Context, cfg *runnerConfig) error {
+		cfg.onDemand = true
+		cfg.bulkCreateTicketConfig = &bulkCreateTicketConfig{
+			templatePath: templatePath,
+		}
+		return nil
+	}
+}
+
 func WithListTicketSchemas() Option {
 	return func(ctx context.Context, cfg *runnerConfig) error {
 		cfg.onDemand = true
@@ -537,7 +564,7 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 	runner.cw = cw
 
 	if cfg.onDemand {
-		if cfg.c1zPath == "" && cfg.eventFeedConfig == nil && cfg.createTicketConfig == nil && cfg.listTicketSchemasConfig == nil && cfg.getTicketConfig == nil {
+		if cfg.c1zPath == "" && cfg.eventFeedConfig == nil && cfg.createTicketConfig == nil && cfg.listTicketSchemasConfig == nil && cfg.getTicketConfig == nil && cfg.bulkCreateTicketConfig == nil {
 			return nil, errors.New("c1zPath must be set when in on-demand mode")
 		}
 
@@ -572,6 +599,8 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 			tm = local.NewListTicketSchema(ctx)
 		case cfg.getTicketConfig != nil:
 			tm = local.NewGetTicket(ctx, cfg.getTicketConfig.ticketID)
+		case cfg.bulkCreateTicketConfig != nil:
+			tm = local.NewBulkTicket(ctx, cfg.bulkCreateTicketConfig.templatePath)
 		default:
 			tm, err = local.NewSyncer(ctx, cfg.c1zPath, local.WithTmpDir(cfg.tempDir))
 			if err != nil {
