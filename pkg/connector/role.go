@@ -41,11 +41,10 @@ var standardRoleTypes = []*okta.Role{
 }
 
 type roleResourceType struct {
-	resourceType    *v2.ResourceType
-	domain          string
-	apiToken        string
-	client          *okta.Client
-	syncCustomRoles bool
+	resourceType *v2.ResourceType
+	domain       string
+	apiToken     string
+	client       *okta.Client
 }
 
 type CustomRoles struct {
@@ -548,10 +547,9 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 
 func roleBuilder(domain string, apiToken string, client *okta.Client, syncCustomRoles bool) *roleResourceType {
 	return &roleResourceType{
-		resourceType:    resourceTypeRole,
-		domain:          domain,
-		apiToken:        apiToken,
-		client:          client,
-		syncCustomRoles: syncCustomRoles,
+		resourceType: resourceTypeRole,
+		domain:       domain,
+		apiToken:     apiToken,
+		client:       client,
 	}
 }

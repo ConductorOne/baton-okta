@@ -320,7 +320,7 @@ func (o *customRoleResourceType) listCustomRoles(
 	return rv, nil
 }
 
-func customRoleBuilder(domain string, apiToken string, client *okta.Client, syncCustomRoles bool) *customRoleResourceType {
+func customRoleBuilder(domain string, apiToken string, client *okta.Client) *customRoleResourceType {
 	return &customRoleResourceType{
 		resourceType: resourceTypeCustomRole,
 		domain:       domain,

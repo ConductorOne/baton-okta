@@ -356,7 +356,7 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 	return nil, nil
 }
 
-func resourceSetsBindingsBuilder(domain string, client *okta.Client, syncCustomRoles bool) *resourceSetsBindingsResourceType {
+func resourceSetsBindingsBuilder(domain string, client *okta.Client) *resourceSetsBindingsResourceType {
 	return &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       domain,

@@ -332,7 +332,7 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 	return nil, nil
 }
 
-func resourceSetsBuilder(domain string, client *okta.Client, syncCustomRoles bool) *resourceSetsResourceType {
+func resourceSetsBuilder(domain string, client *okta.Client) *resourceSetsResourceType {
 	return &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		domain:       domain,

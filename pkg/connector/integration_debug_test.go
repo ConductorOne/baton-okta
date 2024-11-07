@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -19,10 +18,9 @@ import (
 )
 
 var (
-	batonApiToken           = os.Getenv("BATON_API_TOKEN")
-	batonDomain             = os.Getenv("BATON_DOMAIN")
-	batonSyncCustomRoles, _ = strconv.ParseBool(os.Getenv("BATON_SYNC_CUSTOM_ROLES"))
-	ctxTest                 = context.Background()
+	batonApiToken = os.Getenv("BATON_API_TOKEN")
+	batonDomain   = os.Getenv("BATON_DOMAIN")
+	ctxTest       = context.Background()
 )
 
 func TestSyncRoles(t *testing.T) {
@@ -41,9 +39,8 @@ func TestSyncRoles(t *testing.T) {
 	require.Nil(t, err)
 
 	r := &roleResourceType{
-		resourceType:    resourceTypeRole,
-		client:          cliTest.client,
-		syncCustomRoles: batonSyncCustomRoles,
+		resourceType: resourceTypeRole,
+		client:       cliTest.client,
 	}
 
 	for token != empty {
@@ -97,11 +94,10 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 	require.Nil(t, err)
 
 	resource := &roleResourceType{
-		resourceType:    resourceTypeRole,
-		domain:          batonDomain,
-		apiToken:        batonApiToken,
-		client:          cliTest.client,
-		syncCustomRoles: true,
+		resourceType: resourceTypeRole,
+		domain:       batonDomain,
+		apiToken:     batonApiToken,
+		client:       cliTest.client,
 	}
 	rs, err := getRoleResourceForTesting(ctxTest, "READ_ONLY_ADMIN", "test", "")
 	require.Nil(t, err)
@@ -144,9 +140,8 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 
 	entitlement := getEntitlementForTesting(resource, grantPrincipalType, roleEntitlement)
 	r := &roleResourceType{
-		resourceType:    resourceTypeRole,
-		client:          cliTest.client,
-		syncCustomRoles: true,
+		resourceType: resourceTypeRole,
+		client:       cliTest.client,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
