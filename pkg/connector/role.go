@@ -204,9 +204,9 @@ func (o *roleResourceType) Grants(
 
 			for _, user := range users {
 				userId := user.Id
-				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+				roles, resp, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 				if err != nil {
-					return nil, "", nil, err
+					return nil, "", nil, handleOktaResponseError(resp, err)
 				}
 
 				for _, role := range roles {
@@ -363,7 +363,7 @@ func listOktaIamCustomRoles(
 func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
 	orgSettings, resp, err := client.OrgSetting.GetOrgSettings(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, handleOktaResponseError(resp, err)
 	}
 
 	respCtx, err := responseToContext(token, resp)
@@ -426,7 +426,7 @@ func listAdministratorRoleFlags(
 			return nil, nil, errMissingRolePermissions
 		}
 
-		return nil, nil, err
+		return nil, nil, handleOktaResponseError(resp, err)
 	}
 
 	respCtx, err := responseToContext(token, resp)
