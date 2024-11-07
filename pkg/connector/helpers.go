@@ -1,7 +1,9 @@
 package connector
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -12,6 +14,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -115,6 +119,19 @@ func getError(response *okta.Response) (okta.Error, error) {
 	}
 
 	return errOkta, nil
+}
+
+func handleTimeoutError(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Timeout() {
+			return status.Error(codes.DeadlineExceeded, fmt.Sprintf("request timeout: %v", urlErr.URL))
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, "request timeout")
+	}
+	return err
 }
 
 func unmarshalSkipToken(token *pagination.Token) (int32, *pagination.Bag, error) {

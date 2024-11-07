@@ -206,7 +206,7 @@ func (o *roleResourceType) Grants(
 				userId := user.Id
 				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 				if err != nil {
-					return nil, "", nil, err
+					return nil, "", nil, handleTimeoutError(err)
 				}
 
 				for _, role := range roles {
