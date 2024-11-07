@@ -18,7 +18,6 @@ import (
 type customRoleResourceType struct {
 	resourceType *v2.ResourceType
 	domain       string
-	apiToken     string
 	client       *okta.Client
 }
 
@@ -320,11 +319,10 @@ func (o *customRoleResourceType) listCustomRoles(
 	return rv, nil
 }
 
-func customRoleBuilder(domain string, apiToken string, client *okta.Client) *customRoleResourceType {
+func customRoleBuilder(domain string, client *okta.Client) *customRoleResourceType {
 	return &customRoleResourceType{
 		resourceType: resourceTypeCustomRole,
 		domain:       domain,
-		apiToken:     apiToken,
 		client:       client,
 	}
 }

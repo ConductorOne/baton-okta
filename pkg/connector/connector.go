@@ -192,7 +192,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	if o.syncCustomRoles {
 		resourceSyncer = append(resourceSyncer,
-			customRoleBuilder(o.domain, o.apiToken, o.client),
+			customRoleBuilder(o.domain, o.client),
 			resourceSetsBuilder(o.domain, o.client),
 			resourceSetsBindingsBuilder(o.domain, o.client),
 		)
