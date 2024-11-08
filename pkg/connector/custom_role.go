@@ -86,7 +86,7 @@ func (o *customRoleResourceType) Entitlements(
 
 // listGroupAssignedRoles. List all group role assignments
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentBGroup/#tag/RoleAssignmentBGroup/operation/listGroupAssignedRoles
-func (o *customRoleResourceType) listGroupAssignedRoles(ctx context.Context, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
 	apiPath, err := url.JoinPath(groupsUrl, groupId, "roles")
 	if err != nil {
 		return nil, nil, err
@@ -98,7 +98,7 @@ func (o *customRoleResourceType) listGroupAssignedRoles(ctx context.Context, gro
 	}
 
 	var role []*Roles
-	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, o.client)
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,8 +106,8 @@ func (o *customRoleResourceType) listGroupAssignedRoles(ctx context.Context, gro
 	return role, resp, nil
 }
 
-func (o *customRoleResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := o.client.Group.ListGroups(ctx, qp)
+func listGroups(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	groups, resp, err := client.Group.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
 	}
@@ -169,7 +169,7 @@ func (o *customRoleResourceType) Grants(
 			}
 
 			qp := queryParams(groupToken.Size, pageGroups)
-			groups, respGroupCtx, err := o.listGroups(ctx, groupToken, qp)
+			groups, respGroupCtx, err := listGroups(ctx, o.client, groupToken, qp)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
 			}
@@ -186,7 +186,7 @@ func (o *customRoleResourceType) Grants(
 
 			for _, group := range groups {
 				groupId := group.Id
-				roles, _, err := o.listGroupAssignedRoles(ctx, groupId, nil)
+				roles, _, err := listGroupAssignedRoles(ctx, o.client, groupId, nil)
 				if err != nil {
 					return nil, "", nil, err
 				}
