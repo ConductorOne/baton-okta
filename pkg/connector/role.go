@@ -491,6 +491,10 @@ func roleGroupGrant(groupID string, resource *v2.Resource) *v2.Grant {
 		sdkGrant.WithAnnotation(&v2.V1Identifier{
 			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 		}),
+		sdkGrant.WithAnnotation(&v2.GrantExpandable{
+			EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
+			Shallow:        true,
+		}),
 	)
 }
 
