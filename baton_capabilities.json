@@ -22,24 +22,6 @@
     },
     {
       "resourceType": {
-        "id": "custom-role",
-        "displayName": "Custom Role",
-        "traits": [
-          "TRAIT_ROLE"
-        ],
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "custom-role"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC"
-      ]
-    },
-    {
-      "resourceType": {
         "id": "group",
         "displayName": "Group",
         "traits": [
@@ -49,38 +31,6 @@
           {
             "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
             "id": "group"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_PROVISION"
-      ]
-    },
-    {
-      "resourceType": {
-        "id": "resource-set",
-        "displayName": "Resource Set",
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "resource-set"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_PROVISION"
-      ]
-    },
-    {
-      "resourceType": {
-        "id": "resourceset-binding",
-        "displayName": "Resource Set Binding",
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "resourceset-binding"
           }
         ]
       },
@@ -131,7 +81,7 @@
     }
   ],
   "connectorCapabilities": [
-    "CAPABILITY_SYNC",
-    "CAPABILITY_PROVISION"
+    "CAPABILITY_PROVISION",
+    "CAPABILITY_SYNC"
   ]
 }
