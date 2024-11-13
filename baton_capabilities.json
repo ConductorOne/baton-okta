@@ -1,101 +1,136 @@
 {
-  "@type":  "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
-  "resourceTypeCapabilities":  [
+  "@type": "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
+  "resourceTypeCapabilities": [
     {
-      "resourceType":  {
-        "id":  "app",
-        "displayName":  "App",
-        "traits":  [
+      "resourceType": {
+        "id": "app",
+        "displayName": "App",
+        "traits": [
           "TRAIT_APP"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "app"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "app"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_PROVISION"
       ]
     },
     {
-      "resourceType":  {
-        "id":  "group",
-        "displayName":  "Group",
-        "traits":  [
-          "TRAIT_GROUP"
+      "resourceType": {
+        "id": "custom-role",
+        "displayName": "Custom Role",
+        "traits": [
+          "TRAIT_ROLE"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "group"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "custom-role"
           }
         ]
       },
-      "capabilities":  [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_PROVISION"
-      ]
-    },
-    {
-      "resourceType":  {
-        "id":  "resourcesets",
-        "displayName":  "Resource Sets",
-        "annotations":  [
-          {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "resourcesets"
-          }
-        ]
-      },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC"
       ]
     },
     {
-      "resourceType":  {
-        "id":  "role",
-        "displayName":  "Role",
-        "traits":  [
-          "TRAIT_ROLE"
+      "resourceType": {
+        "id": "group",
+        "displayName": "Group",
+        "traits": [
+          "TRAIT_GROUP"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "role"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "group"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_PROVISION"
       ]
     },
     {
-      "resourceType":  {
-        "id":  "user",
-        "displayName":  "User",
-        "traits":  [
-          "TRAIT_USER"
-        ],
-        "annotations":  [
+      "resourceType": {
+        "id": "resource-set",
+        "displayName": "Resource Set",
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "user"
-          },
-          {
-            "@type":  "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "resource-set"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ]
+    },
+    {
+      "resourceType": {
+        "id": "resourceset-binding",
+        "displayName": "Resource Set Binding",
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "resourceset-binding"
+          }
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ]
+    },
+    {
+      "resourceType": {
+        "id": "role",
+        "displayName": "Role",
+        "traits": [
+          "TRAIT_ROLE"
+        ],
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "role"
+          }
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ]
+    },
+    {
+      "resourceType": {
+        "id": "user",
+        "displayName": "User",
+        "traits": [
+          "TRAIT_USER"
+        ],
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "user"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          }
+        ]
+      },
+      "capabilities": [
         "CAPABILITY_SYNC"
       ]
     }
   ],
-  "connectorCapabilities":  [
+  "connectorCapabilities": [
     "CAPABILITY_SYNC",
     "CAPABILITY_PROVISION"
   ]

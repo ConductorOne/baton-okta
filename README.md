@@ -52,8 +52,44 @@ baton resources
 - Groups
 - Roles
 - Users
+- Custom-Roles
+- Resource-Sets
+- Resourceset-Bindings
 
 By default, `baton-okta` will sync information for inactive applications. You can exclude inactive applications setting the `--sync-inactive-apps` flag to `false`.
+
+For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
+
+We have also introduced resourceset-bindings(resourcesetID and custom roles ID) for provisioning custom roles and members.
+
+## Resourceset-bindings, custom roles and members(Users or Groups) usage:
+
+- Let's use some IDs for this example
+```
+Resource Set `iamkuwy3gqcfNexfQ697`
+Custom Role `cr0kuwv5507zJCtSy697`
+Member `00ujp51vjgWd6ylZ6697`
+```
+
+- Granting custom roles for users.
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+--grant-entitlement 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member' --grant-principal-type 'user' --grant-principal '00ujp51vjgWd6ylZ6697'
+```
+
+In the previous example we granted the custom role `cr0kuwv5507zJCtSy697` to user `00ujp5a9z0rMTsPRW697`.
+
+- Revoking custom role grants(Unassigns a Member)
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+--revoke-grant 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member:user:00ujp51vjgWd6ylZ6697' 
+```
+
+- Revoking everything associated to custom role(Deletes a Binding of a Role)
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697 
+```
 
 # Contributing, Support and Issues
 

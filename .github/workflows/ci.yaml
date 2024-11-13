@@ -78,3 +78,15 @@ jobs:
       - name: Check grant was re-granted
         run: |
           ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
+      - name: Grant custom roles for users
+        env:
+            BATON_ENTITLEMENT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member'
+            BATON_PRINCIPAL_TYPE: 'user'
+            BATON_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7' 
+        run: | 
+          ./baton-okta && ./baton-okta --grant-entitlement ${{ env.BATON_ENTITLEMENT }} --grant-principal ${{ env.BATON_PRINCIPAL }} --grant-principal-type ${{ env.BATON_PRINCIPAL_TYPE }}
+      - name: Revoke custom role grants
+        env:
+          BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00ug0t0xjvnHRbQuD5d7'
+        run: |
+           ./baton-okta && ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}

@@ -113,6 +113,12 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
 		Annotations: v1AnnotationsForResourceType("role", false),
 	}
+	resourceTypeCustomRole = &v2.ResourceType{
+		Id:          "custom-role",
+		DisplayName: "Custom Role",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
+		Annotations: v1AnnotationsForResourceType("custom-role", false),
+	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          "user",
 		DisplayName: "User",
@@ -137,9 +143,14 @@ var (
 		Annotations: v1AnnotationsForResourceType("account", false),
 	}
 	resourceTypeResourceSets = &v2.ResourceType{
-		Id:          "resourcesets",
-		DisplayName: "Resource Sets",
-		Annotations: v1AnnotationsForResourceType("resourcesets", false),
+		Id:          "resource-set",
+		DisplayName: "Resource Set",
+		Annotations: v1AnnotationsForResourceType("resource-set", false),
+	}
+	resourceTypeResourceSetsBindings = &v2.ResourceType{
+		Id:          "resourceset-binding",
+		DisplayName: "Resource Set Binding",
+		Annotations: v1AnnotationsForResourceType("resourceset-binding", false),
 	}
 	defaultScopes = []string{
 		"okta.users.read",
@@ -172,13 +183,22 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		}
 	}
 
-	return []connectorbuilder.ResourceSyncer{
-		roleBuilder(o.domain, o.apiToken, o.client, o.syncCustomRoles),
+	resourceSyncer := []connectorbuilder.ResourceSyncer{
+		roleBuilder(o.domain, o.apiToken, o.client),
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
-		resourceSetsBuilder(o.client),
 	}
+
+	if o.syncCustomRoles {
+		resourceSyncer = append(resourceSyncer,
+			customRoleBuilder(o.domain, o.client),
+			resourceSetsBuilder(o.domain, o.client),
+			resourceSetsBindingsBuilder(o.domain, o.client),
+		)
+	}
+
+	return resourceSyncer
 }
 
 func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
