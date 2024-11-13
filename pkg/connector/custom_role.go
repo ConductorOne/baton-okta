@@ -78,7 +78,6 @@ func (o *customRoleResourceType) Entitlements(
 			Id: V1MembershipEntitlementID(role.Type),
 		}),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
-
 	)
 	rv = append(rv, en)
 
