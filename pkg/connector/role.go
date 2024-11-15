@@ -136,7 +136,7 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	_, bag, err := unmarshalSkipToken(token)
+	bag, err := unmarshalRolesToken(token)
 	if err != nil {
 		return nil, "", nil, err
 	}
