@@ -36,7 +36,7 @@ builds:
     hooks:
       post:
         - gon .gon-arm64.json
-        - mv dist/baton-okta-darwin-arm64.signed.zip dist/macos-arm64_darwin_arm64/baton-okta
+        - mv dist/baton-okta-darwin-arm64.signed.zip dist/macos-arm64_darwin_arm64_v8.0/baton-okta
 archives:
   - id: linux-archive
     builds:
