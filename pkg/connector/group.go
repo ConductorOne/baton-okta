@@ -117,48 +117,109 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeGroup.Id})
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-	}
-
 	var rv []*v2.Grant
-	qp := queryParams(token.Size, page)
-
-	groupID := resource.Id.GetResource()
-
-	users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
-	}
-
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-	}
-
-	err = bag.Next(nextPage)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-	}
-
-	for _, user := range users {
-		rv = append(rv, groupGrant(resource, user))
-	}
-
-	pageToken, err := bag.Marshal()
+	bag := &pagination.Bag{}
+	err := bag.Unmarshal(token.Token)
 	if err != nil {
 		return nil, "", nil, err
 	}
 
-	if pageToken == "" {
-		etag := &v2.ETag{
-			Value: time.Now().UTC().Format(time.RFC3339Nano),
-		}
-		annos.Update(etag)
+	if bag.Current() == nil {
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeRole.Id,
+		})
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeUser.Id,
+		})
 	}
 
-	return rv, pageToken, annos, nil
+	page := bag.PageToken()
+
+	groupID := resource.Id.GetResource()
+
+	switch bag.ResourceTypeID() {
+	case resourceTypeUser.Id:
+		qp := queryParams(token.Size, page)
+
+		users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
+		}
+
+		nextPage, annos, err := parseResp(respCtx.OktaResponse)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		err = bag.Next(nextPage)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		}
+
+		for _, user := range users {
+			rv = append(rv, groupGrant(resource, user))
+		}
+		pageToken, err := bag.Marshal()
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		if pageToken == "" {
+			etag := &v2.ETag{
+				Value: time.Now().UTC().Format(time.RFC3339Nano),
+			}
+			annos.Update(etag)
+		}
+
+		return rv, pageToken, annos, nil
+	case resourceTypeRole.Id:
+		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		for _, role := range roles {
+			if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" || role.Type == roleTypeCustom {
+				continue
+			}
+
+			// TODO(lauren) convert model helper
+			roleResource, err := roleResource(ctx, &okta.Role{
+				Id:    role.Id,
+				Label: role.Label,
+				Type:  role.Type,
+			}, resourceTypeRole)
+			if err != nil {
+				return nil, "", nil, err
+			}
+			rv = append(rv, roleGroupGrant(groupID, roleResource))
+		}
+
+		// TODO(lauren) Move this to list method like other methods do
+		respCtx, err := responseToContext(token, resp)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		nextPage, annos, err := parseResp(respCtx.OktaResponse)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		err = bag.Next(nextPage)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		}
+
+		pageToken, err := bag.Marshal()
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		return rv, pageToken, annos, nil
+	default:
+		return nil, "", nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
+	}
 }
 
 func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
