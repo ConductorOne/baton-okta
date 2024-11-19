@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -102,7 +101,7 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
 	}
 
-	nextPage, _, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -126,7 +125,7 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 		return nil, "", nil, err
 	}
 
-	return rv, pageToken, nil, nil
+	return rv, pageToken, annos, nil
 }
 
 func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
@@ -206,66 +205,34 @@ func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceS
 
 func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var rv []*v2.Grant
-	bag, _, err := parsePageToken(pToken.Token, resource.Id)
+	bag, page, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	pageUserToken := "{}"
-	for pageUserToken != "" {
-		userToken := &pagination.Token{
-			Token: pageUserToken,
-		}
-		bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-		}
+	qp := queryParams(pToken.Size, page)
 
-		qp := queryParams(userToken.Size, pageUsers)
-		users, respUserCtx, err := listUsers(ctx, rs.client, userToken, qp)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-		}
-
-		nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-		}
-
-		err = bagUsers.Next(nextUserPage)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-		}
-
-		for _, user := range users {
-			userId := user.Id
-			roles, _, err := listAssignedRolesForUser(ctx, rs.client, userId)
-			if err != nil {
-				return nil, "", nil, err
-			}
-
-			for _, role := range roles {
-				if role.Status == roleStatusInactive || role.Type != roleTypeCustom || !strings.Contains(resource.Id.Resource, role.ResourceSet) {
-					continue
-				}
-
-				principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.Role}}
-				gr := sdkGrant.NewGrant(resource, bindingEntitlement, principal,
-					sdkGrant.WithAnnotation(&v2.V1Identifier{
-						Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
-					}),
-				)
-				rv = append(rv, gr)
-			}
-		}
-
-		pageUserToken, err = bagUsers.Marshal()
-		if err != nil {
-			return nil, "", nil, err
-		}
+	roles, respCtx, err := listBindings(ctx, rs.client, resource.Id.Resource, qp)
+	if err != nil {
+		return nil, "", nil, err
 	}
 
-	err = bag.Next(bag.PageToken())
+	for _, role := range roles {
+		principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.ID}}
+		gr := sdkGrant.NewGrant(resource, bindingEntitlement, principal,
+			sdkGrant.WithAnnotation(&v2.V1Identifier{
+				Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+			}),
+		)
+		rv = append(rv, gr)
+	}
+
+	nextPage, annos, err := parseResp(respCtx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+	}
+
+	err = bag.Next(nextPage)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
@@ -275,7 +242,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 		return nil, "", nil, err
 	}
 
-	return rv, pageToken, nil, nil
+	return rv, pageToken, annos, nil
 }
 
 func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
