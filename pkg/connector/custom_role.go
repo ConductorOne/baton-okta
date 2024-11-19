@@ -181,7 +181,6 @@ func (o *customRoleResourceType) Grants(
 		if userRoles.ContainsOne(resource.Id.GetResource()) {
 			rv = append(rv, roleGrant(userId, resource))
 		}
-
 	}
 
 	pageToken, err := bag.Marshal()
