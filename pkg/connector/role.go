@@ -52,11 +52,23 @@ type CustomRoles struct {
 	Links interface{}  `json:"_links,omitempty"`
 }
 
+type RoleAssignment struct {
+	Id    string      `json:"id,omitempty"`
+	Orn   string      `json:"orn,omitempty"`
+	Links interface{} `json:"_links,omitempty"`
+}
+
+type RoleAssignments struct {
+	RoleAssignments []*RoleAssignment `json:"value,omitempty"`
+	Links           interface{}       `json:"_links,omitempty"`
+}
+
 const (
-	apiPathListAdministrators = "/api/internal/administrators"
-	apiPathListIamCustomRoles = "/api/v1/iam/roles"
-	ContentType               = "application/json"
-	NF                        = -1
+	apiPathListAdministrators              = "/api/internal/administrators"
+	apiPathListIamCustomRoles              = "/api/v1/iam/roles"
+	apiPathListAllUsersWithRoleAssignments = "/api/v1/iam/assignees/users"
+	ContentType                            = "application/json"
+	NF                                     = -1
 )
 
 func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -118,7 +130,7 @@ func (o *roleResourceType) Entitlements(
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 			Id: V1MembershipEntitlementID(role.Type),
 		}),
-		sdkEntitlement.WithGrantableTo(resourceTypeUser),
+		sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
 	)
 	rv = append(rv, en)
 
@@ -239,6 +251,40 @@ func listOktaIamCustomRoles(
 	}
 
 	return role.Roles, respCtx, nil
+}
+
+func listAllUsersWithRoleAssignments(
+	ctx context.Context,
+	client *okta.Client,
+	token *pagination.Token,
+	qp *query.Params,
+) ([]*RoleAssignment, *responseContext, error) {
+	url := apiPathListAllUsersWithRoleAssignments
+	if qp != nil {
+		url += qp.String()
+	}
+
+	rq := client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var role *RoleAssignments
+	resp, err := rq.Do(ctx, req, &role)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	respCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return role.RoleAssignments, respCtx, nil
 }
 
 func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {

@@ -59,7 +59,8 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 
 // listResourceSets. List all Resource Sets.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleCResourceSet/#tag/RoleCResourceSet/operation/listResourceSets
-func listResourceSets(ctx context.Context,
+func listResourceSets(
+	ctx context.Context,
 	client *okta.Client,
 	token *pagination.Token,
 	qp *query.Params,
@@ -143,34 +144,14 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 	}, "", nil, nil
 }
 
-// listAssignedRolesForUser. List all user role assignments.
-// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentAUser/#tag/RoleAssignmentAUser/operation/listAssignedRolesForUser
-func (rs *resourceSetsResourceType) listAssignedRolesForUser(ctx context.Context, userId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
-	apiPath, err := url.JoinPath(usersUrl, userId, "roles")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	reqUrl, err := url.Parse(apiPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var role []*Roles
-	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, rs.client)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return role, resp, nil
-}
-
 // listBindings. List all Role Resource Set Bindings.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/listBindings
-func listBindings(ctx context.Context,
+func listBindings(
+	ctx context.Context,
 	client *okta.Client,
 	resourceSetId string,
-	_ *query.Params) ([]Role, *okta.Response, error) {
+	_ *query.Params,
+) ([]Role, *okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
 	if err != nil {
 		return nil, nil, err
@@ -258,7 +239,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 
 		for _, user := range users {
 			userId := user.Id
-			roles, _, err := rs.listAssignedRolesForUser(ctx, userId, nil)
+			roles, _, err := listAssignedRolesForUser(ctx, rs.client, userId)
 			if err != nil {
 				return nil, "", nil, err
 			}

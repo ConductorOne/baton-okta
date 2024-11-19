@@ -24,6 +24,8 @@ type Link struct {
 	Next Next `json:"next,omitempty"`
 }
 
+// Id is the role assignment id
+// Role is the role id
 type Roles struct {
 	Links          interface{} `json:"_links,omitempty"`
 	AssignmentType string      `json:"assignmentType,omitempty"`

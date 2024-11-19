@@ -179,20 +179,33 @@ func (o *groupResourceType) Grants(
 		}
 
 		for _, role := range roles {
-			if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" || role.Type == roleTypeCustom {
+			if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" {
+				continue
+			}
+
+			if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
 				continue
 			}
 
 			// TODO(lauren) convert model helper
-			roleResource, err := roleResource(ctx, &okta.Role{
-				Id:    role.Id,
-				Label: role.Label,
-				Type:  role.Type,
-			}, resourceTypeRole)
+			var roleResourceVal *v2.Resource
+			if role.Type == roleTypeCustom {
+				roleResourceVal, err = roleResource(ctx, &okta.Role{
+					Id:    role.Role,
+					Label: role.Label,
+				}, resourceTypeCustomRole)
+			} else {
+				roleResourceVal, err = roleResource(ctx, &okta.Role{
+					Id:    role.Role,
+					Label: role.Label,
+					Type:  role.Type,
+				}, resourceTypeRole)
+			}
 			if err != nil {
 				return nil, "", nil, err
 			}
-			rv = append(rv, roleGroupGrant(groupID, roleResource))
+
+			rv = append(rv, roleGroupGrant(groupID, roleResourceVal))
 		}
 
 		// TODO(lauren) Move this to list method like other methods do
