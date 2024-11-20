@@ -135,12 +135,3 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 	}
 	return err
 }
-
-func unmarshalRolesToken(token *pagination.Token) (*pagination.Bag, error) {
-	b := &pagination.Bag{}
-	err := b.Unmarshal(token.Token)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}

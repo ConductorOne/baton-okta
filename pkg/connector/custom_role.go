@@ -2,23 +2,25 @@ package connector
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
 
 type customRoleResourceType struct {
-	resourceType *v2.ResourceType
-	domain       string
-	client       *okta.Client
+	resourceType  *v2.ResourceType
+	domain        string
+	client        *okta.Client
+	userRoleCache sync.Map // userId -> set of roleIds
 }
 
 func (o *customRoleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -60,17 +62,13 @@ func (o *customRoleResourceType) Entitlements(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	var (
-		rv   []*v2.Entitlement
-		role *okta.Role
-	)
-	role = standardRoleFromType(resource.Id.GetResource())
-	if role == nil {
-		role = &okta.Role{
-			Label: resource.DisplayName,
-			Type:  resource.Id.Resource,
-		}
+	var rv []*v2.Entitlement
+
+	role := &okta.Role{
+		Label: resource.DisplayName,
+		Type:  resource.Id.Resource,
 	}
+
 	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
@@ -106,18 +104,26 @@ func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId st
 	return role, resp, nil
 }
 
-func listGroups(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := client.Group.ListGroups(ctx, qp)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
-	}
-
-	reqCtx, err := responseToContext(token, resp)
+// listAssignedRolesForUser. List all user role assignments.
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentAUser/#tag/RoleAssignmentAUser/operation/listAssignedRolesForUser
+func listAssignedRolesForUser(ctx context.Context, client *okta.Client, userId string) ([]*Roles, *okta.Response, error) {
+	apiPath, err := url.JoinPath(usersUrl, userId, "roles")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return groups, reqCtx, nil
+	reqUrl, err := url.Parse(apiPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var role []*Roles
+	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, client)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return role, resp, nil
 }
 
 func (o *customRoleResourceType) Grants(
@@ -126,144 +132,20 @@ func (o *customRoleResourceType) Grants(
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var rv []*v2.Grant
-	_, page, err := parsePageToken(token.Token, resource.Id)
+
+	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	bag, err := unmarshalRolesToken(token)
+	qp := queryParams(token.Size, page)
+
+	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.client, token, qp)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
 	}
 
-	if bag.Current() == nil {
-		// Push onto stack in reverse
-		bag.Push(pagination.PageState{
-			ResourceTypeID: resourceTypeGroup.Id,
-		})
-		bag.Push(pagination.PageState{
-			ResourceTypeID: resourceTypeUser.Id,
-		})
-	}
-
-	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, page)
-	if err != nil {
-		// We don't have permissions to fetch role assignments, so return an empty list
-		if errors.Is(err, errMissingRolePermissions) {
-			return nil, "", nil, nil
-		}
-
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-	}
-
-	switch bag.ResourceTypeID() {
-	case resourceTypeGroup.Id:
-		pageGroupToken := "{}"
-		for pageGroupToken != "" {
-			groupToken := &pagination.Token{
-				Token: pageGroupToken,
-			}
-			bagGroups, pageGroups, err := parsePageToken(groupToken.Token, resource.Id)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-			}
-
-			qp := queryParams(groupToken.Size, pageGroups)
-			groups, respGroupCtx, err := listGroups(ctx, o.client, groupToken, qp)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
-			}
-
-			nextGroupPage, _, err := parseResp(respGroupCtx.OktaResponse)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-			}
-
-			err = bagGroups.Next(nextGroupPage)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-			}
-
-			for _, group := range groups {
-				groupId := group.Id
-				roles, _, err := listGroupAssignedRoles(ctx, o.client, groupId, nil)
-				if err != nil {
-					return nil, "", nil, err
-				}
-
-				for _, role := range roles {
-					if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" || role.Type != roleTypeCustom {
-						continue
-					}
-
-					// It's a custom role. We need to match the label to the display name
-					if role.Label == resource.GetDisplayName() {
-						rv = append(rv, roleGroupGrant(groupId, resource))
-					}
-				}
-			}
-
-			pageGroupToken, err = bagGroups.Marshal()
-			if err != nil {
-				return nil, "", nil, err
-			}
-		}
-	case resourceTypeUser.Id:
-		pageUserToken := "{}"
-		for pageUserToken != "" {
-			userToken := &pagination.Token{
-				Token: pageUserToken,
-			}
-			bagUsers, pageUsers, err := parsePageToken(userToken.Token, resource.Id)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
-			}
-
-			qp := queryParams(userToken.Size, pageUsers)
-			users, respUserCtx, err := listUsers(ctx, o.client, userToken, qp)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
-			}
-
-			nextUserPage, _, err := parseResp(respUserCtx.OktaResponse)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-			}
-
-			err = bagUsers.Next(nextUserPage)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-			}
-
-			for _, user := range users {
-				userId := user.Id
-				roles, _, err := o.client.User.ListAssignedRolesForUser(ctx, userId, nil)
-				if err != nil {
-					return nil, "", nil, err
-				}
-
-				for _, role := range roles {
-					if role.Status == roleStatusInactive || role.AssignmentType != "USER" || role.Type != roleTypeCustom {
-						continue
-					}
-
-					// It's a custom role. We need to match the label to the display name
-					if role.Label == resource.GetDisplayName() {
-						rv = append(rv, roleGrant(userId, resource))
-					}
-				}
-			}
-
-			pageUserToken, err = bagUsers.Marshal()
-			if err != nil {
-				return nil, "", nil, err
-			}
-		}
-	default:
-		return nil, "", nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
-	}
-
-	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -273,12 +155,31 @@ func (o *customRoleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, administratorRoleFlag := range adminFlags {
-		if userHasRoleAccess(administratorRoleFlag, resource) {
-			userID := administratorRoleFlag.UserId
-			if userID != "" {
-				rv = append(rv, roleGrant(userID, resource))
+	for _, user := range usersWithRoleAssignments {
+		userId := user.Id
+
+		userRoles, err := o.getUserRolesFromCache(ctx, userId)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		if userRoles == nil {
+			userRoles = mapset.NewSet[string]()
+			roles, _, err := listAssignedRolesForUser(ctx, o.client, userId)
+			if err != nil {
+				return nil, "", nil, err
 			}
+			for _, role := range roles {
+				if role.Status == roleStatusInactive || role.AssignmentType != "USER" || role.Type != roleTypeCustom {
+					continue
+				}
+				userRoles.Add(role.Role)
+			}
+			o.userRoleCache.Store(userId, userRoles)
+		}
+
+		if userRoles.ContainsOne(resource.Id.GetResource()) {
+			rv = append(rv, roleGrant(userId, resource))
 		}
 	}
 
@@ -325,4 +226,16 @@ func customRoleBuilder(domain string, client *okta.Client) *customRoleResourceTy
 		domain:       domain,
 		client:       client,
 	}
+}
+
+func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
+	appUserRoleCacheVal, ok := o.userRoleCache.Load(userId)
+	if !ok {
+		return nil, nil
+	}
+	userRoles, ok := appUserRoleCacheVal.(mapset.Set[string])
+	if !ok {
+		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
+	}
+	return userRoles, nil
 }
