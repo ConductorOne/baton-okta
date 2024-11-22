@@ -120,10 +120,12 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 
 // listMembersOfBinding. List all Role Resource Set Binding Members
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/listMembersOfBinding
-func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(ctx context.Context,
+func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(
+	ctx context.Context,
 	client *okta.Client,
 	resourceSetId, customRoleId string,
-	_ *query.Params) ([]MembersDetails, *okta.Response, error) {
+	_ *query.Params
+) ([]MembersDetails, *okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members")
 	if err != nil {
 		return nil, nil, err
@@ -228,6 +230,10 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 			principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: resourceId}}
 		case resourceGroups:
 			principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: resourceId}}
+		}
+
+		if principal == nil {
+			continue
 		}
 
 		gr := sdkGrant.NewGrant(resource, entitlementName, principal,
