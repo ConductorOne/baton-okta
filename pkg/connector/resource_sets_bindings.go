@@ -124,7 +124,7 @@ func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(
 	ctx context.Context,
 	client *okta.Client,
 	resourceSetId, customRoleId string,
-	_ *query.Params
+	_ *query.Params,
 ) ([]MembersDetails, *okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members")
 	if err != nil {
