@@ -175,7 +175,24 @@ func (o *groupResourceType) Grants(
 	case resourceTypeRole.Id:
 		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
 		if err != nil {
-			return nil, "", nil, err
+			if resp != nil {
+				defer resp.Body.Close()
+				errOkta, err := getError(resp)
+				if err != nil {
+					return nil, "", nil, err
+				}
+				if errOkta.ErrorCode == AccessDeniedErrorCode {
+					err = bag.Next("")
+					pageToken, err := bag.Marshal()
+					if err != nil {
+						return nil, "", nil, err
+					}
+					return nil, pageToken, nil, nil
+				} else {
+					return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %v", errOkta)
+				}
+			}
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
 		}
 
 		for _, role := range roles {

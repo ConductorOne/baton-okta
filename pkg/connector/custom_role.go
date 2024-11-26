@@ -98,7 +98,7 @@ func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId st
 	var role []*Roles
 	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &role, client)
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 
 	return role, resp, nil
