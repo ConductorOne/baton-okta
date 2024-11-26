@@ -355,7 +355,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				return nil, err
 			}
 
-			if errOkta.ErrorCode != "E0000007" {
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
 				l.Warn(
 					"okta-connector: ",
 					zap.String("principal_id", principal.Id.String()),
@@ -375,7 +375,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.Any("Profile", appUser.Profile),
 			)
-			return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the user")
+			return annotations.New(&v2.GrantAlreadyExists{}), nil
 		}
 
 		user, _, err := g.client.User.GetUser(ctx, userID)
@@ -422,7 +422,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				return nil, err
 			}
 
-			if errOkta.ErrorCode != "E0000007" {
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
 				l.Warn(
 					"okta-connector: ",
 					zap.String("principal_id", principal.Id.String()),
@@ -442,7 +442,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.Any("Profile", appGroup.Profile),
 			)
-			return nil, fmt.Errorf("okta-connector: The app specified is already assigned to the group")
+			return annotations.New(&v2.GrantAlreadyExists{}), nil
 		}
 
 		payload := okta.ApplicationGroupAssignment{}

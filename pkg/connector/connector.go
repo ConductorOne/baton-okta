@@ -19,6 +19,7 @@ import (
 
 const awsApp = "amazon_aws"
 const ResourceNotFoundExceptionErrorCode = "E0000007"
+const AccessDeniedErrorCode = "E0000006"
 const ExpectedIdentityProviderArnRegexCaptureGroups = 2
 const ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances = 3
 
