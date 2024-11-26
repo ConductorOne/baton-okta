@@ -183,6 +183,9 @@ func (o *groupResourceType) Grants(
 				}
 				if errOkta.ErrorCode == AccessDeniedErrorCode {
 					err = bag.Next("")
+					if err != nil {
+						return nil, "", nil, err
+					}
 					pageToken, err := bag.Marshal()
 					if err != nil {
 						return nil, "", nil, err
