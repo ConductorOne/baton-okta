@@ -183,7 +183,10 @@ func (o *roleResourceType) Grants(
 				return nil, "", nil, err
 			}
 			for _, role := range roles {
-				// dont skip for assign,ment type?
+				if role.Status == roleStatusInactive {
+					continue
+				}
+
 				if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
 					continue
 				}
