@@ -185,7 +185,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	}
 
 	resourceSyncer := []connectorbuilder.ResourceSyncer{
-		roleBuilder(o.domain, o.apiToken, o.client),
+		roleBuilder(o.client, o),
 		userBuilder(o.domain, o.apiToken, o.client),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
@@ -212,6 +212,11 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 	} else {
 		resourceTypes = append(resourceTypes, resourceTypeRole, resourceTypeApp)
 	}
+
+	if c.syncCustomRoles {
+		resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
+	}
+
 	return &v2.ResourceTypesServiceListResourceTypesResponse{
 		List: resourceTypes,
 	}, nil

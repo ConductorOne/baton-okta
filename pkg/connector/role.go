@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -15,6 +16,7 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
@@ -32,7 +34,7 @@ var standardRoleTypes = []*okta.Role{
 	{Type: "ORG_ADMIN", Label: "Organizational Administrator"},
 	{Type: "READ_ONLY_ADMIN", Label: "Read-Only Administrator"},
 	{Type: "REPORT_ADMIN", Label: "Report Administrator"},
-	{Type: "SUPER_ORG_ADMIN", Label: "Super Administrator"},
+	{Type: "SUPER_ADMIN", Label: "Super Administrator"},
 	// The type name is strange, but it is what Okta uses for the Group Administrator standard role
 	{Type: "USER_ADMIN", Label: "Group Administrator"},
 	{Type: "HELP_DESK_ADMIN", Label: "Help Desk Administrator"},
@@ -41,10 +43,10 @@ var standardRoleTypes = []*okta.Role{
 }
 
 type roleResourceType struct {
-	resourceType *v2.ResourceType
-	domain       string
-	apiToken     string
-	client       *okta.Client
+	resourceType  *v2.ResourceType
+	client        *okta.Client
+	userRoleCache sync.Map
+	connector     *Okta
 }
 
 type CustomRoles struct {
@@ -146,18 +148,17 @@ func (o *roleResourceType) Grants(
 
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, token, page)
+	qp := queryParams(token.Size, page)
+
+	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.connector.client, token, qp)
 	if err != nil {
-		// We don't have permissions to fetch role assignments, so return an empty list
-		if errors.Is(err, errMissingRolePermissions) {
-			return nil, "", nil, nil
-		}
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
 	}
-	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
+
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -167,12 +168,36 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, administratorRoleFlag := range adminFlags {
-		if userHasRoleAccess(administratorRoleFlag, resource) {
-			userID := administratorRoleFlag.UserId
-			if userID != "" {
-				rv = append(rv, roleGrant(userID, resource))
+	for _, user := range usersWithRoleAssignments {
+		userId := user.Id
+
+		userRoles, err := o.getUserRolesFromCache(ctx, userId)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		if userRoles == nil {
+			userRoles = mapset.NewSet[string]()
+			roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
+			if err != nil {
+				return nil, "", nil, err
 			}
+			for _, role := range roles {
+				if role.Status == roleStatusInactive {
+					continue
+				}
+
+				if role.AssignmentType != "USER" || role.Type == roleTypeCustom {
+					continue
+				}
+
+				userRoles.Add(role.Type)
+			}
+			o.userRoleCache.Store(userId, userRoles)
+		}
+
+		if userRoles.ContainsOne(resource.Id.GetResource()) {
+			rv = append(rv, roleGrant(userId, resource))
 		}
 	}
 
@@ -594,11 +619,22 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	return nil, nil
 }
 
-func roleBuilder(domain string, apiToken string, client *okta.Client) *roleResourceType {
+func (o *roleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
+	appUserRoleCacheVal, ok := o.userRoleCache.Load(userId)
+	if !ok {
+		return nil, nil
+	}
+	userRoles, ok := appUserRoleCacheVal.(mapset.Set[string])
+	if !ok {
+		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
+	}
+	return userRoles, nil
+}
+
+func roleBuilder(client *okta.Client, connector *Okta) *roleResourceType {
 	return &roleResourceType{
 		resourceType: resourceTypeRole,
-		domain:       domain,
-		apiToken:     apiToken,
 		client:       client,
+		connector:    connector,
 	}
 }

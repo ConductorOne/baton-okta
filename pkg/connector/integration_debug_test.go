@@ -95,8 +95,6 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 
 	resource := &roleResourceType{
 		resourceType: resourceTypeRole,
-		domain:       batonDomain,
-		apiToken:     batonApiToken,
 		client:       cliTest.client,
 	}
 	rs, err := getRoleResourceForTesting(ctxTest, "READ_ONLY_ADMIN", "test", "")

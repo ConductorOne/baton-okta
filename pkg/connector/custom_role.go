@@ -196,7 +196,7 @@ func (o *customRoleResourceType) listCustomRoles(
 	_ *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, error) {
-	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
+	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
@@ -220,14 +220,6 @@ func (o *customRoleResourceType) listCustomRoles(
 	return rv, nil
 }
 
-func customRoleBuilder(domain string, client *okta.Client) *customRoleResourceType {
-	return &customRoleResourceType{
-		resourceType: resourceTypeCustomRole,
-		domain:       domain,
-		client:       client,
-	}
-}
-
 func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
 	appUserRoleCacheVal, ok := o.userRoleCache.Load(userId)
 	if !ok {
@@ -238,4 +230,12 @@ func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, user
 		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
 	}
 	return userRoles, nil
+}
+
+func customRoleBuilder(domain string, client *okta.Client) *customRoleResourceType {
+	return &customRoleResourceType{
+		resourceType: resourceTypeCustomRole,
+		domain:       domain,
+		client:       client,
+	}
 }
