@@ -184,11 +184,10 @@ func (o *roleResourceType) Grants(
 			}
 			for _, role := range roles {
 				// dont skip for assign,ment type?
-				if role.Status == roleStatusInactive {
-					if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
-						continue
-					}
+				if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
+					continue
 				}
+
 				userRoles.Add(role.Role)
 			}
 			o.userRoleCache.Store(userId, userRoles)
