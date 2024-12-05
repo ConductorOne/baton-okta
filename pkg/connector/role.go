@@ -32,7 +32,7 @@ var standardRoleTypes = []*okta.Role{
 	{Type: "ORG_ADMIN", Label: "Organizational Administrator"},
 	{Type: "READ_ONLY_ADMIN", Label: "Read-Only Administrator"},
 	{Type: "REPORT_ADMIN", Label: "Report Administrator"},
-	{Type: "SUPER_ORG_ADMIN", Label: "Super Administrator"},
+	{Type: "SUPER_ADMIN", Label: "Super Administrator"},
 	// The type name is strange, but it is what Okta uses for the Group Administrator standard role
 	{Type: "USER_ADMIN", Label: "Group Administrator"},
 	{Type: "HELP_DESK_ADMIN", Label: "Help Desk Administrator"},
