@@ -191,7 +191,7 @@ func (o *roleResourceType) Grants(
 					continue
 				}
 
-				userRoles.Add(role.Role)
+				userRoles.Add(role.Type)
 			}
 			o.userRoleCache.Store(userId, userRoles)
 		}
