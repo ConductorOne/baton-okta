@@ -196,7 +196,7 @@ func (o *customRoleResourceType) listCustomRoles(
 	_ *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, error) {
-	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
+	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}

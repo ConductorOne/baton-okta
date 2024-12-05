@@ -212,6 +212,11 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 	} else {
 		resourceTypes = append(resourceTypes, resourceTypeRole, resourceTypeApp)
 	}
+
+	if c.syncCustomRoles {
+		resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
+	}
+
 	return &v2.ResourceTypesServiceListResourceTypesResponse{
 		List: resourceTypes,
 	}, nil
