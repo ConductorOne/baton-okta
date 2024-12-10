@@ -143,6 +143,14 @@ func (o *groupResourceType) Grants(
 
 		users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
 		if err != nil {
+			if isNotFoundError(err) {
+				_ = bag.Pop()
+				pageToken, err := bag.Marshal()
+				if err != nil {
+					return nil, "", nil, err
+				}
+				return nil, pageToken, nil, nil
+			}
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
 		}
 
@@ -175,6 +183,14 @@ func (o *groupResourceType) Grants(
 	case resourceTypeRole.Id:
 		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
 		if err != nil {
+			if isNotFoundError(err) {
+				_ = bag.Pop()
+				pageToken, err := bag.Marshal()
+				if err != nil {
+					return nil, "", nil, err
+				}
+				return nil, pageToken, nil, nil
+			}
 			if resp == nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
 			}

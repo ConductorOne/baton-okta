@@ -165,6 +165,10 @@ func (o *appResourceType) listAppGroupGrants(
 	qp := queryParams(token.Size, page)
 	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
+		if isNotFoundError(err) {
+			_ = bag.Pop()
+			return nil, nil, bag, nil
+		}
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
 	}
 
@@ -204,6 +208,11 @@ func (o *appResourceType) listAppUsersGrants(
 	qp := queryParams(token.Size, page)
 	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
+		if isNotFoundError(err) {
+			_ = bag.Pop()
+			return nil, nil, bag, nil
+		}
+
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list group users: %w", err)
 	}
 
