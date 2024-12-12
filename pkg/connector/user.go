@@ -32,7 +32,7 @@ type userResourceType struct {
 	client              *okta.Client
 	ciamMode            bool
 	emailFilters        []string
-	SyncSecondaryEmails bool
+	skipSecondaryEmails bool
 }
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -75,7 +75,7 @@ func (o *userResourceType) List(
 		if o.ciamMode && !shouldIncludeOktaUser(user, o.emailFilters) {
 			continue
 		}
-		resource, err := userResource(ctx, user, o.SyncSecondaryEmails)
+		resource, err := userResource(ctx, user, o.skipSecondaryEmails)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -171,7 +171,7 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	return oktaUsers, respCtx, nil
 }
 
-func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string, syncSecondaryEmails bool) *userResourceType {
+func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string, skipSecondaryEmails bool) *userResourceType {
 	var loweredFilters []string
 	for _, ef := range emailFilters {
 		loweredFilters = append(loweredFilters, strings.ToLower(ef))
@@ -183,22 +183,22 @@ func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailF
 		client:              client,
 		ciamMode:            true,
 		emailFilters:        loweredFilters,
-		SyncSecondaryEmails: syncSecondaryEmails,
+		skipSecondaryEmails: skipSecondaryEmails,
 	}
 }
 
-func userBuilder(domain string, apiToken string, client *okta.Client, syncSecondaryEmails bool) *userResourceType {
+func userBuilder(domain string, apiToken string, client *okta.Client, skipSecondaryEmails bool) *userResourceType {
 	return &userResourceType{
 		resourceType:        resourceTypeUser,
 		domain:              domain,
 		apiToken:            apiToken,
 		client:              client,
-		SyncSecondaryEmails: syncSecondaryEmails,
+		skipSecondaryEmails: skipSecondaryEmails,
 	}
 }
 
 // Create a new connector resource for a okta user.
-func userResource(ctx context.Context, user *okta.User, syncSecondaryEmails bool) (*v2.Resource, error) {
+func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
 	firstName, lastName := userName(user)
 
 	oktaProfile := *user.Profile
@@ -226,11 +226,11 @@ func userResource(ctx context.Context, user *okta.User, syncSecondaryEmails bool
 	if email, ok := oktaProfile["email"].(string); ok && email != "" {
 		options = append(options, resource.WithEmail(email, true))
 	}
-	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" && syncSecondaryEmails {
+	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" && !skipSecondaryEmails {
 		options = append(options, resource.WithEmail(secondEmail, false))
 	}
 
-	if !syncSecondaryEmails {
+	if skipSecondaryEmails {
 		oktaProfile["secondEmail"] = nil
 	}
 

@@ -30,7 +30,7 @@ type Okta struct {
 	syncInactiveApps    bool
 	ciamConfig          *ciamConfig
 	syncCustomRoles     bool
-	syncSecondaryEmails bool
+	skipSecondaryEmails bool
 	awsConfig           *awsConfig
 }
 
@@ -91,7 +91,7 @@ type Config struct {
 	CacheTTI            int32
 	CacheTTL            int32
 	SyncCustomRoles     bool
-	SyncSecondaryEmails bool
+	SkipSecondaryEmails bool
 	AWSMode             bool
 	AWSOktaAppId        string
 }
@@ -173,14 +173,14 @@ var (
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
 	if o.ciamConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
-			ciamUserBuilder(o.domain, o.apiToken, o.client, o.ciamConfig.EmailDomains, o.syncSecondaryEmails),
-			ciamBuilder(o.client, o.syncSecondaryEmails),
+			ciamUserBuilder(o.domain, o.apiToken, o.client, o.ciamConfig.EmailDomains, o.skipSecondaryEmails),
+			ciamBuilder(o.client, o.skipSecondaryEmails),
 		}
 	}
 
 	if o.awsConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
-			userBuilder(o.domain, o.apiToken, o.client, o.syncSecondaryEmails),
+			userBuilder(o.domain, o.apiToken, o.client, o.skipSecondaryEmails),
 			groupBuilder(o),
 			accountBuilder(o),
 		}
@@ -188,7 +188,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	resourceSyncer := []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.client, o),
-		userBuilder(o.domain, o.apiToken, o.client, o.syncSecondaryEmails),
+		userBuilder(o.domain, o.apiToken, o.client, o.skipSecondaryEmails),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 	}
@@ -333,7 +333,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		apiToken:            cfg.ApiToken,
 		syncInactiveApps:    cfg.SyncInactiveApps,
 		syncCustomRoles:     cfg.SyncCustomRoles,
-		syncSecondaryEmails: cfg.SyncSecondaryEmails,
+		skipSecondaryEmails: cfg.SkipSecondaryEmails,
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,
