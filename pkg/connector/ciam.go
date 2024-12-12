@@ -17,7 +17,8 @@ import (
 )
 
 type ciamResourceBuilder struct {
-	client *okta.Client
+	client              *okta.Client
+	skipSecondaryEmails bool
 }
 
 func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
@@ -53,7 +54,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
 
-			resource, err := userResource(ctx, oktaUser)
+			resource, err := userResource(ctx, oktaUser, o.skipSecondaryEmails)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create user resource: %w", err)
 			}
@@ -346,8 +347,9 @@ func (o *ciamResourceBuilder) ResourceType(ctx context.Context) *v2.ResourceType
 	return resourceTypeRole
 }
 
-func ciamBuilder(client *okta.Client) *ciamResourceBuilder {
+func ciamBuilder(client *okta.Client, skipSecondaryEmails bool) *ciamResourceBuilder {
 	return &ciamResourceBuilder{
-		client: client,
+		client:              client,
+		skipSecondaryEmails: skipSecondaryEmails,
 	}
 }

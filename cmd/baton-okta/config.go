@@ -19,6 +19,7 @@ var (
 	cacheTTI              = field.IntField("cache-tti", field.WithDescription("Response cache cleanup interval in seconds"), field.WithDefaultValue(60))
 	cacheTTL              = field.IntField("cache-ttl", field.WithDescription("Response cache time to live in seconds"), field.WithDefaultValue(300))
 	syncCustomRoles       = field.BoolField("sync-custom-roles", field.WithDescription("Enable syncing custom roles"), field.WithDefaultValue(false))
+	skipSecondaryEmails   = field.BoolField("skip-secondary-emails", field.WithDescription("Skip syncing secondary emails"), field.WithDefaultValue(false))
 	awsIdentityCenterMode = field.BoolField("aws-identity-center-mode",
 		field.WithDescription("Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced"))
 	awsOktaAppId = field.StringField("aws-okta-app-id", field.WithDescription("The Okta app id for the AWS application"))
@@ -47,6 +48,7 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	cacheTTI,
 	cacheTTL,
 	syncCustomRoles,
+	skipSecondaryEmails,
 	awsIdentityCenterMode,
 	awsOktaAppId,
 }, relationships...)
