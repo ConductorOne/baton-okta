@@ -24,13 +24,14 @@ const ExpectedIdentityProviderArnRegexCaptureGroups = 2
 const ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances = 3
 
 type Okta struct {
-	client           *okta.Client
-	domain           string
-	apiToken         string
-	syncInactiveApps bool
-	ciamConfig       *ciamConfig
-	syncCustomRoles  bool
-	awsConfig        *awsConfig
+	client              *okta.Client
+	domain              string
+	apiToken            string
+	syncInactiveApps    bool
+	ciamConfig          *ciamConfig
+	syncCustomRoles     bool
+	syncSecondaryEmails bool
+	awsConfig           *awsConfig
 }
 
 type ciamConfig struct {
@@ -77,21 +78,22 @@ type oktaAWSAppSettings struct {
 }
 
 type Config struct {
-	Domain           string
-	ApiToken         string
-	OktaClientId     string
-	OktaPrivateKey   string
-	OktaPrivateKeyId string
-	SyncInactiveApps bool
-	OktaProvisioning bool
-	Ciam             bool
-	CiamEmailDomains []string
-	Cache            bool
-	CacheTTI         int32
-	CacheTTL         int32
-	SyncCustomRoles  bool
-	AWSMode          bool
-	AWSOktaAppId     string
+	Domain              string
+	ApiToken            string
+	OktaClientId        string
+	OktaPrivateKey      string
+	OktaPrivateKeyId    string
+	SyncInactiveApps    bool
+	OktaProvisioning    bool
+	Ciam                bool
+	CiamEmailDomains    []string
+	Cache               bool
+	CacheTTI            int32
+	CacheTTL            int32
+	SyncCustomRoles     bool
+	SyncSecondaryEmails bool
+	AWSMode             bool
+	AWSOktaAppId        string
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -171,14 +173,14 @@ var (
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
 	if o.ciamConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
-			ciamUserBuilder(o.domain, o.apiToken, o.client, o.ciamConfig.EmailDomains),
-			ciamBuilder(o.client),
+			ciamUserBuilder(o.domain, o.apiToken, o.client, o.ciamConfig.EmailDomains, o.syncSecondaryEmails),
+			ciamBuilder(o.client, o.syncSecondaryEmails),
 		}
 	}
 
 	if o.awsConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
-			userBuilder(o.domain, o.apiToken, o.client),
+			userBuilder(o.domain, o.apiToken, o.client, o.syncSecondaryEmails),
 			groupBuilder(o),
 			accountBuilder(o),
 		}
@@ -186,7 +188,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	resourceSyncer := []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.client, o),
-		userBuilder(o.domain, o.apiToken, o.client),
+		userBuilder(o.domain, o.apiToken, o.client, o.syncSecondaryEmails),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 	}
@@ -326,11 +328,12 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 	}
 
 	return &Okta{
-		client:           oktaClient,
-		domain:           cfg.Domain,
-		apiToken:         cfg.ApiToken,
-		syncInactiveApps: cfg.SyncInactiveApps,
-		syncCustomRoles:  cfg.SyncCustomRoles,
+		client:              oktaClient,
+		domain:              cfg.Domain,
+		apiToken:            cfg.ApiToken,
+		syncInactiveApps:    cfg.SyncInactiveApps,
+		syncCustomRoles:     cfg.SyncCustomRoles,
+		syncSecondaryEmails: cfg.SyncSecondaryEmails,
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,

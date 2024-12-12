@@ -36,21 +36,22 @@ func main() {
 func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
 	ccfg := &connector.Config{
-		Domain:           v.GetString("domain"),
-		ApiToken:         v.GetString("api-token"),
-		OktaClientId:     v.GetString("okta-client-id"),
-		OktaPrivateKey:   v.GetString("okta-private-key"),
-		OktaPrivateKeyId: v.GetString("okta-private-key-id"),
-		SyncInactiveApps: v.GetBool("sync-inactive-apps"),
-		OktaProvisioning: v.GetBool("okta-provisioning"),
-		Ciam:             v.GetBool("ciam"),
-		CiamEmailDomains: v.GetStringSlice("ciam-email-domains"),
-		Cache:            v.GetBool("cache"),
-		CacheTTI:         v.GetInt32("cache-tti"),
-		CacheTTL:         v.GetInt32("cache-ttl"),
-		SyncCustomRoles:  v.GetBool("sync-custom-roles"),
-		AWSMode:          v.GetBool("aws-identity-center-mode"),
-		AWSOktaAppId:     v.GetString("aws-okta-app-id"),
+		Domain:              v.GetString("domain"),
+		ApiToken:            v.GetString("api-token"),
+		OktaClientId:        v.GetString("okta-client-id"),
+		OktaPrivateKey:      v.GetString("okta-private-key"),
+		OktaPrivateKeyId:    v.GetString("okta-private-key-id"),
+		SyncInactiveApps:    v.GetBool("sync-inactive-apps"),
+		OktaProvisioning:    v.GetBool("okta-provisioning"),
+		Ciam:                v.GetBool("ciam"),
+		CiamEmailDomains:    v.GetStringSlice("ciam-email-domains"),
+		Cache:               v.GetBool("cache"),
+		CacheTTI:            v.GetInt32("cache-tti"),
+		CacheTTL:            v.GetInt32("cache-ttl"),
+		SyncCustomRoles:     v.GetBool("sync-custom-roles"),
+		SyncSecondaryEmails: v.GetBool("sync-secondary-emails"),
+		AWSMode:             v.GetBool("aws-identity-center-mode"),
+		AWSOktaAppId:        v.GetString("aws-okta-app-id"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)
