@@ -44,22 +44,29 @@ type Syncer interface {
 
 // syncer orchestrates a connector sync and stores the results using the provided datasource.Writer.
 type syncer struct {
-	c1zManager        manager.Manager
-	c1zPath           string
-	store             connectorstore.Writer
-	connector         types.ConnectorClient
-	state             State
-	runDuration       time.Duration
-	transitionHandler func(s Action)
-	progressHandler   func(p *Progress)
-	tmpDir            string
-	skipFullSync      bool
+	c1zManager         manager.Manager
+	c1zPath            string
+	store              connectorstore.Writer
+	connector          types.ConnectorClient
+	state              State
+	runDuration        time.Duration
+	transitionHandler  func(s Action)
+	progressHandler    func(p *Progress)
+	tmpDir             string
+	skipFullSync       bool
+	lastCheckPointTime time.Time
 
 	skipEGForResourceType map[string]bool
 }
 
+const minCheckpointInterval = 10 * time.Second
+
 // Checkpoint marshals the current state and stores it.
 func (s *syncer) Checkpoint(ctx context.Context) error {
+	if !s.lastCheckPointTime.IsZero() && time.Since(s.lastCheckPointTime) < minCheckpointInterval {
+		return nil
+	}
+	s.lastCheckPointTime = time.Now()
 	checkpoint, err := s.state.Marshal()
 	if err != nil {
 		return err
@@ -139,6 +146,18 @@ func shouldWaitAndRetry(ctx context.Context, err error) bool {
 	}
 }
 
+func isWarning(ctx context.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if status.Code(err) == codes.NotFound {
+		return true
+	}
+
+	return false
+}
+
 // Sync starts the syncing process. The sync process is driven by the action stack that is part of the state object.
 // For each page of data that is required to be fetched from the connector, a new action is pushed on to the stack. Once
 // an action is completed, it is popped off of the queue. Before processing each action, we checkpoint the state object
@@ -192,12 +211,17 @@ func (s *syncer) Sync(ctx context.Context) error {
 	}
 	s.state = state
 
+	var warnings []error
 	for s.state.Current() != nil {
 		err = s.Checkpoint(ctx)
 		if err != nil {
 			return err
 		}
 
+		// TODO: count actions divided by warnings and error if warning percentage is too high
+		if len(warnings) > 10 {
+			return fmt.Errorf("too many warnings, exiting sync. warnings: %v", warnings)
+		}
 		select {
 		case <-runCtx.Done():
 			err = context.Cause(runCtx)
@@ -247,6 +271,12 @@ func (s *syncer) Sync(ctx context.Context) error {
 
 		case SyncEntitlementsOp:
 			err = s.SyncEntitlements(ctx)
+			if isWarning(ctx, err) {
+				l.Warn("skipping sync entitlement action", zap.Any("stateAction", stateAction), zap.Error(err))
+				warnings = append(warnings, err)
+				s.state.FinishAction(ctx)
+				continue
+			}
 			if !shouldWaitAndRetry(ctx, err) {
 				return err
 			}
@@ -254,6 +284,12 @@ func (s *syncer) Sync(ctx context.Context) error {
 
 		case SyncGrantsOp:
 			err = s.SyncGrants(ctx)
+			if isWarning(ctx, err) {
+				l.Warn("skipping sync grant action", zap.Any("stateAction", stateAction), zap.Error(err))
+				warnings = append(warnings, err)
+				s.state.FinishAction(ctx)
+				continue
+			}
 			if !shouldWaitAndRetry(ctx, err) {
 				return err
 			}
@@ -295,6 +331,14 @@ func (s *syncer) Sync(ctx context.Context) error {
 		return err
 	}
 
+	_, err = s.connector.Cleanup(ctx, &v2.ConnectorServiceCleanupRequest{})
+	if err != nil {
+		l.Error("error clearing connector caches", zap.Error(err))
+	}
+
+	if len(warnings) > 0 {
+		l.Warn("sync completed with warnings", zap.Int("warning_count", len(warnings)), zap.Any("warnings", warnings))
+	}
 	return nil
 }
 
