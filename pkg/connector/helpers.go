@@ -142,16 +142,22 @@ var oktaNotFoundErrors = map[string]struct{}{
 	"E0000008": {},
 }
 
-func isNotFoundError(err error) bool {
+func convertNotFoundError(err error, message string) error {
 	if err == nil {
-		return false
+		return nil
 	}
 
 	var oktaApiError *okta.Error
 	if !errors.As(err, &oktaApiError) {
-		return false
+		return err
 	}
 
 	_, ok := oktaNotFoundErrors[oktaApiError.ErrorCode]
-	return ok
+	if !ok {
+		return err
+	}
+
+	grpcErr := status.Error(codes.NotFound, message)
+	allErrs := append([]error{grpcErr}, err)
+	return errors.Join(allErrs...)
 }
