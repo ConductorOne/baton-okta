@@ -3,7 +3,7 @@ module github.com/conductorone/baton-okta
 go 1.22.2
 
 require (
-	github.com/conductorone/baton-sdk v0.2.44
+	github.com/conductorone/baton-sdk v0.2.52
 	github.com/deckarep/golang-set/v2 v2.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/okta/okta-sdk-golang/v2 v2.20.0

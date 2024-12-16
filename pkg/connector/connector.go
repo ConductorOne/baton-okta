@@ -18,6 +18,8 @@ import (
 )
 
 const awsApp = "amazon_aws"
+
+// TODO: use isNotFoundError() since E0000008 is also a not found error
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
 const ExpectedIdentityProviderArnRegexCaptureGroups = 2

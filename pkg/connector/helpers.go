@@ -135,3 +135,29 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 	}
 	return err
 }
+
+// https://developer.okta.com/docs/reference/error-codes/?q=not%20found
+var oktaNotFoundErrors = map[string]struct{}{
+	"E0000007": {},
+	"E0000008": {},
+}
+
+func convertNotFoundError(err error, message string) error {
+	if err == nil {
+		return nil
+	}
+
+	var oktaApiError *okta.Error
+	if !errors.As(err, &oktaApiError) {
+		return err
+	}
+
+	_, ok := oktaNotFoundErrors[oktaApiError.ErrorCode]
+	if !ok {
+		return err
+	}
+
+	grpcErr := status.Error(codes.NotFound, message)
+	allErrs := append([]error{grpcErr}, err)
+	return errors.Join(allErrs...)
+}
