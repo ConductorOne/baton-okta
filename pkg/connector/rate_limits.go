@@ -1,10 +1,10 @@
 package connector
 
 import (
+	"net/http"
 	"strconv"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -15,7 +15,7 @@ const (
 	oktaRateLimitResetHeader     = "X-Rate-Limit-Reset"
 )
 
-func extractRateLimitData(resp *okta.Response) (*v2.RateLimitDescription, error) {
+func extractRateLimitData(resp *http.Response) (*v2.RateLimitDescription, error) {
 	iLimit, iRemaining, iReset, hasLimit := getRateLimit(resp)
 
 	if !hasLimit {
@@ -29,7 +29,7 @@ func extractRateLimitData(resp *okta.Response) (*v2.RateLimitDescription, error)
 	}, nil
 }
 
-func getRateLimit(resp *okta.Response) (int64, int64, int64, bool) {
+func getRateLimit(resp *http.Response) (int64, int64, int64, bool) {
 	if resp == nil {
 		return 0, 0, 0, false
 	}

@@ -52,6 +52,7 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		SkipSecondaryEmails: v.GetBool("skip-secondary-emails"),
 		AWSMode:             v.GetBool("aws-identity-center-mode"),
 		AWSOktaAppId:        v.GetString("aws-okta-app-id"),
+		SyncSecrets:         v.GetBool("sync-secrets"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)

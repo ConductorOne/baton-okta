@@ -14,7 +14,7 @@ const defaultLimit = 500
 func parseGetResp(resp *okta.Response) (annotations.Annotations, error) {
 	var annos annotations.Annotations
 	if resp != nil {
-		if desc, err := extractRateLimitData(resp); err == nil {
+		if desc, err := extractRateLimitData(resp.Response); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 	}
@@ -32,7 +32,7 @@ func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 		}
 		after := u.Query().Get("after")
 
-		if desc, err := extractRateLimitData(resp); err == nil {
+		if desc, err := extractRateLimitData(resp.Response); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 		nextPage = after
@@ -56,7 +56,7 @@ func parseAdminListResp(resp *okta.Response) (string, annotations.Annotations, e
 		nextQp.Del("limit")
 		nextPage = nextQp.Encode()
 
-		if desc, err := extractRateLimitData(resp); err == nil {
+		if desc, err := extractRateLimitData(resp.Response); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 	}

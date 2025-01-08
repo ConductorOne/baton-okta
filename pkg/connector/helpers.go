@@ -96,7 +96,7 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 		OktaResponse: resp,
 	}
 
-	limit, remaining, reset, hasLimit := getRateLimit(resp)
+	limit, remaining, reset, hasLimit := getRateLimit(resp.Response)
 	ret.rateLimit = limit
 	ret.rateLimitRemaining = remaining
 	ret.rateLimitReset = time.Unix(reset, 0)
