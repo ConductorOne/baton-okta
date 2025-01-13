@@ -3,12 +3,13 @@ package connector
 import (
 	"context"
 	"fmt"
-	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
+
+	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -334,7 +335,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			oktav5.WithCacheTtl(cfg.CacheTTL),
 		)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			return nil, err
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	}
@@ -375,7 +376,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			oktav5.WithCacheTtl(cfg.CacheTTL),
 		)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			return nil, err
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	}

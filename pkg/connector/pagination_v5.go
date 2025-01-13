@@ -1,8 +1,9 @@
 package connector
 
 import (
-	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
 	"net/url"
+
+	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 )

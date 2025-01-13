@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -48,7 +49,7 @@ func (o *apiTokenResourceType) List(
 	}
 
 	// FIXME: Okta V5 API requires the "resp" object to get next pages. Our connector seems stateless - how do we hold onto resp for future calls to this same method?
-	//if resp.HasNextPage() {
+	// if resp.HasNextPage() {
 	//	resp, err = resp.Next(&apiTokens)
 	//	if err != nil {
 	//		return nil, "", nil, err
@@ -64,7 +65,11 @@ func (o *apiTokenResourceType) List(
 	for _, apiToken := range apiTokens {
 		options := []resource.SecretTraitOption{
 			resource.WithSecretExpiresAt(*apiToken.ExpiresAt),
-			resource.WithSecretCreatedByID(*apiToken.UserId),
+			resource.WithSecretCreatedByID(&v2.ResourceId{
+				ResourceType:  resourceTypeUser.Id,
+				Resource:      *apiToken.UserId,
+				BatonResource: false, // FIXME Santhosh What is this bool?
+			}),
 			resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
 			resource.WithSecretCreatedAt(*apiToken.Created),
 		}
