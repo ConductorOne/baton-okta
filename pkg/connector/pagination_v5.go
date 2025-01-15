@@ -3,6 +3,8 @@ package connector
 import (
 	"net/url"
 
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
+
 	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -19,7 +21,7 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 		}
 		after := u.Query().Get("after")
 
-		if desc, err := extractRateLimitData(resp.Response); err == nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 		nextPage = after

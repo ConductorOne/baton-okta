@@ -117,4 +117,4 @@ require (
 	modernc.org/sqlite v1.30.0 // indirect
 )
 
-replace github.com/conductorone/baton-sdk => /Users/santhosh/ductone/baton-sdk
+replace github.com/conductorone/baton-sdk => /Users/santhosh/repos/conductorone/baton-sdk
