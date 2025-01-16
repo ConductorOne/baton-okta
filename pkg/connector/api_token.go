@@ -35,7 +35,7 @@ func (o *apiTokenResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeApiToken.Id})
+	bag, prevSerializedResp, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeApiToken.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to parse page token: %w", err)
 	}
@@ -43,18 +43,25 @@ func (o *apiTokenResourceType) List(
 	var apiTokens []oktav5.ApiToken
 	var resp *oktav5.APIResponse
 
-	apiTokens, resp, err = o.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to list api tokens: %w", err)
-	}
+	if prevSerializedResp == "" {
+		apiTokens, resp, err = o.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to list api tokens: %w", err)
+		}
+	} else {
+		prevResp, err := deserializeOktaResponseV5(prevSerializedResp)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to deserialize page token: %w", err)
+		}
 
-	// FIXME: Okta V5 API requires the "resp" object to get next pages. Our connector seems stateless - how do we hold onto resp for future calls to this same method?
-	// if resp.HasNextPage() {
-	//	resp, err = resp.Next(&apiTokens)
-	//	if err != nil {
-	//		return nil, "", nil, err
-	//	}
-	//}
+		localOktaAPIResponse := oktav5.NewAPIResponse(prevResp.Response, o.clientV5, nil)
+		if localOktaAPIResponse.HasNextPage() {
+			resp, err = localOktaAPIResponse.Next(&apiTokens)
+			if err != nil {
+				return nil, "", nil, err
+			}
+		}
+	}
 
 	nextPage, annos, err := parseRespV5(resp)
 	if err != nil {
@@ -68,7 +75,7 @@ func (o *apiTokenResourceType) List(
 			resource.WithSecretCreatedByID(&v2.ResourceId{
 				ResourceType:  resourceTypeUser.Id,
 				Resource:      *apiToken.UserId,
-				BatonResource: false, // FIXME Santhosh What is this bool?
+				BatonResource: false,
 			}),
 			resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
 			resource.WithSecretCreatedAt(*apiToken.Created),

@@ -360,7 +360,7 @@ github.com/ncruces/go-strftime
 github.com/okta/okta-sdk-golang/v2/okta
 github.com/okta/okta-sdk-golang/v2/okta/cache
 github.com/okta/okta-sdk-golang/v2/okta/query
-# github.com/okta/okta-sdk-golang/v5 v5.0.4
+# github.com/okta/okta-sdk-golang/v5 v5.0.4 => /Users/santhosh/repos/conductorone/okta-sdk-golang
 ## explicit; go 1.20
 github.com/okta/okta-sdk-golang/v5/okta
 # github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
@@ -695,3 +695,4 @@ modernc.org/memory
 ## explicit; go 1.20
 modernc.org/sqlite/lib
 # github.com/conductorone/baton-sdk => /Users/santhosh/repos/conductorone/baton-sdk
+# github.com/okta/okta-sdk-golang/v5 => /Users/santhosh/repos/conductorone/okta-sdk-golang

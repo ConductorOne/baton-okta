@@ -118,3 +118,5 @@ require (
 )
 
 replace github.com/conductorone/baton-sdk => /Users/santhosh/repos/conductorone/baton-sdk
+
+replace github.com/okta/okta-sdk-golang/v5 => /Users/santhosh/repos/conductorone/okta-sdk-golang
