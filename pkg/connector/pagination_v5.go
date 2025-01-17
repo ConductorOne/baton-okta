@@ -7,7 +7,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 
-	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 )

@@ -8,7 +8,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 )
 
 type apiTokenResourceType struct {

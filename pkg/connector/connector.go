@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	oktav5 "github.com/okta/okta-sdk-golang/v5/okta"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
