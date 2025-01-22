@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -271,8 +272,11 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 
 func (o *userResourceType) CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error) {
 	return &v2.CredentialDetailsAccountProvisioning{
-		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD},
-		PreferredCredentialOption:  v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD,
+		},
+		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
 	}, nil, nil
 }
 
@@ -290,54 +294,24 @@ func (r *userResourceType) CreateAccount(
 	annotations.Annotations,
 	error,
 ) {
-
-	pMap := accountInfo.Profile.AsMap()
-	firstName, ok := pMap["first name"]
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
+	userProfile, err := getUserProfile(accountInfo)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
-	lastName, ok := pMap["last name"]
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
-	}
-
-	email, ok := pMap["email"]
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
-	}
-	login, ok := pMap["login"]
-	if !ok {
-		login = email
-	}
-
-	// This password is expired by default, they have to change their password on next login
-	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.CredentialOptions_RandomPassword{
-		Length: 12,
-	})
+	creds, err := getCredentialOption(credentialOptions)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	user, response, err := r.client.User.CreateUser(ctx, okta.CreateUserRequest{
-		Profile: &okta.UserProfile{
-			"firstName": firstName,
-			"lastName":  lastName,
-			"email":     email,
-			"login":     login,
-		},
+		Profile: userProfile,
 		Type: &okta.UserType{
 			Created:   ToPtr(time.Now()),
 			CreatedBy: "ConductorOne",
 		},
-		Credentials: &okta.UserCredentials{
-			Password: &okta.PasswordCredential{
-				Value: plaintextPassword,
-			},
-		},
-	}, &query.Params{
-		NextLogin: "changePassword", // Next time the user logs in they'll have to change password. We will likely make this configurable via the profile / schema
-	})
+		Credentials: creds,
+	}, &query.Params{})
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -354,4 +328,56 @@ func (r *userResourceType) CreateAccount(
 	}
 
 	return car, nil, nil, nil
+}
+
+func getCredentialOption(credentialOptions *v2.CredentialOptions) (*okta.UserCredentials, error) {
+	if credentialOptions.GetNoPassword() != nil {
+		return nil, nil
+	}
+
+	if credentialOptions.GetRandomPassword() == nil {
+		return nil, errors.New("unsupported credential options")
+	}
+
+	length := min(8, credentialOptions.GetRandomPassword().GetLength())
+	// This password is expired by default, they have to change their password on next login
+	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.CredentialOptions_RandomPassword{
+		Length: length,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &okta.UserCredentials{
+		Password: &okta.PasswordCredential{
+			Value: plaintextPassword,
+		},
+	}, nil
+}
+func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
+	pMap := accountInfo.Profile.AsMap()
+	firstName, ok := pMap["first name"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
+	}
+
+	lastName, ok := pMap["last name"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+	}
+
+	email, ok := pMap["email"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+	}
+	login, ok := pMap["login"]
+	if !ok {
+		login = email
+	}
+	return &okta.UserProfile{
+		"firstName": firstName,
+		"lastName":  lastName,
+		"email":     email,
+		"login":     login,
+	}, nil
 }
