@@ -3,10 +3,14 @@ package connector
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/crypto"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -263,4 +267,91 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		options,
 	)
 	return ret, err
+}
+
+func (o *userResourceType) CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error) {
+	return &v2.CredentialDetailsAccountProvisioning{
+		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD},
+		PreferredCredentialOption:  v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+	}, nil, nil
+}
+
+func ToPtr[T any](v T) *T {
+	return &v
+}
+
+func (r *userResourceType) CreateAccount(
+	ctx context.Context,
+	accountInfo *v2.AccountInfo,
+	credentialOptions *v2.CredentialOptions,
+) (
+	connectorbuilder.CreateAccountResponse,
+	[]*v2.PlaintextData,
+	annotations.Annotations,
+	error,
+) {
+
+	pMap := accountInfo.Profile.AsMap()
+	firstName, ok := pMap["first name"]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
+	}
+
+	lastName, ok := pMap["last name"]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+	}
+
+	email, ok := pMap["email"]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+	}
+	login, ok := pMap["login"]
+	if !ok {
+		login = email
+	}
+
+	// This password is expired by default, they have to change their password on next login
+	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.CredentialOptions_RandomPassword{
+		Length: 12,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	user, response, err := r.client.User.CreateUser(ctx, okta.CreateUserRequest{
+		Profile: &okta.UserProfile{
+			"firstName": firstName,
+			"lastName":  lastName,
+			"email":     email,
+			"login":     login,
+		},
+		Type: &okta.UserType{
+			Created:   ToPtr(time.Now()),
+			CreatedBy: "ConductorOne",
+		},
+		Credentials: &okta.UserCredentials{
+			Password: &okta.PasswordCredential{
+				Value: plaintextPassword,
+			},
+		},
+	}, &query.Params{
+		NextLogin: "changePassword", // Next time the user logs in they'll have to change password. We will likely make this configurable via the profile / schema
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
+	}
+
+	userResource, err := userResource(ctx, user, r.skipSecondaryEmails)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	car := &v2.CreateAccountResponse_SuccessResult{
+		Resource: userResource,
+	}
+
+	return car, nil, nil, nil
 }
