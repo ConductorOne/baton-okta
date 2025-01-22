@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -304,6 +305,11 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
+	params, err := getAccountCreationQueryParams(accountInfo, credentialOptions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	user, response, err := r.client.User.CreateUser(ctx, okta.CreateUserRequest{
 		Profile: userProfile,
 		Type: &okta.UserType{
@@ -311,7 +317,7 @@ func (r *userResourceType) CreateAccount(
 			CreatedBy: "ConductorOne",
 		},
 		Credentials: creds,
-	}, &query.Params{})
+	}, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -355,12 +361,12 @@ func getCredentialOption(credentialOptions *v2.CredentialOptions) (*okta.UserCre
 }
 func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	pMap := accountInfo.Profile.AsMap()
-	firstName, ok := pMap["first name"]
+	firstName, ok := pMap["first_name"]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
 	}
 
-	lastName, ok := pMap["last name"]
+	lastName, ok := pMap["last_name"]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
 	}
@@ -379,4 +385,35 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 		"email":     email,
 		"login":     login,
 	}, nil
+}
+
+func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.CredentialOptions) (*query.Params, error) {
+	if credentialOptions.GetNoPassword() != nil {
+		return nil, nil
+	}
+
+	pMap := accountInfo.Profile.AsMap()
+	requirePass, ok := pMap["password_change_on_login_required"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
+	}
+
+	requirePasswordChanged := false
+	switch v := requirePass.(type) {
+	case bool:
+		requirePasswordChanged = v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, err
+		}
+		requirePasswordChanged = parsed
+	}
+
+	params := &query.Params{}
+	if requirePasswordChanged {
+		params.NextLogin = "changePassword"
+		params.Activate = ToPtr(true) // This defaults to true anyways, but lets be explicit
+	}
+	return params, nil
 }
