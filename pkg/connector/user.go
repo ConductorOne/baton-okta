@@ -340,7 +340,6 @@ func getCredentialOption(credentialOptions *v2.CredentialOptions) (*okta.UserCre
 	}
 
 	length := min(8, credentialOptions.GetRandomPassword().GetLength())
-	// This password is expired by default, they have to change their password on next login
 	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.CredentialOptions_RandomPassword{
 		Length: length,
 	})
