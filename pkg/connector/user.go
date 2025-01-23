@@ -2,11 +2,17 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/crypto"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -263,4 +269,151 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		options,
 	)
 	return ret, err
+}
+
+func (o *userResourceType) CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error) {
+	return &v2.CredentialDetailsAccountProvisioning{
+		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD,
+		},
+		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+	}, nil, nil
+}
+
+func ToPtr[T any](v T) *T {
+	return &v
+}
+
+func (r *userResourceType) CreateAccount(
+	ctx context.Context,
+	accountInfo *v2.AccountInfo,
+	credentialOptions *v2.CredentialOptions,
+) (
+	connectorbuilder.CreateAccountResponse,
+	[]*v2.PlaintextData,
+	annotations.Annotations,
+	error,
+) {
+	userProfile, err := getUserProfile(accountInfo)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	creds, err := getCredentialOption(credentialOptions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	params, err := getAccountCreationQueryParams(accountInfo, credentialOptions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	user, response, err := r.client.User.CreateUser(ctx, okta.CreateUserRequest{
+		Profile: userProfile,
+		Type: &okta.UserType{
+			Created:   ToPtr(time.Now()),
+			CreatedBy: "ConductorOne",
+		},
+		Credentials: creds,
+	}, params)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
+	}
+
+	userResource, err := userResource(ctx, user, r.skipSecondaryEmails)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	car := &v2.CreateAccountResponse_SuccessResult{
+		Resource: userResource,
+	}
+
+	return car, nil, nil, nil
+}
+
+func getCredentialOption(credentialOptions *v2.CredentialOptions) (*okta.UserCredentials, error) {
+	if credentialOptions.GetNoPassword() != nil {
+		return nil, nil
+	}
+
+	if credentialOptions.GetRandomPassword() == nil {
+		return nil, errors.New("unsupported credential options")
+	}
+
+	length := min(8, credentialOptions.GetRandomPassword().GetLength())
+	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.CredentialOptions_RandomPassword{
+		Length: length,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &okta.UserCredentials{
+		Password: &okta.PasswordCredential{
+			Value: plaintextPassword,
+		},
+	}, nil
+}
+func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
+	pMap := accountInfo.Profile.AsMap()
+	firstName, ok := pMap["first_name"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
+	}
+
+	lastName, ok := pMap["last_name"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+	}
+
+	email, ok := pMap["email"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+	}
+	login, ok := pMap["login"]
+	if !ok {
+		login = email
+	}
+	return &okta.UserProfile{
+		"firstName": firstName,
+		"lastName":  lastName,
+		"email":     email,
+		"login":     login,
+	}, nil
+}
+
+func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.CredentialOptions) (*query.Params, error) {
+	if credentialOptions.GetNoPassword() != nil {
+		return nil, nil
+	}
+
+	pMap := accountInfo.Profile.AsMap()
+	requirePass, ok := pMap["password_change_on_login_required"]
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
+	}
+
+	requirePasswordChanged := false
+	switch v := requirePass.(type) {
+	case bool:
+		requirePasswordChanged = v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, err
+		}
+		requirePasswordChanged = parsed
+	}
+
+	params := &query.Params{}
+	if requirePasswordChanged {
+		params.NextLogin = "changePassword"
+		params.Activate = ToPtr(true) // This defaults to true anyways, but lets be explicit
+	}
+	return params, nil
 }
