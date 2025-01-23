@@ -393,11 +393,7 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	}
 
 	pMap := accountInfo.Profile.AsMap()
-	requirePass, ok := pMap["password_change_on_login_required"]
-	if !ok {
-		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
-	}
-
+	requirePass, _ := pMap["password_change_on_login_required"]
 	requirePasswordChanged := false
 	switch v := requirePass.(type) {
 	case bool:
@@ -408,6 +404,8 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 			return nil, err
 		}
 		requirePasswordChanged = parsed
+	case nil:
+		// Do nothing
 	}
 
 	params := &query.Params{}
