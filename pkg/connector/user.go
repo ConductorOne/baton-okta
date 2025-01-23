@@ -393,7 +393,7 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	}
 
 	pMap := accountInfo.Profile.AsMap()
-	requirePass, _ := pMap["password_change_on_login_required"]
+	requirePass := pMap["password_change_on_login_required"]
 	requirePasswordChanged := false
 	switch v := requirePass.(type) {
 	case bool:
