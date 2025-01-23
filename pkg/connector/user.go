@@ -373,7 +373,7 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 
 	email, ok := pMap["email"]
 	if !ok {
-		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
+		return nil, fmt.Errorf("okta-connectorv2: missing email in account info")
 	}
 	login, ok := pMap["login"]
 	if !ok {
