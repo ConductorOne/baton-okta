@@ -262,6 +262,28 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 		DisplayName: "Okta",
 		Description: "The Okta connector syncs user, group, role, and app data from Okta",
 		Annotations: annos,
+		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
+			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
+				"firstName": {
+					DisplayName: "First Name",
+					Required:    true,
+					Description: "This first name will be used for the user.",
+					Field:       &v2.ConnectorAccountCreationSchema_Field_StringField{},
+				},
+				"lastName": {
+					DisplayName: "Last Name",
+					Required:    true,
+					Description: "This last name will be used for the user.",
+					Field:       &v2.ConnectorAccountCreationSchema_Field_StringField{},
+				},
+				"email": {
+					DisplayName: "Email",
+					Required:    true,
+					Description: "This email will be used as the login for the user.",
+					Field:       &v2.ConnectorAccountCreationSchema_Field_StringField{},
+				},
+			},
+		},
 	}, nil
 }
 
