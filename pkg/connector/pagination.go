@@ -3,6 +3,8 @@ package connector
 import (
 	"net/url"
 
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -14,7 +16,7 @@ const defaultLimit = 500
 func parseGetResp(resp *okta.Response) (annotations.Annotations, error) {
 	var annos annotations.Annotations
 	if resp != nil {
-		if desc, err := extractRateLimitData(resp); err == nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 	}
@@ -32,7 +34,7 @@ func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 		}
 		after := u.Query().Get("after")
 
-		if desc, err := extractRateLimitData(resp); err == nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 		nextPage = after
@@ -56,7 +58,7 @@ func parseAdminListResp(resp *okta.Response) (string, annotations.Annotations, e
 		nextQp.Del("limit")
 		nextPage = nextQp.Encode()
 
-		if desc, err := extractRateLimitData(resp); err == nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 	}

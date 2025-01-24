@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -23,18 +22,6 @@ const (
 )
 
 type responseContext struct {
-	token *pagination.Token
-
-	requestID string
-
-	status     string
-	statusCode int
-
-	hasRateLimit       bool
-	rateLimit          int64
-	rateLimitRemaining int64
-	rateLimitReset     time.Time
-
 	OktaResponse *okta.Response
 }
 
@@ -88,21 +75,9 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	after := u.Query().Get("after")
 	token.Token = after
 
-	ret := &responseContext{
-		token:        token,
-		requestID:    resp.Header.Get(oktaRequestIDHeader),
-		status:       resp.Status,
-		statusCode:   resp.StatusCode,
+	return &responseContext{
 		OktaResponse: resp,
-	}
-
-	limit, remaining, reset, hasLimit := getRateLimit(resp)
-	ret.rateLimit = limit
-	ret.rateLimitRemaining = remaining
-	ret.rateLimitReset = time.Unix(reset, 0)
-	ret.hasRateLimit = hasLimit
-
-	return ret, nil
+	}, nil
 }
 
 func getError(response *okta.Response) (okta.Error, error) {
