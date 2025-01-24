@@ -268,7 +268,9 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					DisplayName: "First Name",
 					Required:    true,
 					Description: "This first name will be used for the user.",
-					Field:       &v2.ConnectorAccountCreationSchema_Field_StringField{},
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
 					Placeholder: "First name",
 					Order:       1,
 				},
@@ -276,7 +278,9 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					DisplayName: "Last Name",
 					Required:    true,
 					Description: "This last name will be used for the user.",
-					Field:       &v2.ConnectorAccountCreationSchema_Field_StringField{},
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
 					Placeholder: "Last name",
 					Order:       2,
 				},
@@ -284,7 +288,9 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					DisplayName: "Email",
 					Required:    true,
 					Description: "This email will be used as the login for the user.",
-					Field:       &v2.ConnectorAccountCreationSchema_Field_StringField{},
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
 					Placeholder: "Email",
 					Order:       3,
 				},
