@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -76,7 +76,6 @@ type oktaAWSAppSettings struct {
 	JoinAllRoles                 bool
 	IdentityProviderArn          string
 	RoleRegex                    string
-	IdentityProviderArnRegex     string
 	UseGroupMapping              bool
 	IdentityProviderArnAccountID string
 	appGroupCache                sync.Map // group ID to app group cache
@@ -471,10 +470,10 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 		return nil, fmt.Errorf("okta-connector: okta app is not aws: %w", err)
 	}
 	if oktaApp.Settings == nil {
-		return nil, fmt.Errorf("okta-connector: settings are not present on okta app")
+		return nil, fmt.Errorf("okta-aws-connector: settings are not present on okta app")
 	}
 	if oktaApp.Settings.App == nil {
-		return nil, fmt.Errorf("okta-connector: app settings are not present on okta app")
+		return nil, fmt.Errorf("okta-aws-connector: app settings are not present on okta app")
 	}
 	appSettings := *oktaApp.Settings.App
 	useGroupMapping, ok := appSettings["useGroupMapping"]
@@ -509,19 +508,7 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	if !ok {
 		return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not string")
 	}
-	roleValuePattern, ok := appSettings["roleValuePattern"]
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'roleValuePattern' app setting is not present on okta app settings")
-	}
-	roleValuePatternString, ok := roleValuePattern.(string)
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'roleValuePattern' app setting is not string")
-	}
 
-	splitPattern := strings.Split(roleValuePatternString, ",")
-	accountPattern := splitPattern[0]
-
-	identityProviderRegex := strings.Replace(accountPattern, "${accountid}", `(\d{12})`, 1)
 	groupFilterRegex := strings.Replace(groupFilterString, `(?{{accountid}}`, `(\d+`, 1)
 	groupFilterRegex = strings.Replace(groupFilterRegex, `(?{{role}}`, `([a-zA-Z0-9+=,.@\\-_]+`, 1)
 
@@ -529,23 +516,15 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	roleRegex := strings.ReplaceAll(groupFilterRegex, `\\`, `\`)
 
 	// TODO(lauren) only do this if use group mapping not enabled?
-	identityProvideArnAccountIDRegex, err := regexp.Compile(strings.ToLower(identityProviderRegex))
+	accountId, err := accountIdFromARN(identityProviderArnString)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: error compiling 'identityProviderRegex' regex")
+		return nil, err
 	}
-	identityProviderArnAccountID := identityProvideArnAccountIDRegex.FindStringSubmatch(strings.ToLower(identityProviderArnString))
-
-	// First element is full string
-	if len(identityProviderArnAccountID) != ExpectedIdentityProviderArnRegexCaptureGroups {
-		return nil, fmt.Errorf("okta-aws-connector: error getting account id from identityProviderArn")
-	}
-	accountId := identityProviderArnAccountID[1]
 
 	oktaAWSAppSettings := &oktaAWSAppSettings{
 		JoinAllRoles:                 joinAllRolesBool,
 		IdentityProviderArn:          identityProviderArnString,
 		RoleRegex:                    roleRegex,
-		IdentityProviderArnRegex:     identityProviderRegex,
 		UseGroupMapping:              useGroupMappingBool,
 		IdentityProviderArnAccountID: accountId,
 	}
@@ -613,4 +592,12 @@ func (a *oktaAWSAppSettings) oktaAppGroup(ctx context.Context, appGroup *okta.Ap
 		samlRoles: samlRoles,
 		accountID: accountId,
 	}, nil
+}
+
+func accountIdFromARN(input string) (string, error) {
+	parsedArn, err := arn.Parse(input)
+	if err != nil {
+		return "", fmt.Errorf("okta-aws-connector: invalid ARN: '%s': %w", input, err)
+	}
+	return parsedArn.AccountID, nil
 }
