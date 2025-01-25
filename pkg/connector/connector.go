@@ -264,7 +264,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 		Annotations: annos,
 		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
 			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
-				"firstName": {
+				"first_name": {
 					DisplayName: "First Name",
 					Required:    true,
 					Description: "This first name will be used for the user.",
@@ -274,7 +274,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "First name",
 					Order:       1,
 				},
-				"lastName": {
+				"last_name": {
 					DisplayName: "Last Name",
 					Required:    true,
 					Description: "This last name will be used for the user.",
