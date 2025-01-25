@@ -516,7 +516,7 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	roleRegex := strings.ReplaceAll(groupFilterRegex, `\\`, `\`)
 
 	// TODO(lauren) only do this if use group mapping not enabled?
-	accountId, err := AccountIdFromARN(identityProviderArnString)
+	accountId, err := accountIdFromARN(identityProviderArnString)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +594,7 @@ func (a *oktaAWSAppSettings) oktaAppGroup(ctx context.Context, appGroup *okta.Ap
 	}, nil
 }
 
-func AccountIdFromARN(input string) (string, error) {
+func accountIdFromARN(input string) (string, error) {
 	parsedArn, err := arn.Parse(input)
 	if err != nil {
 		return "", fmt.Errorf("okta-aws-connector: invalid ARN: '%s': %w", input, err)
