@@ -66,13 +66,13 @@ func TestUserResourceTypeList(t *testing.T) {
 
 	o := &userResourceType{
 		resourceType: resourceTypeUser,
-		client:       cliTest.client,
+		connector:    cliTest,
 	}
 	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
 	require.Nil(t, err)
 	require.NotNil(t, res)
 
-	oktaUsers, resp, err := o.client.User.ListAssignedRolesForUser(ctxTest, "00ujp5a9z0rMTsPRW697", nil)
+	oktaUsers, resp, err := o.connector.client.User.ListAssignedRolesForUser(ctxTest, "00ujp5a9z0rMTsPRW697", nil)
 	require.Nil(t, err)
 	require.NotNil(t, resp)
 	require.NotNil(t, oktaUsers)

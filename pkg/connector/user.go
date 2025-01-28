@@ -33,14 +33,9 @@ const (
 )
 
 type userResourceType struct {
-	resourceType        *v2.ResourceType
-	domain              string
-	apiToken            string
-	client              *okta.Client
-	ciamMode            bool
-	emailFilters        []string
-	skipSecondaryEmails bool
-	connector           *Okta
+	resourceType *v2.ResourceType
+	emailFilters []string
+	connector    *Okta
 }
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -64,7 +59,7 @@ func (o *userResourceType) List(
 	}
 
 	// If we are in ciam mode, and there are no email filters specified, don't sync users.
-	if o.ciamMode && len(o.emailFilters) == 0 {
+	if o.connector.ciamConfig.Enabled && len(o.emailFilters) == 0 {
 		return nil, "", nil, nil
 	}
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
@@ -75,7 +70,7 @@ func (o *userResourceType) List(
 	var rv []*v2.Resource
 	qp := queryParams(token.Size, page)
 
-	users, respCtx, err := listUsers(ctx, o.client, token, qp)
+	users, respCtx, err := listUsers(ctx, o.connector.client, token, qp)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
@@ -91,10 +86,10 @@ func (o *userResourceType) List(
 	}
 
 	for _, user := range users {
-		if o.ciamMode && !shouldIncludeOktaUser(user, o.emailFilters) {
+		if o.connector.ciamConfig.Enabled && !shouldIncludeOktaUser(user, o.emailFilters) {
 			continue
 		}
-		resource, err := userResource(ctx, user, o.skipSecondaryEmails)
+		resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -140,9 +135,9 @@ func (o *userResourceType) listAWSAccountUsers(
 	for _, appUser := range appUsers {
 		user, err := embeddedOktaUserFromAppUser(appUser)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connectorq: failed to get user from app user response: %w", err)
+			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to get user from app user response: %w", err)
 		}
-		resource, err := userResource(ctx, user, o.skipSecondaryEmails)
+		resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -262,30 +257,22 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	return oktaUsers, respCtx, nil
 }
 
-func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailFilters []string, skipSecondaryEmails bool) *userResourceType {
+func ciamUserBuilder(connector *Okta) *userResourceType {
 	var loweredFilters []string
-	for _, ef := range emailFilters {
+	for _, ef := range connector.ciamConfig.EmailDomains {
 		loweredFilters = append(loweredFilters, strings.ToLower(ef))
 	}
 	return &userResourceType{
-		resourceType:        resourceTypeUser,
-		domain:              domain,
-		apiToken:            apiToken,
-		client:              client,
-		ciamMode:            true,
-		emailFilters:        loweredFilters,
-		skipSecondaryEmails: skipSecondaryEmails,
+		resourceType: resourceTypeUser,
+		emailFilters: loweredFilters,
+		connector:    connector,
 	}
 }
 
-func userBuilder(domain string, apiToken string, client *okta.Client, skipSecondaryEmails bool, connector *Okta) *userResourceType {
+func userBuilder(connector *Okta) *userResourceType {
 	return &userResourceType{
-		resourceType:        resourceTypeUser,
-		domain:              domain,
-		apiToken:            apiToken,
-		client:              client,
-		skipSecondaryEmails: skipSecondaryEmails,
-		connector:           connector,
+		resourceType: resourceTypeUser,
+		connector:    connector,
 	}
 }
 
@@ -396,7 +383,7 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	user, response, err := r.client.User.CreateUser(ctx, okta.CreateUserRequest{
+	user, response, err := r.connector.client.User.CreateUser(ctx, okta.CreateUserRequest{
 		Profile: userProfile,
 		Type: &okta.UserType{
 			Created:   ToPtr(time.Now()),
@@ -411,7 +398,7 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
 
-	userResource, err := userResource(ctx, user, r.skipSecondaryEmails)
+	userResource, err := userResource(ctx, user, r.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, nil, nil, err
 	}
