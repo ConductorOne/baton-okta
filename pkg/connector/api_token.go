@@ -72,6 +72,11 @@ func (o *apiTokenResourceType) List(
 	for _, apiToken := range apiTokens {
 		options := []resource.SecretTraitOption{
 			resource.WithSecretExpiresAt(*apiToken.ExpiresAt),
+			resource.WithSecretIdentityID(&v2.ResourceId{
+				ResourceType:  resourceTypeUser.Id,
+				Resource:      *apiToken.UserId,
+				BatonResource: false,
+			}),
 			resource.WithSecretCreatedByID(&v2.ResourceId{
 				ResourceType:  resourceTypeUser.Id,
 				Resource:      *apiToken.UserId,

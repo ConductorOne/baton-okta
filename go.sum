@@ -56,8 +56,8 @@ github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyY
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
-github.com/conductorone/baton-sdk v0.2.65 h1:lD/MQ15GBCZQ0uCJ+QhBfrxnL36gxFKgdqYmPDBJrGY=
-github.com/conductorone/baton-sdk v0.2.65/go.mod h1:++OGHvXelWE8B/n4539ZgsXkwyV376AF/AAP+HhXJ1M=
+github.com/conductorone/baton-sdk v0.2.66 h1:1lZViGp4FWX4jTwzyGFhyoo4guy/Ny9yYupi7FjmKeQ=
+github.com/conductorone/baton-sdk v0.2.66/go.mod h1:++OGHvXelWE8B/n4539ZgsXkwyV376AF/AAP+HhXJ1M=
 github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone h1:uC3LzsqpOxJwdEwBbCvUNVbXS4fiacjtRHT0YKHg4qc=
 github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone/go.mod h1:m26TFqZUtbHD+UjwSSigbl4zgZ8vC74pTMCZyufKQgQ=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
