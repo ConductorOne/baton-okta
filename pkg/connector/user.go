@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -39,6 +40,7 @@ type userResourceType struct {
 	ciamMode            bool
 	emailFilters        []string
 	skipSecondaryEmails bool
+	connector           *Okta
 }
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -50,6 +52,17 @@ func (o *userResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
+	if o.connector != nil && o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
+		awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("error getting aws app settings config")
+		}
+		// TODO(lauren) get users for all groups matching pattern when user group mapping enabled
+		if !awsConfig.UseGroupMapping {
+			return o.listAWSAccountUsers(ctx, resourceID, token)
+		}
+	}
+
 	// If we are in ciam mode, and there are no email filters specified, don't sync users.
 	if o.ciamMode && len(o.emailFilters) == 0 {
 		return nil, "", nil, nil
@@ -95,6 +108,78 @@ func (o *userResourceType) List(
 	}
 
 	return rv, pageToken, annos, nil
+}
+
+func (o *userResourceType) listAWSAccountUsers(
+	ctx context.Context,
+	resourceID *v2.ResourceId,
+	token *pagination.Token,
+) ([]*v2.Resource, string, annotations.Annotations, error) {
+	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+	}
+
+	var rv []*v2.Resource
+	qp := queryParamsExpand(token.Size, page, "user")
+	appUsers, respContext, err := listApplicationUsers(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-aws-connector: list application users %w", err)
+	}
+
+	nextPage, annos, err := parseResp(respContext.OktaResponse)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
+	}
+
+	err = bag.Next(nextPage)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
+	}
+
+	for _, appUser := range appUsers {
+		user, err := embeddedOktaUserFromAppUser(appUser)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-aws-connectorq: failed to get user from app user response: %w", err)
+		}
+		resource, err := userResource(ctx, user, o.skipSecondaryEmails)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		rv = append(rv, resource)
+	}
+
+	pageToken, err := bag.Marshal()
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	return rv, pageToken, annos, nil
+}
+
+func embeddedOktaUserFromAppUser(appUser *okta.AppUser) (*okta.User, error) {
+	embedded := appUser.Embedded
+	if embedded == nil {
+		return nil, fmt.Errorf("app user '%s' embedded data was nil", appUser.Id)
+	}
+	embeddedMap, ok := embedded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("app user '%s' embedded data was not a map", appUser.Id)
+	}
+	embeddedUser, ok := embeddedMap["user"]
+	if !ok {
+		return nil, fmt.Errorf("embedded user data was nil for app user '%s'", appUser.Id)
+	}
+	userJSON, err := json.Marshal(embeddedUser)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling embedded user data for app user '%s': %w", appUser.Id, err)
+	}
+	oktaUser := &okta.User{}
+	err = json.Unmarshal(userJSON, &oktaUser)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling embedded user data for app user '%s': %w", appUser.Id, err)
+	}
+	return oktaUser, nil
 }
 
 func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
@@ -193,13 +278,14 @@ func ciamUserBuilder(domain string, apiToken string, client *okta.Client, emailF
 	}
 }
 
-func userBuilder(domain string, apiToken string, client *okta.Client, skipSecondaryEmails bool) *userResourceType {
+func userBuilder(domain string, apiToken string, client *okta.Client, skipSecondaryEmails bool, connector *Okta) *userResourceType {
 	return &userResourceType{
 		resourceType:        resourceTypeUser,
 		domain:              domain,
 		apiToken:            apiToken,
 		client:              client,
 		skipSecondaryEmails: skipSecondaryEmails,
+		connector:           connector,
 	}
 }
 

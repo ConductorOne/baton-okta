@@ -191,7 +191,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	if o.awsConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
-			userBuilder(o.domain, o.apiToken, o.client, o.skipSecondaryEmails),
+			userBuilder(o.domain, o.apiToken, o.client, o.skipSecondaryEmails, o),
 			groupBuilder(o),
 			accountBuilder(o),
 		}
@@ -199,7 +199,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	resourceSyncer := []connectorbuilder.ResourceSyncer{
 		roleBuilder(o.client, o),
-		userBuilder(o.domain, o.apiToken, o.client, o.skipSecondaryEmails),
+		userBuilder(o.domain, o.apiToken, o.client, o.skipSecondaryEmails, o),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
 	}
