@@ -125,9 +125,11 @@ func (o *groupResourceType) Grants(
 	}
 
 	if bag.Current() == nil {
-		bag.Push(pagination.PageState{
-			ResourceTypeID: resourceTypeRole.Id,
-		})
+		if o.connector.awsConfig == nil || !o.connector.awsConfig.Enabled {
+			bag.Push(pagination.PageState{
+				ResourceTypeID: resourceTypeRole.Id,
+			})
+		}
 		bag.Push(pagination.PageState{
 			ResourceTypeID: resourceTypeUser.Id,
 		})
