@@ -47,7 +47,7 @@ func (o *userResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	if o.connector != nil && o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
 		awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("error getting aws app settings config")
