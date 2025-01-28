@@ -19,12 +19,9 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
-const awsApp = "amazon_aws"
-
 // TODO: use isNotFoundError() since E0000008 is also a not found error
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
-const ExpectedIdentityProviderArnRegexCaptureGroups = 2
 const ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances = 3
 
 type Okta struct {
@@ -466,8 +463,8 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: verify failed to convert aws app: %w", err)
 	}
-	if oktaApp.Name != awsApp {
-		return nil, fmt.Errorf("okta-connector: okta app is not aws: %w", err)
+	if !strings.Contains(oktaApp.Name, "aws") {
+		return nil, fmt.Errorf("okta-aws-connector: okta app '%s' is not an aws app", oktaApp.Name)
 	}
 	if oktaApp.Settings == nil {
 		return nil, fmt.Errorf("okta-aws-connector: settings are not present on okta app")
