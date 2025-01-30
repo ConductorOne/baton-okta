@@ -9,6 +9,25 @@ Globals:
     MemorySize: 128
     LoggingConfig:
       LogFormat: JSON
+    Environment:
+      Variables:
+        BATON_LAMBDA_CONFIGURATION_HOST: !Ref BatonLambdaConfigurationHost
+        BATON_LAMBDA_TOKEN_HOST: !Ref BatonLambdaTokenHost
+        BATON_LAMBDA_CLIENT_ID: !Ref BatonLambdaClientId
+        BATON_LAMBDA_CLIENT_SECRET: !Ref BatonLambdaClientSecret
+Parameters:
+  BatonLambdaConfigurationHost:
+    Type: String
+    Description: The host of the configuration service
+  BatonLambdaTokenHost:
+    Type: String
+    Description: The host of the token service
+  BatonLambdaClientId:
+    Type: String
+    Description: The client id for the lambda
+  BatonLambdaClientSecret:
+    Type: String
+    Description: The client secret for the lambda
 Resources:
   BatonOktaConnector:
     Type: AWS::Serverless::Function
