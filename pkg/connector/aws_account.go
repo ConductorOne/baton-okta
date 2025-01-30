@@ -440,6 +440,10 @@ func (o *accountResourceType) getOktaAppGroupFromCacheOrFetch(ctx context.Contex
 		query.NewQueryParams(query.WithExpand("group")))
 
 	if err != nil {
+		if resp == nil {
+			return nil, fmt.Errorf("okta-connectorv2: failed to fetch application group assignment: %w", err)
+		}
+
 		defer resp.Body.Close()
 		errOkta, err := getError(resp)
 		if err != nil {
