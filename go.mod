@@ -1,8 +1,6 @@
 module github.com/conductorone/baton-okta
 
-go 1.22.10
-
-toolchain go1.23.4
+go 1.23.4
 
 require (
 	github.com/conductorone/baton-sdk v0.2.65
@@ -16,10 +14,14 @@ require (
 )
 
 require (
+	github.com/aws/aws-lambda-go v1.47.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.69.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
+	github.com/ductone/c1-lambda v0.0.0-00010101000000-000000000000 // indirect
 	github.com/gammazero/deque v1.0.0 // indirect
+	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
@@ -36,24 +38,24 @@ require (
 	filippo.io/age v1.2.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.27.1
+	github.com/aws/aws-sdk-go-v2 v1.33.0
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.7 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.27.17 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.17 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.4 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.28.9 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.50 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.23 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.22 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.8 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.8 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.28 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.28 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.10 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.54.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.20.10 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.28.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.24.9 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.28.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.5 // indirect
 	github.com/aws/smithy-go v1.22.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -79,7 +81,7 @@ require (
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/pquerna/xjwt v0.2.0 // indirect
+	github.com/pquerna/xjwt v0.3.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
@@ -108,7 +110,7 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.69.2
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -118,3 +120,7 @@ require (
 	modernc.org/memory v1.8.2 // indirect
 	modernc.org/sqlite v1.34.4 // indirect
 )
+
+replace github.com/ductone/c1-lambda => ../c1-lambda
+
+replace github.com/conductorone/baton-sdk => ../baton-sdk

@@ -71,11 +71,6 @@ func MakeMainCommand(
 			return err
 		}
 
-		c, err := getconnector(runCtx, v)
-		if err != nil {
-			return err
-		}
-
 		daemonMode := v.GetString("client-id") != "" || isService()
 		if daemonMode {
 			if v.GetString("client-id") == "" {
@@ -174,6 +169,11 @@ func MakeMainCommand(
 				return fmt.Errorf("the specified c1z temp dir does not exist: %s", c1zTmpDir)
 			}
 			opts = append(opts, connectorrunner.WithTempDir(v.GetString("c1z-temp-dir")))
+		}
+
+		c, err := getconnector(runCtx, v)
+		if err != nil {
+			return err
 		}
 
 		// NOTE(shackra): top-most in the execution flow for connectors

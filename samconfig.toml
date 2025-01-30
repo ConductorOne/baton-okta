@@ -1,0 +1,16 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "baton-demo"
+
+[default.build.parameters]
+parallel = true
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"

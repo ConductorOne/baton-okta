@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  baton-okta
+
+Globals:
+  Function:
+    Timeout: 5
+    MemorySize: 128
+    LoggingConfig:
+      LogFormat: JSON
+Resources:
+  BatonOktaConnector:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+      - arm64
+      Environment:
+        Variables:
+          BATON_LAMBDA_CONFIGURATION_HOST: !Ref BatonLambdaConfigurationHost
+          BATON_LAMBDA_TOKEN_HOST: !Ref BatonLambdaTokenHost
+          BATON_LAMBDA_CLIENT_ID: !Ref BatonLambdaClientId
+          BATON_LAMBDA_CLIENT_SECRET: !Ref BatonLambdaClientSecret
+    Metadata:
+      DockerTag: provided.al2023-v1
+      DockerContext: .
+      Dockerfile: Dockerfile.lambda
