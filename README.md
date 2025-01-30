@@ -133,8 +133,10 @@ Flags:
       --okta-provisioning            ($BATON_OKTA_PROVISIONING)
   -p, --provisioning                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
       --skip-full-sync               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
+      --skip-secondary-emails        Skip syncing secondary emails ($BATON_SKIP_SECONDARY_EMAILS)
       --sync-custom-roles            Enable syncing custom roles ($BATON_SYNC_CUSTOM_ROLES)
       --sync-inactive-apps           Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
+      --sync-secrets                 Whether to sync secrets or not ($BATON_SYNC_SECRETS)
       --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
   -v, --version                      version for baton-okta
 
