@@ -83,23 +83,23 @@ type oktaAWSAppSettings struct {
 }
 
 type Config struct {
-	Domain              string
-	ApiToken            string
-	OktaClientId        string
-	OktaPrivateKey      string
-	OktaPrivateKeyId    string
-	SyncInactiveApps    bool
-	OktaProvisioning    bool
-	Ciam                bool
-	CiamEmailDomains    []string
-	Cache               bool
-	CacheTTI            int32
-	CacheTTL            int32
-	SyncCustomRoles     bool
-	SkipSecondaryEmails bool
-	AWSMode             bool
-	AWSOktaAppId        string
-	SyncSecrets         bool
+	Domain              string   `json:"domain"`
+	ApiToken            string   `json:"api-token"`
+	OktaClientId        string   `json:"okta-client-id"`
+	OktaPrivateKey      string   `json:"okta-private-key"`
+	OktaPrivateKeyId    string   `json:"okta-private-key-id"`
+	SyncInactiveApps    bool     `json:"sync-inactive-apps"`
+	OktaProvisioning    bool     `json:"okta-provisioning"`
+	Ciam                bool     `json:"ciam"`
+	CiamEmailDomains    []string `json:"ciam-email-domains"`
+	Cache               bool     `json:"cache"`
+	CacheTTI            int32    `json:"cache-tti"`
+	CacheTTL            int32    `json:"cache-ttl"`
+	SyncCustomRoles     bool     `json:"sync-custom-roles"`
+	SkipSecondaryEmails bool     `json:"skip-secondary-emails"`
+	AWSMode             bool     `json:"aws-identity-center-mode"`
+	AWSOktaAppId        string   `json:"aws-okta-app-id"`
+	SyncSecrets         bool     `json:"sync-secrets"`
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {

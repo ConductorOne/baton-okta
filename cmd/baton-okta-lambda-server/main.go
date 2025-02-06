@@ -13,6 +13,7 @@ import (
 
 	"github.com/conductorone/baton-okta/pkg/connector"
 	configschema "github.com/conductorone/baton-sdk/pkg/config"
+	"github.com/conductorone/baton-sdk/pkg/field"
 )
 
 var version = "dev"
@@ -33,10 +34,16 @@ func main() {
 	}
 }
 
+// constructor's config type is generated from the config schema
+
+type Constructor func(ctx context.Context, cfg *connector.Config) (types.ConnectorServer, error)
+type LambdaEntrypoint func(ctx context.Context, name string, config field.Configuration, construct Constructor) error
+
 func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
+
 	ccfg := &connector.Config{
-		Domain:              v.GetString("domain"),
+		Domain:              v.GetString(domain.FieldName),
 		ApiToken:            v.GetString("api-token"),
 		OktaClientId:        v.GetString("okta-client-id"),
 		OktaPrivateKey:      v.GetString("okta-private-key"),

@@ -13,7 +13,7 @@ endif
 .PHONY: build
 build:
 	go build -o ${OUTPUT_PATH} ./cmd/baton-okta
-	go build -o ${LAMBDA_SERVER_OUTPUT_PATH} ./cmd/baton-okta-lambda-server
+	# go build -o ${LAMBDA_SERVER_OUTPUT_PATH} ./cmd/baton-okta-lambda-server
 
 .PHONY: build-lambda-server
 build-lambda-server:
