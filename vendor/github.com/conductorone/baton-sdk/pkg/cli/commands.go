@@ -34,9 +34,11 @@ func makeGenericConfiguration[T any](v *viper.Viper) (*T, error) {
 
 	var config T // Create a zero-value instance of T
 
-	fmt.Printf("🌮 makeGenericConfiguration's viper: %s\n\n", v.GetString("api-token"))
 	// Ensure T is a struct (or pointer to struct)
 	tType := reflect.TypeOf(config)
+	if tType == reflect.TypeOf(viper.Viper{}) {
+		return any(v).(*T), nil
+	}
 	if tType.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("T must be a struct, but got %s", tType.Kind())
 	}

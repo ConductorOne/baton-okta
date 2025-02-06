@@ -83,23 +83,23 @@ type oktaAWSAppSettings struct {
 }
 
 type Config struct {
-	Domain              string   `json:"domain"`
-	ApiToken            string   `json:"api-token"`
-	OktaClientId        string   `json:"okta-client-id"`
-	OktaPrivateKey      string   `json:"okta-private-key"`
-	OktaPrivateKeyId    string   `json:"okta-private-key-id"`
-	SyncInactiveApps    bool     `json:"sync-inactive-apps"`
-	OktaProvisioning    bool     `json:"okta-provisioning"`
-	Ciam                bool     `json:"ciam"`
-	CiamEmailDomains    []string `json:"ciam-email-domains"`
-	Cache               bool     `json:"cache"`
-	CacheTTI            int32    `json:"cache-tti"`
-	CacheTTL            int32    `json:"cache-ttl"`
-	SyncCustomRoles     bool     `json:"sync-custom-roles"`
-	SkipSecondaryEmails bool     `json:"skip-secondary-emails"`
-	AWSMode             bool     `json:"aws-identity-center-mode"`
-	AWSOktaAppId        string   `json:"aws-okta-app-id"`
-	SyncSecrets         bool     `json:"sync-secrets"`
+	Domain              string   `mapstructure:"domain"`
+	ApiToken            string   `mapstructure:"api-token"`
+	OktaClientId        string   `mapstructure:"okta-client-id"`
+	OktaPrivateKey      string   `mapstructure:"okta-private-key"`
+	OktaPrivateKeyId    string   `mapstructure:"okta-private-key-id"`
+	SyncInactiveApps    bool     `mapstructure:"sync-inactive-apps"`
+	OktaProvisioning    bool     `mapstructure:"okta-provisioning"`
+	Ciam                bool     `mapstructure:"ciam"`
+	CiamEmailDomains    []string `mapstructure:"ciam-email-domains"`
+	Cache               bool     `mapstructure:"cache"`
+	CacheTTI            int32    `mapstructure:"cache-tti"`
+	CacheTTL            int32    `mapstructure:"cache-ttl"`
+	SyncCustomRoles     bool     `mapstructure:"sync-custom-roles"`
+	SkipSecondaryEmails bool     `mapstructure:"skip-secondary-emails"`
+	AWSMode             bool     `mapstructure:"aws-identity-center-mode"`
+	AWSOktaAppId        string   `mapstructure:"aws-okta-app-id"`
+	SyncSecrets         bool     `mapstructure:"sync-secrets"`
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
