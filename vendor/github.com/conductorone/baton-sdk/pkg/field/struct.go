@@ -1,12 +1,9 @@
 package field
 
 type Configuration struct {
-	Fields      []SchemaField
-	Constraints []SchemaFieldRelationship
+	Fields      []SchemaField             `json:"Fields"`
+	Constraints []SchemaFieldRelationship `json:"Constraints"`
 }
-
-func (c *Configuration) MarshalJSON() {} // To JSONSCHEMA
-
 
 func NewConfiguration(fields []SchemaField, constraints ...SchemaFieldRelationship) Configuration {
 	return Configuration{

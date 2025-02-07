@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -26,14 +27,12 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types"
 )
 
-type GetConnectorFunc func(context.Context, *viper.Viper) (types.ConnectorServer, error)
-type GetConnectorFunc2[T any] func(context.Context, *T) (types.ConnectorServer, error)
+type GetConnectorFunc[T any] func(context.Context, *T) (types.ConnectorServer, error)
 
 func makeGenericConfiguration[T any](v *viper.Viper) (*T, error) {
 	// Create an instance of the struct type T using reflection
 
 	var config T // Create a zero-value instance of T
-
 	// Ensure T is a struct (or pointer to struct)
 	tType := reflect.TypeOf(config)
 	if tType == reflect.TypeOf(viper.Viper{}) {
@@ -42,13 +41,11 @@ func makeGenericConfiguration[T any](v *viper.Viper) (*T, error) {
 	if tType.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("T must be a struct, but got %s", tType.Kind())
 	}
-
 	// Unmarshal into the config struct
 	err := v.Unmarshal(&config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-
 	return &config, nil
 }
 
@@ -57,7 +54,7 @@ func MakeMainCommand[T any](
 	name string,
 	v *viper.Viper,
 	confschema field.Configuration,
-	getconnector GetConnectorFunc2[T],
+	getconnector GetConnectorFunc[T],
 	opts ...connectorrunner.Option,
 ) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
@@ -65,6 +62,7 @@ func MakeMainCommand[T any](
 		// regular) with our instance of Viper, doing this
 		// anywhere else may fail to communicate to Viper the
 		// values gathered by Cobra.
+
 		err := v.BindPFlags(cmd.Flags())
 		if err != nil {
 			return err
@@ -229,7 +227,7 @@ func MakeGRPCServerCommand[T any](
 	name string,
 	v *viper.Viper,
 	confschema field.Configuration,
-	getconnector GetConnectorFunc2[T],
+	getconnector GetConnectorFunc[T],
 ) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		// NOTE(shackra): bind all the flags (persistent and
@@ -350,7 +348,7 @@ func MakeCapabilitiesCommand[T any](
 	name string,
 	v *viper.Viper,
 	confschema field.Configuration,
-	getconnector GetConnectorFunc2[T],
+	getconnector GetConnectorFunc[T],
 ) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		// NOTE(shackra): bind all the flags (persistent and
@@ -416,6 +414,26 @@ func MakeCapabilitiesCommand[T any](
 			return err
 		}
 
+		return nil
+	}
+}
+
+func MakeConfigSchemaCommand[T any](
+	ctx context.Context,
+	name string,
+	v *viper.Viper,
+	confschema field.Configuration,
+	getconnector GetConnectorFunc[T],
+) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		b, err := json.Marshal(confschema)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprint(os.Stdout, string(b))
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 }
