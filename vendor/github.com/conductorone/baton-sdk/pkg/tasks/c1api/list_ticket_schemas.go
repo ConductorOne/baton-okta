@@ -28,9 +28,6 @@ type listTicketSchemasTaskHandler struct {
 }
 
 func (c *listTicketSchemasTaskHandler) HandleTask(ctx context.Context) error {
-	ctx, span := tracer.Start(ctx, "listTicketSchemasTaskHandler.HandleTask")
-	defer span.End()
-
 	l := ctxzap.Extract(ctx)
 
 	t := c.task.GetListTicketSchemas()

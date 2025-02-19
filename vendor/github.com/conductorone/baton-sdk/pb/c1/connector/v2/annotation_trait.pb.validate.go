@@ -331,7 +331,7 @@ type UserTraitMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m UserTraitMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -488,7 +488,7 @@ type GroupTraitMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GroupTraitMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -616,7 +616,7 @@ type RoleTraitMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m RoleTraitMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -849,7 +849,7 @@ type AppTraitMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m AppTraitMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1080,35 +1080,6 @@ func (m *SecretTrait) validate(all bool) error {
 		}
 	}
 
-	if all {
-		switch v := interface{}(m.GetIdentityId()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, SecretTraitValidationError{
-					field:  "IdentityId",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, SecretTraitValidationError{
-					field:  "IdentityId",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetIdentityId()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return SecretTraitValidationError{
-				field:  "IdentityId",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
 	if len(errors) > 0 {
 		return SecretTraitMultiError(errors)
 	}
@@ -1122,7 +1093,7 @@ type SecretTraitMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m SecretTraitMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1286,7 +1257,7 @@ type UserTrait_EmailMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m UserTrait_EmailMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1412,7 +1383,7 @@ type UserTrait_StatusMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m UserTrait_StatusMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1514,7 +1485,7 @@ type UserTrait_MFAStatusMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m UserTrait_MFAStatusMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1618,7 +1589,7 @@ type UserTrait_SSOStatusMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m UserTrait_SSOStatusMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}

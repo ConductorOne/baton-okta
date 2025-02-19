@@ -13,6 +13,12 @@ filippo.io/edwards25519/field
 ## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
+# github.com/aws/aws-lambda-go v1.47.0
+## explicit; go 1.18
+github.com/aws/aws-lambda-go/lambda
+github.com/aws/aws-lambda-go/lambda/handlertrace
+github.com/aws/aws-lambda-go/lambda/messages
+github.com/aws/aws-lambda-go/lambdacontext
 # github.com/aws/aws-sdk-go-v2 v1.34.0
 ## explicit; go 1.21
 github.com/aws/aws-sdk-go-v2/aws
@@ -92,6 +98,11 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared/arn
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared/config
+# github.com/aws/aws-sdk-go-v2/service/lambda v1.69.6
+## explicit; go 1.21
+github.com/aws/aws-sdk-go-v2/service/lambda
+github.com/aws/aws-sdk-go-v2/service/lambda/internal/endpoints
+github.com/aws/aws-sdk-go-v2/service/lambda/types
 # github.com/aws/aws-sdk-go-v2/service/s3 v1.75.0
 ## explicit; go 1.21
 github.com/aws/aws-sdk-go-v2/service/s3
@@ -150,7 +161,7 @@ github.com/benbjohnson/clock
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
 # github.com/conductorone/baton-sdk v0.2.65 => ../baton-sdk
-## explicit; go 1.23
+## explicit; go 1.23.4
 github.com/conductorone/baton-sdk/internal/connector
 github.com/conductorone/baton-sdk/pb/c1/c1z/v1
 github.com/conductorone/baton-sdk/pb/c1/connector/v2
@@ -221,6 +232,16 @@ github.com/doug-martin/goqu/v9/internal/sb
 github.com/doug-martin/goqu/v9/internal/tag
 github.com/doug-martin/goqu/v9/internal/util
 github.com/doug-martin/goqu/v9/sqlgen
+# github.com/ductone/c1-lambda v0.0.0-00010101000000-000000000000 => ../c1-lambda
+## explicit; go 1.23.4
+github.com/ductone/c1-lambda/pb/c1/connectorapi/baton/v1
+github.com/ductone/c1-lambda/pb/c1/transport/v1
+github.com/ductone/c1-lambda/pkg/config
+github.com/ductone/c1-lambda/pkg/grpc
+github.com/ductone/c1-lambda/pkg/grpc/transport
+github.com/ductone/c1-lambda/pkg/udpop
+github.com/ductone/c1-lambda/pkg/ugrpc
+github.com/ductone/c1-lambda/pkg/uhttp
 # github.com/dustin/go-humanize v1.0.1
 ## explicit; go 1.16
 github.com/dustin/go-humanize
@@ -249,13 +270,6 @@ github.com/go-jose/go-jose/v4
 github.com/go-jose/go-jose/v4/cipher
 github.com/go-jose/go-jose/v4/json
 github.com/go-jose/go-jose/v4/jwt
-# github.com/go-logr/logr v1.4.2
-## explicit; go 1.18
-github.com/go-logr/logr
-github.com/go-logr/logr/funcr
-# github.com/go-logr/stdr v1.2.2
-## explicit; go 1.16
-github.com/go-logr/stdr
 # github.com/go-ole/go-ole v1.3.0
 ## explicit; go 1.12
 github.com/go-ole/go-ole
@@ -275,6 +289,7 @@ github.com/goccy/go-json/internal/runtime
 ## explicit; go 1.17
 github.com/golang/protobuf/jsonpb
 github.com/golang/protobuf/proto
+github.com/golang/protobuf/ptypes/any
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
@@ -303,6 +318,9 @@ github.com/hashicorp/hcl/json/token
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
+# github.com/jmespath/go-jmespath v0.4.0
+## explicit; go 1.14
+github.com/jmespath/go-jmespath
 # github.com/kelseyhightower/envconfig v1.4.0
 ## explicit
 github.com/kelseyhightower/envconfig
@@ -400,6 +418,8 @@ github.com/pquerna/xjwt
 # github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
 ## explicit; go 1.12
 github.com/remyoudompheng/bigfft
+# github.com/rogpeppe/go-internal v1.13.1
+## explicit; go 1.22
 # github.com/sagikazarmark/locafero v0.7.0
 ## explicit; go 1.21
 github.com/sagikazarmark/locafero
@@ -470,37 +490,15 @@ github.com/tklauser/numcpus
 # github.com/yusufpapurcu/wmi v1.2.4
 ## explicit; go 1.16
 github.com/yusufpapurcu/wmi
-# go.opentelemetry.io/auto/sdk v1.1.0
-## explicit; go 1.22.0
-go.opentelemetry.io/auto/sdk
-go.opentelemetry.io/auto/sdk/internal/telemetry
-# go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.59.0
-## explicit; go 1.22.0
-go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc
-go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/internal
 # go.opentelemetry.io/otel v1.34.0
 ## explicit; go 1.22.0
-go.opentelemetry.io/otel
 go.opentelemetry.io/otel/attribute
-go.opentelemetry.io/otel/baggage
-go.opentelemetry.io/otel/codes
 go.opentelemetry.io/otel/internal
 go.opentelemetry.io/otel/internal/attribute
-go.opentelemetry.io/otel/internal/baggage
-go.opentelemetry.io/otel/internal/global
-go.opentelemetry.io/otel/propagation
-go.opentelemetry.io/otel/semconv/v1.17.0
-go.opentelemetry.io/otel/semconv/v1.26.0
 # go.opentelemetry.io/otel/metric v1.34.0
 ## explicit; go 1.22.0
 go.opentelemetry.io/otel/metric
 go.opentelemetry.io/otel/metric/embedded
-go.opentelemetry.io/otel/metric/noop
-# go.opentelemetry.io/otel/trace v1.34.0
-## explicit; go 1.22.0
-go.opentelemetry.io/otel/trace
-go.opentelemetry.io/otel/trace/embedded
-go.opentelemetry.io/otel/trace/noop
 # go.uber.org/multierr v1.11.0
 ## explicit; go 1.19
 go.uber.org/multierr
@@ -524,6 +522,7 @@ golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
 golang.org/x/crypto/curve25519
+golang.org/x/crypto/ed25519
 golang.org/x/crypto/hkdf
 golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
@@ -681,9 +680,17 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
+# gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
+## explicit; go 1.11
 # gopkg.in/ini.v1 v1.67.0
 ## explicit
 gopkg.in/ini.v1
+# gopkg.in/square/go-jose.v2 v2.6.0
+## explicit
+gopkg.in/square/go-jose.v2
+gopkg.in/square/go-jose.v2/cipher
+gopkg.in/square/go-jose.v2/json
+gopkg.in/square/go-jose.v2/jwt
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2

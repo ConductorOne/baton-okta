@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
-
 	v1 "github.com/conductorone/baton-sdk/pb/c1/connectorapi/baton/v1"
 	"github.com/conductorone/baton-sdk/pkg/provisioner"
 	"github.com/conductorone/baton-sdk/pkg/tasks"
@@ -40,9 +38,6 @@ func (m *localResourceDeleter) Next(ctx context.Context) (*v1.Task, time.Duratio
 }
 
 func (m *localResourceDeleter) Process(ctx context.Context, task *v1.Task, cc types.ConnectorClient) error {
-	ctx, span := tracer.Start(ctx, "localResourceDeleter.Process", trace.WithNewRoot())
-	defer span.End()
-
 	accountManager := provisioner.NewResourceDeleter(cc, m.dbPath, m.resourceId, m.resourceType)
 
 	err := accountManager.Run(ctx)

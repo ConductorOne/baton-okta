@@ -172,7 +172,7 @@ type ResourceDiffMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ResourceDiffMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -374,7 +374,7 @@ type EntitlementDiffMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m EntitlementDiffMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -575,7 +575,7 @@ type GrantDiffMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantDiffMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -762,7 +762,7 @@ type C1ZDiffOutputMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m C1ZDiffOutputMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}

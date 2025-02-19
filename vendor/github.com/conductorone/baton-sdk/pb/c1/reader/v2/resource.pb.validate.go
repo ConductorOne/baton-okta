@@ -76,7 +76,7 @@ type ResourceTypesReaderServiceGetResourceTypeRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ResourceTypesReaderServiceGetResourceTypeRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -218,7 +218,7 @@ type ResourceTypesReaderServiceGetResourceTypeResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ResourceTypesReaderServiceGetResourceTypeResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -405,7 +405,7 @@ type ResourcesReaderServiceGetResourceRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ResourcesReaderServiceGetResourceRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -540,7 +540,7 @@ type ResourcesReaderServiceGetResourceResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ResourcesReaderServiceGetResourceResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}

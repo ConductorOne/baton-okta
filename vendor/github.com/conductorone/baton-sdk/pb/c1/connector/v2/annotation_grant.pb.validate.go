@@ -100,7 +100,7 @@ type GrantMetadataMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantMetadataMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -202,7 +202,7 @@ type GrantExpandableMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantExpandableMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -333,7 +333,7 @@ type GrantImmutableMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantImmutableMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -433,7 +433,7 @@ type GrantAlreadyExistsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantAlreadyExistsMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -535,7 +535,7 @@ type GrantAlreadyRevokedMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantAlreadyRevokedMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}

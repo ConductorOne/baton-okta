@@ -7,11 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
-
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	v1 "github.com/conductorone/baton-sdk/pb/c1/connectorapi/baton/v1"
@@ -66,9 +64,6 @@ func (m *localBulkCreateTicket) Next(ctx context.Context) (*v1.Task, time.Durati
 }
 
 func (m *localBulkCreateTicket) Process(ctx context.Context, task *v1.Task, cc types.ConnectorClient) error {
-	ctx, span := tracer.Start(ctx, "localBulkCreateTicket.Process", trace.WithNewRoot())
-	defer span.End()
-
 	l := ctxzap.Extract(ctx)
 
 	templates, err := m.loadTicketTemplate(ctx)

@@ -73,9 +73,6 @@ type protoHasID interface {
 // listConnectorObjects uses a connector list request to fetch the corresponding data from the local db.
 // It returns the raw bytes that need to be unmarshalled into the correct proto message.
 func (c *C1File) listConnectorObjects(ctx context.Context, tableName string, req proto.Message) ([][]byte, string, error) {
-	ctx, span := tracer.Start(ctx, "C1File.listConnectorObjects")
-	defer span.End()
-
 	err := c.validateDb(ctx)
 	if err != nil {
 		return nil, "", err
@@ -243,8 +240,6 @@ func bulkPutConnectorObject[T proto.Message](ctx context.Context, c *C1File,
 	if len(msgs) == 0 {
 		return nil
 	}
-	ctx, span := tracer.Start(ctx, "C1File.bulkPutConnectorObjectTx")
-	defer span.End()
 
 	err := c.validateSyncDb(ctx)
 	if err != nil {
@@ -309,9 +304,6 @@ func bulkPutConnectorObject[T proto.Message](ctx context.Context, c *C1File,
 }
 
 func (c *C1File) getResourceObject(ctx context.Context, resourceID *v2.ResourceId, m *v2.Resource, syncID string) error {
-	ctx, span := tracer.Start(ctx, "C1File.getResourceObject")
-	defer span.End()
-
 	err := c.validateDb(ctx)
 	if err != nil {
 		return err
@@ -370,9 +362,6 @@ func (c *C1File) getResourceObject(ctx context.Context, resourceID *v2.ResourceI
 }
 
 func (c *C1File) getConnectorObject(ctx context.Context, tableName string, id string, m proto.Message) error {
-	ctx, span := tracer.Start(ctx, "C1File.getConnectorObject")
-	defer span.End()
-
 	err := c.validateDb(ctx)
 	if err != nil {
 		return err

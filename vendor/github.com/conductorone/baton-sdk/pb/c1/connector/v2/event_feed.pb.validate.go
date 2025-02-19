@@ -164,7 +164,7 @@ type ListEventsRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ListEventsRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -351,7 +351,7 @@ type ListEventsResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ListEventsResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -644,7 +644,7 @@ type EventMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m EventMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -801,7 +801,7 @@ type UsageEventMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m UsageEventMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -929,7 +929,7 @@ type GrantEventMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m GrantEventMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1086,7 +1086,7 @@ type RevokeEventMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m RevokeEventMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}

@@ -71,7 +71,7 @@ type SchemaServiceGetSchemaRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m SchemaServiceGetSchemaRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -205,7 +205,7 @@ type SchemaServiceGetSchemaResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m SchemaServiceGetSchemaResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -403,7 +403,7 @@ type ConfigSchemaMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m ConfigSchemaMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -678,7 +678,7 @@ type FieldMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m FieldMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -808,7 +808,7 @@ type StringFieldMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m StringFieldMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -941,7 +941,7 @@ type SelectFieldMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m SelectFieldMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1043,7 +1043,7 @@ type RandomStringFieldMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m RandomStringFieldMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1175,7 +1175,7 @@ type FileFieldMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m FileFieldMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
@@ -1279,7 +1279,7 @@ type SelectField_ItemMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
 func (m SelectField_ItemMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
+	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
 	}
