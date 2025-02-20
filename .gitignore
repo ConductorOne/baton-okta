@@ -17,3 +17,4 @@
 dist/
 .aws-sam
 env.json
+.vscode/

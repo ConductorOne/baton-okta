@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
+	cfg "github.com/conductorone/baton-okta/pkg/config"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
@@ -80,26 +81,6 @@ type oktaAWSAppSettings struct {
 	IdentityProviderArnAccountID string
 	appGroupCache                sync.Map // group ID to app group cache
 	notAppGroupCache             sync.Map // group IDs that are not app groups
-}
-
-type Config struct {
-	Domain              string   `mapstructure:"domain"`
-	ApiToken            string   `mapstructure:"api-token"`
-	OktaClientId        string   `mapstructure:"okta-client-id"`
-	OktaPrivateKey      string   `mapstructure:"okta-private-key"`
-	OktaPrivateKeyId    string   `mapstructure:"okta-private-key-id"`
-	SyncInactiveApps    bool     `mapstructure:"sync-inactive-apps"`
-	OktaProvisioning    bool     `mapstructure:"okta-provisioning"`
-	Ciam                bool     `mapstructure:"ciam"`
-	CiamEmailDomains    []string `mapstructure:"ciam-email-domains"`
-	Cache               bool     `mapstructure:"cache"`
-	CacheTTI            int32    `mapstructure:"cache-tti"`
-	CacheTTL            int32    `mapstructure:"cache-ttl"`
-	SyncCustomRoles     bool     `mapstructure:"sync-custom-roles"`
-	SkipSecondaryEmails bool     `mapstructure:"skip-secondary-emails"`
-	AWSMode             bool     `mapstructure:"aws-identity-center-mode"`
-	AWSOktaAppId        string   `mapstructure:"aws-okta-app-id"`
-	SyncSecrets         bool     `mapstructure:"sync-secrets"`
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -334,7 +315,7 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func New(ctx context.Context, cfg *Config) (*Okta, error) {
+func New(ctx context.Context, cfg *cfg.Okta) (*Okta, error) {
 	var (
 		oktaClient *okta.Client
 		scopes     = defaultScopes
@@ -352,8 +333,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithToken(cfg.ApiToken),
 			okta.WithHttpClientPtr(client),
 			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
+			okta.WithCacheTti(int32(cfg.CacheTTI)),
+			okta.WithCacheTtl(int32(cfg.CacheTTL)),
 		)
 		if err != nil {
 			return nil, err
@@ -364,8 +345,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			oktav5.WithToken(cfg.ApiToken),
 			oktav5.WithHttpClientPtr(client),
 			oktav5.WithCache(cfg.Cache),
-			oktav5.WithCacheTti(cfg.CacheTTI),
-			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithCacheTti(int32(cfg.CacheTTI)),
+			oktav5.WithCacheTtl(int32(cfg.CacheTTL)),
 		)
 		if err != nil {
 			return nil, err
@@ -390,8 +371,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithPrivateKey(cfg.OktaPrivateKey),
 			okta.WithPrivateKeyId(cfg.OktaPrivateKeyId),
 			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
+			okta.WithCacheTti(int32(cfg.CacheTTI)),
+			okta.WithCacheTtl(int32(cfg.CacheTTL)),
 		)
 		if err != nil {
 			return nil, err
@@ -405,8 +386,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			oktav5.WithPrivateKey(cfg.OktaPrivateKey),
 			oktav5.WithPrivateKeyId(cfg.OktaPrivateKeyId),
 			oktav5.WithCache(cfg.Cache),
-			oktav5.WithCacheTti(cfg.CacheTTI),
-			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithCacheTti(int32(cfg.CacheTTI)),
+			oktav5.WithCacheTtl(int32(cfg.CacheTTL)),
 		)
 		if err != nil {
 			return nil, err
@@ -416,7 +397,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 
 	awsConfig := &awsConfig{
 		Enabled:   cfg.AWSMode,
-		OktaAppId: cfg.AWSOktaAppId,
+		OktaAppId: cfg.AwsOktaAppId,
 	}
 
 	return &Okta{

@@ -1,7 +1,7 @@
 FROM public.ecr.aws/docker/library/golang:1.23 AS build-image
 WORKDIR /src
 COPY . .
-RUN GOOS=linux GOARCH=arm64 make build-lambda-server
+RUN GOOS=linux GOARCH=arm64 make BUILD_LAMBDA_TARGET=1 build-lambda-server
 FROM public.ecr.aws/lambda/provided:al2023
 COPY --from=build-image /src/dist/linux_arm64/baton-okta-lambda-server .
 ENTRYPOINT ["./baton-okta-lambda-server"]

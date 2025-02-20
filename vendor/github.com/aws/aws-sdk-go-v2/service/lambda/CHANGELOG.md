@@ -1,3 +1,38 @@
+# v1.69.14 (2025-02-18)
+
+* **Bug Fix**: Bump go version to 1.22
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.13 (2025-02-14)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.12 (2025-02-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.11 (2025-02-04)
+
+* No change notes available for this release.
+
+# v1.69.10 (2025-01-31)
+
+* **Dependency Update**: Switch to code-generated waiter matchers, removing the dependency on go-jmespath.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.9 (2025-01-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.8 (2025-01-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+* **Dependency Update**: Upgrade to smithy-go v1.22.2.
+
+# v1.69.7 (2025-01-17)
+
+* **Bug Fix**: Fix bug where credentials weren't refreshed during retry loop.
+
 # v1.69.6 (2025-01-15)
 
 * **Dependency Update**: Updated to the latest SDK module versions

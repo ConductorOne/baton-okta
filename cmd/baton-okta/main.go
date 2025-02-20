@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	cfg "github.com/conductorone/baton-okta/pkg/config"
 	configschema "github.com/conductorone/baton-sdk/pkg/config"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types"
@@ -19,7 +20,7 @@ var version = "dev"
 func main() {
 	ctx := context.Background()
 
-	_, cmd, err := configschema.DefineConfiguration(ctx, "baton-okta", getConnector, configuration)
+	_, cmd, err := configschema.DefineConfiguration(ctx, "baton-okta", getConnector, cfg.Config)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
@@ -33,7 +34,7 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, ccfg *connector.Config) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, ccfg *cfg.Okta) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
 	cb, err := connector.New(ctx, ccfg)
 	if err != nil {

@@ -9,20 +9,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"time"
 
-	"github.com/conductorone/baton-sdk/pkg/field"
-	"github.com/conductorone/baton-sdk/pkg/logging"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/debug"
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 	"gopkg.in/yaml.v2"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/spf13/cobra"
+
+	"github.com/conductorone/baton-sdk/pkg/field"
+	"github.com/conductorone/baton-sdk/pkg/logging"
 )
 
 const (
@@ -61,12 +62,6 @@ var skipServiceSetupFields = map[string]struct{}{
 	"GrantPrincipalType": {},
 	"RevokeGrantID":      {},
 }
-
-var (
-	stringReflectType      = reflect.TypeOf("")
-	boolReflectType        = reflect.TypeOf(true)
-	stringSliceReflectType = reflect.TypeOf([]string(nil))
-)
 
 func getExePath() (string, error) {
 	p, err := filepath.Abs(os.Args[0])
@@ -303,18 +298,18 @@ func interactiveSetup(ctx context.Context, outputFilePath string, fields []field
 			continue
 		}
 
-		switch vfield.GetType() {
-		case reflect.Bool:
+		switch vfield.Variant {
+		case field.BoolVariant:
 			b, err := strconv.ParseBool(input)
 			if err != nil {
 				return err
 			}
 			config[vfield.GetName()] = b
 
-		case reflect.String:
+		case field.StringVariant:
 			config[vfield.GetName()] = input
 
-		case reflect.Int:
+		case field.IntVariant:
 			i, err := strconv.Atoi(input)
 			if err != nil {
 				return err
@@ -324,7 +319,7 @@ func interactiveSetup(ctx context.Context, outputFilePath string, fields []field
 
 			// TODO (shackra): add support for []string in SDK
 		default:
-			l.Error("Unsupported type for interactive config.", zap.String("type", vfield.GetType().String()))
+			l.Error("Unsupported type for interactive config.", zap.String("type", string(vfield.Variant)))
 			return errors.New("unsupported type for interactive config")
 		}
 	}

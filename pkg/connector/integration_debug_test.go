@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	cfg "github.com/conductorone/baton-okta/pkg/config"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -32,7 +33,7 @@ func TestSyncRoles(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -58,7 +59,7 @@ func TestUserResourceTypeList(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -87,7 +88,7 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -116,7 +117,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -155,7 +156,7 @@ func TestResourcSetRevoke(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -185,7 +186,7 @@ func TestResourceSetsList(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -205,7 +206,7 @@ func TestResourceSetsBindingsList(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -225,7 +226,7 @@ func TestResourceSetGrants(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -249,7 +250,7 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -274,7 +275,7 @@ func TestListResourceSetsBindings(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -292,7 +293,7 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -333,7 +334,7 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClietForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -432,7 +433,7 @@ func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitl
 	return ent.NewAssignmentEntitlement(resource, entitlement, options...)
 }
 
-func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
+func getClietForTesting(ctx context.Context, cfg *cfg.Okta) (*Okta, error) {
 	var oktaClient *okta.Client
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
@@ -445,8 +446,8 @@ func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
 			okta.WithToken(cfg.ApiToken),
 			okta.WithHttpClientPtr(client),
 			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
+			okta.WithCacheTti(int32(cfg.CacheTTI)),
+			okta.WithCacheTtl(int32(cfg.CacheTTL)),
 		)
 		if err != nil {
 			return nil, err
