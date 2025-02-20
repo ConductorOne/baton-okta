@@ -1,4 +1,4 @@
-//go:build build_lambda_target
+//go:build build_lambda_support
 
 package cli
 
@@ -30,19 +30,33 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func AddCommand(mainCMD *cobra.Command, subCMD *cobra.Command) {
+func AddLambdaCommand(mainCMD *cobra.Command, subCMD *cobra.Command) {
 	mainCMD.AddCommand(subCMD)
 }
 
-func MakeLambdaServerCommand[T any](
+func OptionallyAddLambdaCommand[T any](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,
 	getconnector GetConnectorFunc[T],
-	lambdaSchema field.Configuration,
 	connectorSchema field.Configuration,
-) func(*cobra.Command, []string) error {
-	return func(cmd *cobra.Command, args []string) error {
+	constraintSetter ContrainstSetter,
+	mainCmd *cobra.Command,
+) *cobra.Command {
+	lambdaSchema := field.NewConfiguration(field.LambdaServerFields(), field.LambdaServerRelationships...)
+
+	cmd := &cobra.Command{
+		Use:           "lambda",
+		Short:         "lambda",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+	}
+
+	constraintSetter(cmd, lambdaSchema)
+
+	mainCmd.AddCommand(cmd)
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		err := v.BindPFlags(cmd.Flags())
 		if err != nil {
 			return err
@@ -111,48 +125,7 @@ func MakeLambdaServerCommand[T any](
 		lambda.Start(s.Handler)
 		return nil
 	}
-}
-
-type staticLambdaResolver struct {
-	endpoint *url.URL
-}
-
-func (l *staticLambdaResolver) ResolveEndpoint(ctx context.Context, params lambda_sdk.EndpointParameters) (aws_transport.Endpoint, error) {
-	return aws_transport.Endpoint{
-		URI: *l.endpoint,
-	}, nil
-}
-
-func newStaticLambdaResolver(endpoint string) (lambda_sdk.EndpointResolverV2, error) {
-	uri, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse endpoint: %w", err)
-	}
-	return &staticLambdaResolver{endpoint: uri}, nil
-}
-
-func lambdaConnectorClient(ctx context.Context, endpoint string, function string) (types.ConnectorClient, error) {
-	cfg, err := aws_config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var opts []func(*lambda_sdk.Options)
-	if endpoint != "" {
-		resolver, err := newStaticLambdaResolver(endpoint)
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, lambda_sdk.WithEndpointResolverV2(resolver))
-	}
-	lambdaClient := lambda_sdk.NewFromConfig(cfg, opts...)
-
-	lambdaTransport, err := transport.NewLambdaClientTransport(ctx, lambdaClient, function)
-	if err != nil {
-		return nil, err
-	}
-	cc := c1_lambda_grpc.NewClientConn(lambdaTransport)
-	return connector.NewConnectorClient(ctx, cc), nil
+	return cmd
 }
 
 func MakeLambdaMetadataCommand[T any](
@@ -209,4 +182,46 @@ func MakeLambdaMetadataCommand[T any](
 
 		return nil
 	}
+}
+
+type staticLambdaResolver struct {
+	endpoint *url.URL
+}
+
+func (l *staticLambdaResolver) ResolveEndpoint(ctx context.Context, params lambda_sdk.EndpointParameters) (aws_transport.Endpoint, error) {
+	return aws_transport.Endpoint{
+		URI: *l.endpoint,
+	}, nil
+}
+
+func newStaticLambdaResolver(endpoint string) (lambda_sdk.EndpointResolverV2, error) {
+	uri, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse endpoint: %w", err)
+	}
+	return &staticLambdaResolver{endpoint: uri}, nil
+}
+
+func lambdaConnectorClient(ctx context.Context, endpoint string, function string) (types.ConnectorClient, error) {
+	cfg, err := aws_config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var opts []func(*lambda_sdk.Options)
+	if endpoint != "" {
+		resolver, err := newStaticLambdaResolver(endpoint)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, lambda_sdk.WithEndpointResolverV2(resolver))
+	}
+	lambdaClient := lambda_sdk.NewFromConfig(cfg, opts...)
+
+	lambdaTransport, err := transport.NewLambdaClientTransport(ctx, lambdaClient, function)
+	if err != nil {
+		return nil, err
+	}
+	cc := c1_lambda_grpc.NewClientConn(lambdaTransport)
+	return connector.NewConnectorClient(ctx, cc), nil
 }

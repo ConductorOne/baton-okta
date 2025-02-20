@@ -26,6 +26,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/uotel"
 )
 
+type ContrainstSetter func(*cobra.Command, field.Configuration) error
+
 func MakeMainCommand[T any](
 	ctx context.Context,
 	name string,
