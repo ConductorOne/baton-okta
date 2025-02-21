@@ -121,7 +121,7 @@ func DefineConfiguration[T cli.Configurable](
 	return v, mainCMD, nil
 }
 
-func verifyStructFields[T any](schema field.Configuration) error {
+func verifyStructFields[T cli.Configurable](schema field.Configuration) error {
 	// Verify that every field in the confschema has a corresponding struct tag in the struct defined in getconnector of type T
 	//  or that it obeys the old interface, a *viper.Viper
 	var config T // Create a zero-value instance of T

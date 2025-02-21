@@ -43,6 +43,7 @@ func MakeGenericConfiguration[T Configurable](v *viper.Viper) (T, error) {
 // NOTE(shackra): Set all values from Viper to the flags so
 // that Cobra won't complain that a flag is missing in case we
 // pass values through environment variables
+
 func VisitFlags(cmd *cobra.Command, v *viper.Viper) {
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		if v.IsSet(f.Name) {

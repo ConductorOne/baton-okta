@@ -78,7 +78,6 @@ func OptionallyAddLambdaCommand[T Configurable](
 			v.GetString("lambda-client-id"),
 			v.GetString("lambda-client-secret"),
 		)
-
 		if err != nil {
 			return fmt.Errorf("failed to get connector manager client: %w", err)
 		}

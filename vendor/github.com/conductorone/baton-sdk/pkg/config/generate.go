@@ -121,8 +121,6 @@ func (c* {{ .StructName }}) findFieldByTag(tagValue string) (any, bool) {
 	return nil, false
 }
 
-
-
 func (c *{{ .StructName }}) GetStringSlice(fieldName string) []string {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
