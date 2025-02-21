@@ -30,7 +30,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func OptionallyAddLambdaCommand[T any](
+func OptionallyAddLambdaCommand[T Configurable](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,
@@ -78,12 +78,12 @@ func OptionallyAddLambdaCommand[T any](
 			v.GetString("lambda-client-id"),
 			v.GetString("lambda-client-secret"),
 		)
+
 		if err != nil {
 			return fmt.Errorf("failed to get connector manager client: %w", err)
 		}
 
 		// Get configuration, convert it to viper flag values, then proceed.
-		// TODO(morgabra): Should we start the lambda handler first? What are the timeouts for startup?
 		config, err := client.GetConnectorConfig(ctx, &pb_connector_api.GetConnectorConfigRequest{})
 		if err != nil {
 			return fmt.Errorf("failed to get connector config: %w", err)
@@ -94,13 +94,12 @@ func OptionallyAddLambdaCommand[T any](
 			return fmt.Errorf("failed to make generic configuration: %w", err)
 		}
 
-		err = mapstructure.Decode(config.Config.AsMap(), &t)
+		err = mapstructure.Decode(config.Config.AsMap(), t)
 		if err != nil {
 			log.Fatalf("Error decoding: %v", err)
 		}
-		v := any(t).(*viper.Viper)
 
-		if err := field.Validate(connectorSchema, v); err != nil {
+		if err := field.Validate(connectorSchema, t); err != nil {
 			return err
 		}
 
@@ -124,7 +123,7 @@ func OptionallyAddLambdaCommand[T any](
 	return nil
 }
 
-func MakeLambdaMetadataCommand[T any](
+func MakeLambdaMetadataCommand[T Configurable](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,

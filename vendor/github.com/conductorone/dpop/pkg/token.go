@@ -118,17 +118,17 @@ func (c *tokenSource) Token() (*oauth2.Token, error) {
 	method := http.MethodPost
 	dpopProof, err := c.dpopSigner.Proof(method, c.tokenURL.String(), "", "")
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "failed to get token: %s", err)
+		return nil, status.Errorf(codes.Unauthenticated, "failed to get proof: %s", err)
 	}
 
 	rv, err := jsigner.Sign(marshalledClaims)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Unauthenticated, "failed to sign proof: %s", err)
 	}
 
 	s, err := rv.CompactSerialize()
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Unauthenticated, "failed to serialize proof: %s", err)
 	}
 
 	body := url.Values{
@@ -139,13 +139,13 @@ func (c *tokenSource) Token() (*oauth2.Token, error) {
 	}
 
 	var encodeable Encodable
-	if c.claimsAdjuster != nil {
+	if c.claimsAdjuster == nil {
+		encodeable = &body
+	} else {
 		encodeable, err = c.claimsAdjuster.AdjustBody(&body)
 		if err != nil {
 			return nil, fmt.Errorf("token-source: failed to adjust body: %w", err)
 		}
-	} else {
-		encodeable = &body
 	}
 
 	req, err := http.NewRequestWithContext(context.Background(), method, c.tokenURL.String(), strings.NewReader(encodeable.Encode()))
@@ -171,7 +171,6 @@ func (c *tokenSource) Token() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if token.AccessToken == "" {
 		return nil, status.Errorf(codes.Unauthenticated, "failed to get token: empty access token")
 	}

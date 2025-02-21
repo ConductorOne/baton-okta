@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func DefineConfiguration[T any](
+func DefineConfiguration[T cli.Configurable](
 	ctx context.Context,
 	connectorName string,
 	connector cli.GetConnectorFunc[T],

@@ -57,8 +57,10 @@ func WithNewDPoPSigner(ctx context.Context, tokenURL *url.URL, clientID string, 
 
 type dpopPerRPCCredentials struct {
 	tokenSource oauth2.TokenSource
-	dpopSigner  *dpop.DPoPProofer
-	accessToken *oauth2.Token
+	// access token from the source
+	token *oauth2.Token
+	// used to sign the dpop proof with the token
+	dpopSigner *dpop.DPoPProofer
 }
 
 func (c *dpopPerRPCCredentials) RequireTransportSecurity() bool {
@@ -66,16 +68,21 @@ func (c *dpopPerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 func (c *dpopPerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	token := c.accessToken
-	if c.accessToken == nil || c.accessToken.Expiry.Before(time.Now().Add(1*time.Minute)) {
-		token, err := c.tokenSource.Token()
+	if c.token == nil || c.token.Expiry.Before(time.Now().Add(1*time.Minute)) {
+		var err error
+		c.token, err = c.tokenSource.Token()
 		if err != nil {
 			return nil, err
 		}
-		c.accessToken = token
 	}
 
-	ri, _ := credentials.RequestInfoFromContext(ctx)
+	token := c.token
+
+	ri, ok := credentials.RequestInfoFromContext(ctx)
+	if !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "missing request info")
+	}
+
 	err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "connection is not secure enough to send credentials")
