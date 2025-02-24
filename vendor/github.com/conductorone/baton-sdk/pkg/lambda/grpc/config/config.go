@@ -12,15 +12,19 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
-	pb_connector_manager "github.com/conductorone/baton-sdk/pb/c1/connectorapi/baton/v1"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
-	dpop_grpc "github.com/conductorone/dpop/pkg/ugrpc"
 	"github.com/go-jose/go-jose/v4"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	pb_connector_manager "github.com/conductorone/baton-sdk/pb/c1/connectorapi/baton/v1"
+
+	"github.com/conductorone/dpop/pkg/dpop"
+	// dpop_grpc "github.com/conductorone/dpop/pkg/ugrpc"
+
+	dpop_grpc "github.com/conductorone/dpop/integrations/dpop_grpc"
+	dpop_oauth "github.com/conductorone/dpop/integrations/dpop_oauth2"
 )
 
 var (
@@ -39,45 +43,59 @@ func GetConnectorConfigServiceClient(ctx context.Context, clientID string, clien
 		tokenHost = envHost
 	}
 
-	tokenUrl := &url.URL{
+	tokenURL := &url.URL{
 		Scheme: "https",
 		Host:   tokenHost,
 		Path:   "auth/v1/token",
 	}
 
-	claimsAdjuster, err := NewAdjuster(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("connector-manager-client: failed to create claims adjuster: %w", err)
+	// Generate test keys
+	_, priv, err := ed25519.GenerateKey(nil)
+	// Create JWK for private key
+	jwk := &jose.JSONWebKey{
+		Key:       priv,
+		KeyID:     "key",
+		Algorithm: string(jose.EdDSA),
+		Use:       "sig",
 	}
 
-	secret, err := parseSecret([]byte(clientSecret))
+	clientSecretJWK, err := parseSecret([]byte(clientSecret))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get-connector-service-client: failed to unmarshal client secret: %w", err)
+	}
+	// Create DPoP proofer
+	proofer, err := dpop.NewProofer(jwk)
+	idAttMarshaller, err := NewIdAttMarshaller(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get-connector-service-client: failed to create claims adjuster: %w", err)
+	}
+	opts := dpop_oauth.WithRequestOption(dpop_oauth.WithCustomMarshaler(idAttMarshaller.Marshal))
+	tokenSource, err := dpop_oauth.NewTokenSource(proofer, tokenURL, clientID, clientSecretJWK, opts)
+	if err != nil {
+		return nil, fmt.Errorf("get-connector-service-client: failed to create token source: %w", err)
 	}
 
-	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, ctxzap.Extract(ctx)), uhttp.WithUserAgent("baton-c1-dpop-client"))
-	if err != nil {
-		return nil, fmt.Errorf("connector-manager-client: failed to create http client: %w", err)
-	}
-
-	options := dpop_grpc.SignerOptions{HttpClient: httpClient}
-	o, err := dpop_grpc.WithNewDPoPSigner(ctx, tokenUrl, clientID, secret, claimsAdjuster, options)
-	if err != nil {
-		return nil, fmt.Errorf("connector-manager-client: failed to create dpop signer: %w", err)
-	}
+	creds, err := dpop_grpc.NewDPoPCredentials(proofer, tokenSource, tokenHost, []dpop.ProofOption{
+		// dpop.WithStaticNonce("test-nonce"),
+		dpop.WithValidityDuration(time.Minute * 5),
+		dpop.WithProofNowFunc(func() time.Time {
+			return time.Now() // Use current time to avoid clock skew issues
+		}),
+	})
 
 	systemCertPool, err := x509.SystemCertPool()
 	if err != nil || systemCertPool == nil {
-		return nil, fmt.Errorf("connector-manager-client: failed to load system cert pool: %w", err)
+		return nil, fmt.Errorf("get-connector-service-client: failed to load system cert pool: %w", err)
 	}
-	creds := credentials.NewTLS(&tls.Config{
+	transportCreds := credentials.NewTLS(&tls.Config{
 		RootCAs:    systemCertPool,
 		MinVersion: tls.VersionTLS12,
 	})
+
 	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(creds),
+		grpc.WithTransportCredentials(transportCreds),
 		grpc.WithUserAgent(fmt.Sprintf("%s baton-lambda/%s", clientName, "v0.0.1")),
-		o,
+		grpc.WithPerRPCCredentials(creds),
 		// grpc.WithBlock(),
 	}
 

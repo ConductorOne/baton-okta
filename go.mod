@@ -1,6 +1,8 @@
 module github.com/conductorone/baton-okta
 
-go 1.23.4
+go 1.23.6
+
+toolchain go1.24.0
 
 require (
 	github.com/conductorone/baton-sdk v0.2.65
@@ -9,13 +11,14 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/okta/okta-sdk-golang/v2 v2.20.0
 	go.uber.org/zap v1.27.0
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/lambda v1.69.14 // indirect
-	github.com/conductorone/dpop v0.0.1 // indirect
+	github.com/conductorone/dpop v0.1.0 // indirect
+	github.com/conductorone/dpop/integrations/dpop_grpc v0.0.0-20250223181800-c4b16d6894a7 // indirect
+	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.0.0-20250223181800-c4b16d6894a7 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
@@ -25,6 +28,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.0 // indirect
+	github.com/jellydator/ttlcache/v3 v3.3.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
@@ -112,14 +116,14 @@ require (
 	go.opentelemetry.io/otel/metric v1.34.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.34.0 // indirect
 	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c // indirect
-	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/oauth2 v0.25.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/oauth2 v0.26.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250127172529-29210b9bc287 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250219182151-9fdb1cabc7b2 // indirect
 	google.golang.org/grpc v1.70.0
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -131,4 +135,9 @@ require (
 )
 
 replace github.com/conductorone/baton-sdk => ../baton-sdk
+
 replace github.com/conductorone/dpop => ../dpop
+
+replace github.com/conductorone/dpop/integrations/dpop_grpc => ../dpop/integrations/dpop_grpc
+
+replace github.com/conductorone/dpop/integrations/dpop_oauth2 => ../dpop/integrations/dpop_oauth2

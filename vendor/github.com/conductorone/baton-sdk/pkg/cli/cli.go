@@ -12,16 +12,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Configurable interface {
-	GetString(key string) string
-	GetBool(key string) bool
-	GetInt(key string) int
-	GetStringSlice(key string) []string
-}
+type GetConnectorFunc[T field.Configurable] func(context.Context, T) (types.ConnectorServer, error)
 
-type GetConnectorFunc[T Configurable] func(context.Context, T) (types.ConnectorServer, error)
-
-func MakeGenericConfiguration[T Configurable](v *viper.Viper) (T, error) {
+func MakeGenericConfiguration[T field.Configurable](v *viper.Viper) (T, error) {
 	// Create an instance of the struct type T using reflection
 	var config T // Create a zero-value instance of T
 	// Ensure T is a struct (or pointer to struct)

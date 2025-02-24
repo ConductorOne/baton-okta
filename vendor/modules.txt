@@ -98,11 +98,6 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared/arn
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared/config
-# github.com/aws/aws-sdk-go-v2/service/lambda v1.69.14
-## explicit; go 1.22
-github.com/aws/aws-sdk-go-v2/service/lambda
-github.com/aws/aws-sdk-go-v2/service/lambda/internal/endpoints
-github.com/aws/aws-sdk-go-v2/service/lambda/types
 # github.com/aws/aws-sdk-go-v2/service/s3 v1.75.0
 ## explicit; go 1.21
 github.com/aws/aws-sdk-go-v2/service/s3
@@ -161,7 +156,7 @@ github.com/benbjohnson/clock
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
 # github.com/conductorone/baton-sdk v0.2.65 => ../baton-sdk
-## explicit; go 1.23.4
+## explicit; go 1.23.6
 github.com/conductorone/baton-sdk/internal/connector
 github.com/conductorone/baton-sdk/pb/c1/c1z/v1
 github.com/conductorone/baton-sdk/pb/c1/config/v1
@@ -188,7 +183,6 @@ github.com/conductorone/baton-sdk/pkg/dotc1z/manager/s3
 github.com/conductorone/baton-sdk/pkg/field
 github.com/conductorone/baton-sdk/pkg/lambda/grpc
 github.com/conductorone/baton-sdk/pkg/lambda/grpc/config
-github.com/conductorone/baton-sdk/pkg/lambda/grpc/transport
 github.com/conductorone/baton-sdk/pkg/logging
 github.com/conductorone/baton-sdk/pkg/metrics
 github.com/conductorone/baton-sdk/pkg/pagination
@@ -212,10 +206,15 @@ github.com/conductorone/baton-sdk/pkg/uotel
 github.com/conductorone/baton-sdk/pkg/us3
 github.com/conductorone/baton-sdk/pkg/ustrings
 github.com/conductorone/baton-sdk/pkg/utls
-# github.com/conductorone/dpop v0.0.1 => ../dpop
-## explicit; go 1.23.4
-github.com/conductorone/dpop/pkg
-github.com/conductorone/dpop/pkg/ugrpc
+# github.com/conductorone/dpop v0.1.0 => ../dpop
+## explicit; go 1.23.6
+github.com/conductorone/dpop/pkg/dpop
+# github.com/conductorone/dpop/integrations/dpop_grpc v0.0.0-20250223181800-c4b16d6894a7 => ../dpop/integrations/dpop_grpc
+## explicit; go 1.23.6
+github.com/conductorone/dpop/integrations/dpop_grpc
+# github.com/conductorone/dpop/integrations/dpop_oauth2 v0.0.0-20250223181800-c4b16d6894a7 => ../dpop/integrations/dpop_oauth2
+## explicit; go 1.23.6
+github.com/conductorone/dpop/integrations/dpop_oauth2
 # github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone
 ## explicit; go 1.20
 github.com/conductorone/okta-sdk-golang/v5/okta
@@ -329,6 +328,9 @@ github.com/hashicorp/hcl/json/token
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
+# github.com/jellydator/ttlcache/v3 v3.3.0
+## explicit; go 1.18
+github.com/jellydator/ttlcache/v3
 # github.com/kelseyhightower/envconfig v1.4.0
 ## explicit
 github.com/kelseyhightower/envconfig
@@ -569,8 +571,8 @@ go.uber.org/zap/internal/exit
 go.uber.org/zap/internal/pool
 go.uber.org/zap/internal/stacktrace
 go.uber.org/zap/zapcore
-# golang.org/x/crypto v0.32.0
-## explicit; go 1.20
+# golang.org/x/crypto v0.34.0
+## explicit; go 1.23.0
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
@@ -589,15 +591,16 @@ golang.org/x/exp/slices
 golang.org/x/exp/slog
 golang.org/x/exp/slog/internal
 golang.org/x/exp/slog/internal/buffer
-# golang.org/x/net v0.34.0
+# golang.org/x/net v0.35.0
 ## explicit; go 1.18
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
+golang.org/x/net/internal/httpcommon
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/oauth2 v0.25.0
+# golang.org/x/oauth2 v0.26.0
 ## explicit; go 1.18
 golang.org/x/oauth2
 golang.org/x/oauth2/clientcredentials
@@ -607,7 +610,8 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.11.0
 ## explicit; go 1.18
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.29.0
+golang.org/x/sync/singleflight
+# golang.org/x/sys v0.30.0
 ## explicit; go 1.18
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
@@ -638,8 +642,8 @@ golang.org/x/text/unicode/norm
 # google.golang.org/genproto/googleapis/api v0.0.0-20250127172529-29210b9bc287
 ## explicit; go 1.22
 google.golang.org/genproto/googleapis/api/httpbody
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20250127172529-29210b9bc287
-## explicit; go 1.22
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20250219182151-9fdb1cabc7b2
+## explicit; go 1.23.0
 google.golang.org/genproto/googleapis/rpc/errdetails
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.70.0
@@ -703,7 +707,7 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/protobuf v1.36.4
+# google.golang.org/protobuf v1.36.5
 ## explicit; go 1.21
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
@@ -793,3 +797,5 @@ modernc.org/memory
 modernc.org/sqlite/lib
 # github.com/conductorone/baton-sdk => ../baton-sdk
 # github.com/conductorone/dpop => ../dpop
+# github.com/conductorone/dpop/integrations/dpop_grpc => ../dpop/integrations/dpop_grpc
+# github.com/conductorone/dpop/integrations/dpop_oauth2 => ../dpop/integrations/dpop_oauth2
