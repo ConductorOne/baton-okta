@@ -10,8 +10,8 @@ OUTPUT_PATH = ${BUILD_DIR}/baton-okta
 endif
 
 # Set the build tag conditionally based on ENABLE_LAMBDA
-ifdef BUILD_LAMBDA_SUPPORT
-	BUILD_TAGS=-tags build_lambda_support
+ifdef BATON_LAMBDA_SUPPORT
+	BUILD_TAGS=-tags baton_lambda_support
 else
 	BUILD_TAGS=
 endif
