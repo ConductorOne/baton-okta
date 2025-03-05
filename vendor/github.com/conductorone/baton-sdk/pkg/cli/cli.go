@@ -17,14 +17,15 @@ type GetConnectorFunc[T field.Configurable] func(context.Context, T) (types.Conn
 func MakeGenericConfiguration[T field.Configurable](v *viper.Viper) (T, error) {
 	// Create an instance of the struct type T using reflection
 	var config T // Create a zero-value instance of T
-	// Ensure T is a struct (or pointer to struct)
-	tType := reflect.TypeOf(config)
-	if tType == reflect.TypeOf(viper.Viper{}) {
-		return any(v).(T), nil
+
+	// Is it a *Viper?
+	if reflect.TypeOf(config) == reflect.TypeOf((*viper.Viper)(nil)) {
+		if t, ok := any(v).(T); ok {
+			return t, nil
+		}
+		return config, fmt.Errorf("cannot convert *viper.Viper to %T", config)
 	}
-	// if tType.Kind() != reflect.Struct {
-	// 	return nil, fmt.Errorf("T must be a struct, but got %s", tType.Kind())
-	// }
+
 	// Unmarshal into the config struct
 	err := v.Unmarshal(&config)
 	if err != nil {
@@ -33,10 +34,9 @@ func MakeGenericConfiguration[T field.Configurable](v *viper.Viper) (T, error) {
 	return config, nil
 }
 
-// NOTE(shackra): Set all values from Viper to the flags so
-// that Cobra won't complain that a flag is missing in case we
-// pass values through environment variables
-
+// NOTE(shackra): Set all values from Viper to the flags so...
+// that Cobra won't complain that a flag is missing in case we...
+// pass values through environment variables.
 func VisitFlags(cmd *cobra.Command, v *viper.Viper) {
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		if v.IsSet(f.Name) {

@@ -13,7 +13,6 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-	// dpop "github.com/conductorone/dpop/pkg"
 )
 
 func sha256AndHexEncode(input string) string {

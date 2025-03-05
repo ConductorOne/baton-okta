@@ -16,9 +16,9 @@ require (
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0 // indirect
-	github.com/conductorone/dpop v0.1.0 // indirect
-	github.com/conductorone/dpop/integrations/dpop_grpc v0.0.0-20250223181800-c4b16d6894a7 // indirect
-	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.0.0-20250223181800-c4b16d6894a7 // indirect
+	github.com/conductorone/dpop v0.1.4 // indirect
+	github.com/conductorone/dpop/integrations/dpop_grpc v0.1.4 // indirect
+	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.1.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
@@ -53,14 +53,14 @@ require (
 	filippo.io/age v1.2.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.36.2
+	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.29.2 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.55 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.25 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.55 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.33 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.33 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.2 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.29 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.2 // indirect

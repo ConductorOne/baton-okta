@@ -21,7 +21,6 @@ import (
 	pb_connector_manager "github.com/conductorone/baton-sdk/pb/c1/connectorapi/baton/v1"
 
 	"github.com/conductorone/dpop/pkg/dpop"
-	// dpop_grpc "github.com/conductorone/dpop/pkg/ugrpc"
 
 	dpop_grpc "github.com/conductorone/dpop/integrations/dpop_grpc"
 	dpop_oauth "github.com/conductorone/dpop/integrations/dpop_oauth2"
@@ -49,9 +48,11 @@ func GetConnectorConfigServiceClient(ctx context.Context, clientID string, clien
 		Path:   "auth/v1/token",
 	}
 
-	// Generate test keys
 	_, priv, err := ed25519.GenerateKey(nil)
-	// Create JWK for private key
+	if err != nil {
+		return nil, fmt.Errorf("get-connector-service-client: failed to generate ed25519: %w", err)
+	}
+
 	jwk := &jose.JSONWebKey{
 		Key:       priv,
 		KeyID:     "key",
@@ -63,8 +64,12 @@ func GetConnectorConfigServiceClient(ctx context.Context, clientID string, clien
 	if err != nil {
 		return nil, fmt.Errorf("get-connector-service-client: failed to unmarshal client secret: %w", err)
 	}
-	// Create DPoP proofer
+
 	proofer, err := dpop.NewProofer(jwk)
+	if err != nil {
+		return nil, fmt.Errorf("get-connector-service-client: failed to create proofer: %w", err)
+	}
+
 	idAttMarshaller, err := NewIdAttMarshaller(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get-connector-service-client: failed to create claims adjuster: %w", err)
@@ -76,12 +81,12 @@ func GetConnectorConfigServiceClient(ctx context.Context, clientID string, clien
 	}
 
 	creds, err := dpop_grpc.NewDPoPCredentials(proofer, tokenSource, tokenHost, []dpop.ProofOption{
-		// dpop.WithStaticNonce("test-nonce"),
 		dpop.WithValidityDuration(time.Minute * 5),
-		dpop.WithProofNowFunc(func() time.Time {
-			return time.Now() // Use current time to avoid clock skew issues
-		}),
+		dpop.WithProofNowFunc(time.Now),
 	})
+	if err != nil {
+		return nil, fmt.Errorf("get-connector-service-client: failed to create dpop credentials: %w", err)
+	}
 
 	systemCertPool, err := x509.SystemCertPool()
 	if err != nil || systemCertPool == nil {
@@ -96,7 +101,6 @@ func GetConnectorConfigServiceClient(ctx context.Context, clientID string, clien
 		grpc.WithTransportCredentials(transportCreds),
 		grpc.WithUserAgent(fmt.Sprintf("%s baton-lambda/%s", clientName, "v0.0.1")),
 		grpc.WithPerRPCCredentials(creds),
-		// grpc.WithBlock(),
 	}
 
 	client, err := grpc.NewClient(tokenHost, dialOpts...)

@@ -1,4 +1,4 @@
-//go:build build_lambda_support
+//go:build baton_lambda_support
 
 package cli
 
@@ -31,7 +31,7 @@ func OptionallyAddLambdaCommand[T field.Configurable](
 
 	lambdaCmd, err := AddCommand(mainCmd, v, &lambdaSchema, &cobra.Command{
 		Use:           "lambda",
-		Short:         "run a server for a AWS Lambda function",
+		Short:         "Run a server for a AWS Lambda function",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	})

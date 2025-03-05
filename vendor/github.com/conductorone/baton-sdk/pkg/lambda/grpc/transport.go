@@ -83,8 +83,6 @@ func (f *Response) MarshalJSON() ([]byte, error) {
 	return protojson.Marshal(f.msg)
 }
 
-// UnmarshalResponse unmarshalls the response.
-// If response is not set it returns an error.
 func (f *Response) UnmarshalResponse(resp any) error {
 	respb, ok := resp.(proto.Message)
 	if !ok {
@@ -97,8 +95,6 @@ func (f *Response) UnmarshalResponse(resp any) error {
 	return nil
 }
 
-// Status returns the status of the response.
-// Status is required on all responses, so if it is not set, it returns an error.
 func (f *Response) Status() (*status.Status, error) {
 	if f.msg.GetStatus() == nil {
 		return nil, status.Errorf(codes.Internal, "response status not set")
