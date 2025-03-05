@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -24,6 +26,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/tasks"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 )
+
+var tracer = otel.Tracer("baton-sdk/pkg.connectorbuilder")
 
 type ResourceSyncer interface {
 	ResourceType(ctx context.Context) *v2.ResourceType
@@ -77,6 +81,17 @@ type TicketManager interface {
 	BulkGetTickets(context.Context, *v2.TicketsServiceBulkGetTicketsRequest) (*v2.TicketsServiceBulkGetTicketsResponse, error)
 }
 
+type CustomActionManager interface {
+	ListActionSchemas(ctx context.Context) ([]*v2.BatonActionSchema, annotations.Annotations, error)
+	GetActionSchema(ctx context.Context, name string) (*v2.BatonActionSchema, annotations.Annotations, error)
+	InvokeAction(ctx context.Context, name string, args *structpb.Struct) (string, v2.BatonActionStatus, *structpb.Struct, annotations.Annotations, error)
+	GetActionStatus(ctx context.Context, id string) (v2.BatonActionStatus, *structpb.Struct, annotations.Annotations, error)
+}
+
+type RegisterActionManager interface {
+	RegisterActionManager(ctx context.Context) (CustomActionManager, error)
+}
+
 type ConnectorBuilder interface {
 	Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 	Validate(ctx context.Context) (annotations.Annotations, error)
@@ -89,6 +104,7 @@ type builderImpl struct {
 	resourceProvisionersV2 map[string]ResourceProvisionerV2
 	resourceManagers       map[string]ResourceManager
 	accountManager         AccountManager
+	actionManager          CustomActionManager
 	credentialManagers     map[string]CredentialManager
 	eventFeed              EventProvider
 	cb                     ConnectorBuilder
@@ -99,6 +115,9 @@ type builderImpl struct {
 }
 
 func (b *builderImpl) BulkCreateTickets(ctx context.Context, request *v2.TicketsServiceBulkCreateTicketsRequest) (*v2.TicketsServiceBulkCreateTicketsResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.BulkCreateTickets")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.BulkCreateTicketsType
 	if b.ticketManager == nil {
@@ -125,6 +144,9 @@ func (b *builderImpl) BulkCreateTickets(ctx context.Context, request *v2.Tickets
 }
 
 func (b *builderImpl) BulkGetTickets(ctx context.Context, request *v2.TicketsServiceBulkGetTicketsRequest) (*v2.TicketsServiceBulkGetTicketsResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.BulkGetTickets")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.BulkGetTicketsType
 	if b.ticketManager == nil {
@@ -151,6 +173,9 @@ func (b *builderImpl) BulkGetTickets(ctx context.Context, request *v2.TicketsSer
 }
 
 func (b *builderImpl) ListTicketSchemas(ctx context.Context, request *v2.TicketsServiceListTicketSchemasRequest) (*v2.TicketsServiceListTicketSchemasResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListTicketSchemas")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.ListTicketSchemasType
 	if b.ticketManager == nil {
@@ -180,6 +205,9 @@ func (b *builderImpl) ListTicketSchemas(ctx context.Context, request *v2.Tickets
 }
 
 func (b *builderImpl) CreateTicket(ctx context.Context, request *v2.TicketsServiceCreateTicketRequest) (*v2.TicketsServiceCreateTicketResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.CreateTicket")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.CreateTicketType
 	if b.ticketManager == nil {
@@ -222,6 +250,9 @@ func (b *builderImpl) CreateTicket(ctx context.Context, request *v2.TicketsServi
 }
 
 func (b *builderImpl) GetTicket(ctx context.Context, request *v2.TicketsServiceGetTicketRequest) (*v2.TicketsServiceGetTicketResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetTicket")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.GetTicketType
 	if b.ticketManager == nil {
@@ -250,6 +281,9 @@ func (b *builderImpl) GetTicket(ctx context.Context, request *v2.TicketsServiceG
 }
 
 func (b *builderImpl) GetTicketSchema(ctx context.Context, request *v2.TicketsServiceGetTicketSchemaRequest) (*v2.TicketsServiceGetTicketSchemaResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetTicketSchema")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.GetTicketSchemaType
 	if b.ticketManager == nil {
@@ -280,6 +314,7 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 			resourceProvisionersV2: make(map[string]ResourceProvisionerV2),
 			resourceManagers:       make(map[string]ResourceManager),
 			accountManager:         nil,
+			actionManager:          nil,
 			credentialManagers:     make(map[string]CredentialManager),
 			cb:                     c,
 			ticketManager:          nil,
@@ -304,6 +339,27 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 				return nil, fmt.Errorf("error: cannot set multiple ticket managers")
 			}
 			ret.ticketManager = ticketManager
+		}
+
+		if actionManager, ok := c.(CustomActionManager); ok {
+			if ret.actionManager != nil {
+				return nil, fmt.Errorf("error: cannot set multiple action managers")
+			}
+			ret.actionManager = actionManager
+		}
+
+		if registerActionManager, ok := c.(RegisterActionManager); ok {
+			if ret.actionManager != nil {
+				return nil, fmt.Errorf("error: cannot register multiple action managers")
+			}
+			actionManager, err := registerActionManager.RegisterActionManager(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error: registering action manager failed: %w", err)
+			}
+			if actionManager == nil {
+				return nil, fmt.Errorf("error: action manager is nil")
+			}
+			ret.actionManager = actionManager
 		}
 
 		for _, rb := range c.ResourceSyncers(ctx) {
@@ -405,6 +461,9 @@ func (b *builderImpl) ListResourceTypes(
 	ctx context.Context,
 	request *v2.ResourceTypesServiceListResourceTypesRequest,
 ) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListResourceTypes")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.ListResourceTypesType
 	var out []*v2.ResourceType
@@ -419,6 +478,9 @@ func (b *builderImpl) ListResourceTypes(
 
 // ListResources returns all available resources for a given resource type ID.
 func (b *builderImpl) ListResources(ctx context.Context, request *v2.ResourcesServiceListResourcesRequest) (*v2.ResourcesServiceListResourcesResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListResources")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.ListResourcesType
 	rb, ok := b.resourceBuilders[request.ResourceTypeId]
@@ -451,6 +513,9 @@ func (b *builderImpl) ListResources(ctx context.Context, request *v2.ResourcesSe
 
 // ListEntitlements returns all the entitlements for a given resource.
 func (b *builderImpl) ListEntitlements(ctx context.Context, request *v2.EntitlementsServiceListEntitlementsRequest) (*v2.EntitlementsServiceListEntitlementsResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListEntitlements")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.ListEntitlementsType
 	rb, ok := b.resourceBuilders[request.Resource.Id.ResourceType]
@@ -483,6 +548,9 @@ func (b *builderImpl) ListEntitlements(ctx context.Context, request *v2.Entitlem
 
 // ListGrants lists all the grants for a given resource.
 func (b *builderImpl) ListGrants(ctx context.Context, request *v2.GrantsServiceListGrantsRequest) (*v2.GrantsServiceListGrantsResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListGrants")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.ListGrantsType
 	rid := request.Resource.Id
@@ -518,6 +586,9 @@ func (b *builderImpl) ListGrants(ctx context.Context, request *v2.GrantsServiceL
 
 // GetMetadata gets all metadata for a connector.
 func (b *builderImpl) GetMetadata(ctx context.Context, request *v2.ConnectorServiceGetMetadataRequest) (*v2.ConnectorServiceGetMetadataResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetMetadata")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.GetMetadataType
 	md, err := b.cb.Metadata(ctx)
@@ -630,6 +701,7 @@ func getCapabilities(ctx context.Context, b *builderImpl) (*v2.ConnectorCapabili
 			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_CREATE] = struct{}{}
 			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_DELETE] = struct{}{}
 		}
+
 		resourceTypeCapabilities = append(resourceTypeCapabilities, resourceTypeCapability)
 	}
 	sort.Slice(resourceTypeCapabilities, func(i, j int) bool {
@@ -642,6 +714,10 @@ func getCapabilities(ctx context.Context, b *builderImpl) (*v2.ConnectorCapabili
 
 	if b.ticketManager != nil {
 		connectorCaps[v2.Capability_CAPABILITY_TICKETING] = struct{}{}
+	}
+
+	if b.actionManager != nil {
+		connectorCaps[v2.Capability_CAPABILITY_ACTIONS] = struct{}{}
 	}
 
 	var caps []v2.Capability
@@ -664,6 +740,9 @@ func getCapabilities(ctx context.Context, b *builderImpl) (*v2.ConnectorCapabili
 
 // Validate validates the connector.
 func (b *builderImpl) Validate(ctx context.Context, request *v2.ConnectorServiceValidateRequest) (*v2.ConnectorServiceValidateResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.Validate")
+	defer span.End()
+
 	annos, err := b.cb.Validate(ctx)
 	if err != nil {
 		return nil, err
@@ -673,6 +752,9 @@ func (b *builderImpl) Validate(ctx context.Context, request *v2.ConnectorService
 }
 
 func (b *builderImpl) Grant(ctx context.Context, request *v2.GrantManagerServiceGrantRequest) (*v2.GrantManagerServiceGrantResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.Grant")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.GrantType
 	l := ctxzap.Extract(ctx)
@@ -710,6 +792,9 @@ func (b *builderImpl) Grant(ctx context.Context, request *v2.GrantManagerService
 }
 
 func (b *builderImpl) Revoke(ctx context.Context, request *v2.GrantManagerServiceRevokeRequest) (*v2.GrantManagerServiceRevokeResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.Revoke")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.RevokeType
 
@@ -748,10 +833,16 @@ func (b *builderImpl) Revoke(ctx context.Context, request *v2.GrantManagerServic
 // GetAsset streams the asset to the client.
 // FIXME(jirwin): Asset streaming is disabled.
 func (b *builderImpl) GetAsset(request *v2.AssetServiceGetAssetRequest, server v2.AssetService_GetAssetServer) error {
+	_, span := tracer.Start(server.Context(), "builderImpl.GetAsset")
+	defer span.End()
+
 	return nil
 }
 
 func (b *builderImpl) ListEvents(ctx context.Context, request *v2.ListEventsRequest) (*v2.ListEventsResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListEvents")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.ListEventsType
 	if b.eventFeed == nil {
@@ -776,6 +867,9 @@ func (b *builderImpl) ListEvents(ctx context.Context, request *v2.ListEventsRequ
 }
 
 func (b *builderImpl) CreateResource(ctx context.Context, request *v2.CreateResourceRequest) (*v2.CreateResourceResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.CreateResource")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.CreateResourceType
 	l := ctxzap.Extract(ctx)
@@ -797,6 +891,9 @@ func (b *builderImpl) CreateResource(ctx context.Context, request *v2.CreateReso
 }
 
 func (b *builderImpl) DeleteResource(ctx context.Context, request *v2.DeleteResourceRequest) (*v2.DeleteResourceResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.DeleteResource")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.DeleteResourceType
 
@@ -819,6 +916,9 @@ func (b *builderImpl) DeleteResource(ctx context.Context, request *v2.DeleteReso
 }
 
 func (b *builderImpl) RotateCredential(ctx context.Context, request *v2.RotateCredentialRequest) (*v2.RotateCredentialResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.RotateCredential")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.RotateCredentialsType
 	l := ctxzap.Extract(ctx)
@@ -874,6 +974,9 @@ func (b *builderImpl) Cleanup(ctx context.Context, request *v2.ConnectorServiceC
 }
 
 func (b *builderImpl) CreateAccount(ctx context.Context, request *v2.CreateAccountRequest) (*v2.CreateAccountResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.CreateAccount")
+	defer span.End()
+
 	start := b.nowFunc()
 	tt := tasks.CreateAccountType
 	l := ctxzap.Extract(ctx)
@@ -923,4 +1026,113 @@ func (b *builderImpl) CreateAccount(ctx context.Context, request *v2.CreateAccou
 
 	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
 	return rv, nil
+}
+
+func (b *builderImpl) ListActionSchemas(ctx context.Context, request *v2.ListActionSchemasRequest) (*v2.ListActionSchemasResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListActionSchemas")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionListSchemasType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	actionSchemas, annos, err := b.actionManager.ListActionSchemas(ctx)
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: listing action schemas failed: %w", err)
+	}
+
+	rv := &v2.ListActionSchemasResponse{
+		Schemas:     actionSchemas,
+		Annotations: annos,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return rv, nil
+}
+
+func (b *builderImpl) GetActionSchema(ctx context.Context, request *v2.GetActionSchemaRequest) (*v2.GetActionSchemaResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetActionSchema")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionGetSchemaType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	actionSchema, annos, err := b.actionManager.GetActionSchema(ctx, request.GetName())
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: getting action schema failed: %w", err)
+	}
+
+	rv := &v2.GetActionSchemaResponse{
+		Schema:      actionSchema,
+		Annotations: annos,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return rv, nil
+}
+
+func (b *builderImpl) InvokeAction(ctx context.Context, request *v2.InvokeActionRequest) (*v2.InvokeActionResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.InvokeAction")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionInvokeType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	id, status, resp, annos, err := b.actionManager.InvokeAction(ctx, request.GetName(), request.GetArgs())
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: invoking action failed: %w", err)
+	}
+
+	rv := &v2.InvokeActionResponse{
+		Id:          id,
+		Status:      status,
+		Annotations: annos,
+		Response:    resp,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return rv, nil
+}
+
+func (b *builderImpl) GetActionStatus(ctx context.Context, request *v2.GetActionStatusRequest) (*v2.GetActionStatusResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetActionStatus")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionStatusType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	status, rv, annos, err := b.actionManager.GetActionStatus(ctx, request.GetId())
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: getting action status failed: %w", err)
+	}
+
+	resp := &v2.GetActionStatusResponse{
+		Id:          request.GetId(),
+		Name:        request.GetName(),
+		Status:      status,
+		Annotations: annos,
+		Response:    rv,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return resp, nil
 }

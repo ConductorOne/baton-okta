@@ -13,17 +13,20 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorrunner"
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-func DefineConfiguration(
+func DefineConfiguration[T field.Configurable](
 	ctx context.Context,
 	connectorName string,
-	connector cli.GetConnectorFunc,
+	connector cli.GetConnectorFunc[T],
 	schema field.Configuration,
 	options ...connectorrunner.Option,
 ) (*viper.Viper, *cobra.Command, error) {
+	if err := verifyStructFields[T](schema); err != nil {
+		return nil, nil, fmt.Errorf("VerifyStructFields failed: %w", err)
+	}
+
 	v := viper.New()
 	v.SetConfigType("yaml")
 
@@ -54,6 +57,7 @@ func DefineConfiguration(
 	for _, f := range uniqueFields {
 		confschema.Fields = append(confschema.Fields, f)
 	}
+
 	// setup CLI with cobra
 	mainCMD := &cobra.Command{
 		Use:           connectorName,
@@ -63,77 +67,90 @@ func DefineConfiguration(
 		RunE:          cli.MakeMainCommand(ctx, connectorName, v, confschema, connector, options...),
 	}
 	// set persistent flags only on the main subcommand
-	err = setFlagsAndConstraints(mainCMD, field.NewConfiguration(field.DefaultFields, field.DefaultRelationships...))
+	err = cli.SetFlagsAndConstraints(mainCMD, field.NewConfiguration(field.DefaultFields, field.DefaultRelationships...))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// set the rest of flags
-	err = setFlagsAndConstraints(mainCMD, schema)
+	err = cli.SetFlagsAndConstraints(mainCMD, schema)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	grpcServerCmd := &cobra.Command{
+	mainCMD.AddCommand(cli.AdditionalCommands(connectorName, schema.Fields)...)
+	cli.VisitFlags(mainCMD, v)
+
+	err = cli.OptionallyAddLambdaCommand(ctx, connectorName, v, connector, confschema, mainCMD)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_, err = cli.AddCommand(mainCMD, v, &schema, &cobra.Command{
 		Use:    "_connector-service",
 		Short:  "Start the connector service",
 		Hidden: true,
 		RunE:   cli.MakeGRPCServerCommand(ctx, connectorName, v, confschema, connector),
-	}
-	err = setFlagsAndConstraints(grpcServerCmd, schema)
+	})
+
 	if err != nil {
 		return nil, nil, err
 	}
-	mainCMD.AddCommand(grpcServerCmd)
 
-	capabilitiesCmd := &cobra.Command{
+	_, err = cli.AddCommand(mainCMD, v, &schema, &cobra.Command{
 		Use:   "capabilities",
 		Short: "Get connector capabilities",
 		RunE:  cli.MakeCapabilitiesCommand(ctx, connectorName, v, confschema, connector),
-	}
-	err = setFlagsAndConstraints(capabilitiesCmd, schema)
+	})
+
 	if err != nil {
 		return nil, nil, err
 	}
-	mainCMD.AddCommand(capabilitiesCmd)
 
-	mainCMD.AddCommand(cli.AdditionalCommands(connectorName, schema.Fields)...)
-
-	// NOTE(shackra): Set all values from Viper to the flags so
-	// that Cobra won't complain that a flag is missing in case we
-	// pass values through environment variables
-
-	// main subcommand
-	mainCMD.Flags().VisitAll(func(f *pflag.Flag) {
-		if v.IsSet(f.Name) {
-			_ = mainCMD.Flags().Set(f.Name, v.GetString(f.Name))
-		}
+	_, err = cli.AddCommand(mainCMD, v, nil, &cobra.Command{
+		Use:   "config",
+		Short: "Get the connector config schema",
+		RunE:  cli.MakeConfigSchemaCommand(ctx, connectorName, v, confschema, connector),
 	})
 
-	// children process subcommand
-	grpcServerCmd.Flags().VisitAll(func(f *pflag.Flag) {
-		if v.IsSet(f.Name) {
-			_ = grpcServerCmd.Flags().Set(f.Name, v.GetString(f.Name))
-		}
-	})
-
-	// capabilities subcommand
-	capabilitiesCmd.Flags().VisitAll(func(f *pflag.Flag) {
-		if v.IsSet(f.Name) {
-			_ = capabilitiesCmd.Flags().Set(f.Name, v.GetString(f.Name))
-		}
-	})
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return v, mainCMD, nil
 }
 
-func listFieldConstrainsAsStrings(constrains field.SchemaFieldRelationship) []string {
-	var fields []string
-	for _, v := range constrains.Fields {
-		fields = append(fields, v.FieldName)
+func verifyStructFields[T field.Configurable](schema field.Configuration) error {
+	// Verify that every field in the confschema has a corresponding struct tag in the struct defined in getconnector of type T
+	//  or that it obeys the old interface, a *viper.Viper
+	var config T // Create a zero-value instance of T
+	tType := reflect.TypeOf(config)
+	// Viper doesn't do struct fields
+	if tType == reflect.TypeOf(&viper.Viper{}) {
+		return nil
 	}
-
-	return fields
+	configType := reflect.TypeOf(config)
+	if configType.Kind() == reflect.Ptr {
+		configType = configType.Elem()
+	}
+	if configType.Kind() != reflect.Struct {
+		return fmt.Errorf("T must be a struct type, got %v", configType.Kind())
+	}
+	for _, field := range schema.Fields {
+		fieldFound := false
+		for i := 0; i < configType.NumField(); i++ {
+			structField := configType.Field(i)
+			if structField.Tag.Get("mapstructure") == field.FieldName {
+				fieldFound = true
+				break
+			}
+		}
+		if !fieldFound {
+			return fmt.Errorf("field %s in confschema does not have a corresponding struct tag in the configuration struct", field.FieldName)
+		}
+	}
+	return nil
 }
 
 func cleanOrGetConfigPath(customPath string) (string, string, error) {
@@ -158,158 +175,4 @@ func cleanOrGetConfigPath(customPath string) (string, string, error) {
 	}
 
 	return ".", ".baton", nil
-}
-
-func setFlagsAndConstraints(command *cobra.Command, schema field.Configuration) error {
-	// add options
-	for _, field := range schema.Fields {
-		switch field.FieldType {
-		case reflect.Bool:
-			value, err := field.Bool()
-			if err != nil {
-				return fmt.Errorf(
-					"field %s, %s: %w",
-					field.FieldName,
-					field.FieldType,
-					err,
-				)
-			}
-			if field.Persistent {
-				command.PersistentFlags().
-					BoolP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			} else {
-				command.Flags().
-					BoolP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			}
-		case reflect.Int:
-			value, err := field.Int()
-			if err != nil {
-				return fmt.Errorf(
-					"field %s, %s: %w",
-					field.FieldName,
-					field.FieldType,
-					err,
-				)
-			}
-			if field.Persistent {
-				command.PersistentFlags().
-					IntP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			} else {
-				command.Flags().
-					IntP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			}
-		case reflect.String:
-			value, err := field.String()
-			if err != nil {
-				return fmt.Errorf(
-					"field %s, %s: %w",
-					field.FieldName,
-					field.FieldType,
-					err,
-				)
-			}
-			if field.Persistent {
-				command.PersistentFlags().
-					StringP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			} else {
-				command.Flags().
-					StringP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			}
-		case reflect.Slice:
-			value, err := field.StringSlice()
-			if err != nil {
-				return fmt.Errorf(
-					"field %s, %s: %w",
-					field.FieldName,
-					field.FieldType,
-					err,
-				)
-			}
-			if field.Persistent {
-				command.PersistentFlags().
-					StringSliceP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			} else {
-				command.Flags().
-					StringSliceP(field.FieldName, field.CLIShortHand, value, field.GetDescription())
-			}
-		default:
-			return fmt.Errorf(
-				"field %s, %s is not yet supported",
-				field.FieldName,
-				field.FieldType,
-			)
-		}
-
-		// mark hidden
-		if field.Hidden {
-			if field.Persistent {
-				err := command.PersistentFlags().MarkHidden(field.FieldName)
-				if err != nil {
-					return fmt.Errorf(
-						"cannot hide persistent field %s, %s: %w",
-						field.FieldName,
-						field.FieldType,
-						err,
-					)
-				}
-			} else {
-				err := command.Flags().MarkHidden(field.FieldName)
-				if err != nil {
-					return fmt.Errorf(
-						"cannot hide field %s, %s: %w",
-						field.FieldName,
-						field.FieldType,
-						err,
-					)
-				}
-			}
-		}
-
-		// mark required
-		if field.Required {
-			if field.FieldType == reflect.Bool {
-				return fmt.Errorf("requiring %s of type %s does not make sense", field.FieldName, field.FieldType)
-			}
-
-			if field.Persistent {
-				err := command.MarkPersistentFlagRequired(field.FieldName)
-				if err != nil {
-					return fmt.Errorf(
-						"cannot require persistent field %s, %s: %w",
-						field.FieldName,
-						field.FieldType,
-						err,
-					)
-				}
-			} else {
-				err := command.MarkFlagRequired(field.FieldName)
-				if err != nil {
-					return fmt.Errorf(
-						"cannot require field %s, %s: %w",
-						field.FieldName,
-						field.FieldType,
-						err,
-					)
-				}
-			}
-		}
-	}
-
-	// apply constrains
-	for _, constrain := range schema.Constraints {
-		switch constrain.Kind {
-		case field.MutuallyExclusive:
-			command.MarkFlagsMutuallyExclusive(listFieldConstrainsAsStrings(constrain)...)
-		case field.RequiredTogether:
-			command.MarkFlagsRequiredTogether(listFieldConstrainsAsStrings(constrain)...)
-		case field.AtLeastOne:
-			command.MarkFlagsOneRequired(listFieldConstrainsAsStrings(constrain)...)
-		case field.Dependents:
-			// do nothing
-		default:
-			return fmt.Errorf("invalid config")
-		}
-	}
-
-	return nil
 }
