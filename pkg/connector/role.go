@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"sync"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -43,10 +42,9 @@ var standardRoleTypes = []*okta.Role{
 }
 
 type roleResourceType struct {
-	resourceType  *v2.ResourceType
-	client        *okta.Client
-	userRoleCache sync.Map
-	connector     *Okta
+	resourceType *v2.ResourceType
+	client       *okta.Client
+	connector    *Okta
 }
 
 type CustomRoles struct {
@@ -187,13 +185,21 @@ func (o *roleResourceType) Grants(
 					continue
 				}
 
-				if role.AssignmentType != "USER" || role.Type == roleTypeCustom {
+				if role.AssignmentType != "USER" {
 					continue
 				}
 
-				userRoles.Add(role.Type)
+				if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
+					continue
+				}
+
+				if role.Type == roleTypeCustom {
+					userRoles.Add(role.Role)
+				} else {
+					userRoles.Add(role.Type)
+				}
 			}
-			o.userRoleCache.Store(userId, userRoles)
+			o.connector.userRoleCache.Store(userId, userRoles)
 		}
 
 		if userRoles.ContainsOne(resource.Id.GetResource()) {
@@ -625,7 +631,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 }
 
 func (o *roleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
-	appUserRoleCacheVal, ok := o.userRoleCache.Load(userId)
+	appUserRoleCacheVal, ok := o.connector.userRoleCache.Load(userId)
 	if !ok {
 		return nil, nil
 	}

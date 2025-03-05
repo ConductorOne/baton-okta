@@ -2,7 +2,7 @@ module github.com/conductorone/baton-okta
 
 go 1.23.6
 
-toolchain go1.23.7
+toolchain go1.24.0
 
 require (
 	github.com/conductorone/baton-sdk v0.2.71

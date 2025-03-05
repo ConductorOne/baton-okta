@@ -35,6 +35,7 @@ type Okta struct {
 	skipSecondaryEmails bool
 	awsConfig           *awsConfig
 	SyncSecrets         bool
+	userRoleCache       sync.Map
 }
 
 type ciamConfig struct {
@@ -206,7 +207,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	if o.syncCustomRoles {
 		resourceSyncer = append(resourceSyncer,
-			customRoleBuilder(o.domain, o.client),
+			customRoleBuilder(o),
 			resourceSetsBuilder(o.domain, o.client),
 			resourceSetsBindingsBuilder(o.domain, o.client),
 		)
