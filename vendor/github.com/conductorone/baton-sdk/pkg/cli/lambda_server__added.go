@@ -96,8 +96,16 @@ func OptionallyAddLambdaCommand[T field.Configurable](
 			return fmt.Errorf("lambda-run: failed to get connector: %w", err)
 		}
 
+		// Ensure only one auth method is provided
+		jwk := v.GetString(field.LambdaServerAuthJWTSigner.GetName())
+		jwksUrl := v.GetString(field.LambdaServerAuthJWTJWKSUrl.GetName())
+		if (jwk == "" && jwksUrl == "") || (jwk != "" && jwksUrl != "") {
+			return fmt.Errorf("lambda-run: must specify exactly one of %s or %s", field.LambdaServerAuthJWTSigner.GetName(), field.LambdaServerAuthJWTJWKSUrl.GetName())
+		}
+
 		authConfig := auth.Config{
-			PublicKeyJWK: v.GetString(field.LambdaServerAuthJWTSigner.GetName()),
+			PublicKeyJWK: jwk,
+			JWKSUrl:      jwksUrl,
 			Issuer:       v.GetString(field.LambdaServerAuthJWTExpectedIssuerField.GetName()),
 			Subject:      v.GetString(field.LambdaServerAuthJWTExpectedSubjectField.GetName()),
 			Audience:     v.GetString(field.LambdaServerAuthJWTExpectedAudienceField.GetName()),
