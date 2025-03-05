@@ -148,13 +148,10 @@ func (o *groupResourceType) Grants(
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
 		}
 		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
-		if !ok {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get groups users count")
-		}
 
 		var annos annotations.Annotations
 		nextPage := ""
-		if usersCount > 0 {
+		if !ok || usersCount > 0 {
 			qp := queryParams(token.Size, page)
 
 			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
@@ -249,10 +246,7 @@ func (o *groupResourceType) Grants(
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
 			}
 			usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
-			if !ok {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get groups users count")
-			}
-			shouldExpand := usersCount > 0
+			shouldExpand := !ok || usersCount > 0
 			rv = append(rv, roleGroupGrant(groupID, roleResourceVal, shouldExpand))
 		}
 
