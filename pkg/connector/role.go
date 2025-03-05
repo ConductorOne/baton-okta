@@ -432,18 +432,23 @@ func roleGrant(userID string, resource *v2.Resource) *v2.Grant {
 	)
 }
 
-func roleGroupGrant(groupID string, resource *v2.Resource) *v2.Grant {
+func roleGroupGrant(groupID string, resource *v2.Resource, shouldExpand bool) *v2.Grant {
 	gr := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}}
 
-	return sdkGrant.NewGrant(resource, "assigned", gr,
+	grantOpts := []sdkGrant.GrantOption{
 		sdkGrant.WithAnnotation(&v2.V1Identifier{
 			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 		}),
-		sdkGrant.WithAnnotation(&v2.GrantExpandable{
+	}
+
+	if shouldExpand {
+		grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.GrantExpandable{
 			EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
 			Shallow:        true,
-		}),
-	)
+		}))
+	}
+
+	return sdkGrant.NewGrant(resource, "assigned", gr, grantOpts...)
 }
 
 func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
