@@ -16,14 +16,14 @@ require (
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0 // indirect
-	github.com/conductorone/dpop v0.1.4 // indirect
+	github.com/conductorone/dpop v0.2.0 // indirect
 	github.com/conductorone/dpop/integrations/dpop_grpc v0.1.4 // indirect
-	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.1.4 // indirect
+	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
 	github.com/gammazero/deque v1.0.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
@@ -116,15 +116,15 @@ require (
 	go.opentelemetry.io/otel/metric v1.34.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
-	golang.org/x/crypto v0.34.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c // indirect
-	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/oauth2 v0.26.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250219182151-9fdb1cabc7b2 // indirect
-	google.golang.org/grpc v1.70.0
+	golang.org/x/net v0.36.0 // indirect
+	golang.org/x/oauth2 v0.28.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
+	google.golang.org/grpc v1.71.0
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -135,9 +135,3 @@ require (
 )
 
 replace github.com/conductorone/baton-sdk => ../baton-sdk
-
-replace github.com/conductorone/dpop => ../dpop
-
-replace github.com/conductorone/dpop/integrations/dpop_grpc => ../dpop/integrations/dpop_grpc
-
-replace github.com/conductorone/dpop/integrations/dpop_oauth2 => ../dpop/integrations/dpop_oauth2
