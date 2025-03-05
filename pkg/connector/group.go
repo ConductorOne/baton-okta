@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -21,6 +22,7 @@ import (
 )
 
 const membershipUpdatedField = "lastMembershipUpdated"
+const usersCountProfileKey = "users_count"
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
@@ -51,7 +53,7 @@ func (o *groupResourceType) List(
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
 		}
 	} else {
-		qp := queryParams(token.Size, page)
+		qp := queryParamsExpand(token.Size, page, "stats")
 		groups, respCtx, err = o.listGroups(ctx, token, qp)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
@@ -141,16 +143,33 @@ func (o *groupResourceType) Grants(
 
 	switch bag.ResourceTypeID() {
 	case resourceTypeUser.Id:
-		qp := queryParams(token.Size, page)
-
-		users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
+		groupTrait, err := sdkResource.GetGroupTrait(resource)
 		if err != nil {
-			return nil, "", nil, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
+		}
+		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+		if !ok {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get groups users count")
 		}
 
-		nextPage, annos, err := parseResp(respCtx.OktaResponse)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		var annos annotations.Annotations
+		nextPage := ""
+		if usersCount > 0 {
+			qp := queryParams(token.Size, page)
+
+			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
+			if err != nil {
+				return nil, "", nil, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+			}
+
+			nextPage, annos, err = parseResp(respCtx.OktaResponse)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+			}
+
+			for _, user := range users {
+				rv = append(rv, groupGrant(resource, user))
+			}
 		}
 
 		err = bag.Next(nextPage)
@@ -158,9 +177,6 @@ func (o *groupResourceType) Grants(
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 		}
 
-		for _, user := range users {
-			rv = append(rv, groupGrant(resource, user))
-		}
 		pageToken, err := bag.Marshal()
 		if err != nil {
 			return nil, "", nil, err
@@ -228,7 +244,16 @@ func (o *groupResourceType) Grants(
 				return nil, "", nil, err
 			}
 
-			rv = append(rv, roleGroupGrant(groupID, roleResourceVal))
+			groupTrait, err := sdkResource.GetGroupTrait(resource)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
+			}
+			usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+			if !ok {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get groups users count")
+			}
+			shouldExpand := usersCount > 0
+			rv = append(rv, roleGroupGrant(groupID, roleResourceVal, shouldExpand))
 		}
 
 		// TODO(lauren) Move this to list method like other methods do
@@ -406,9 +431,34 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 }
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
+	embedded := group.Embedded
+	if embedded == nil {
+		return nil, fmt.Errorf("group '%s' embedded data was nil", group.Id)
+	}
+	embeddedMap, ok := embedded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("group '%s' embedded data was not a map", group.Id)
+	}
+	embeddedStats, ok := embeddedMap["stats"]
+	if !ok {
+		return nil, fmt.Errorf("embedded stat data was nil for group '%s'", group.Id)
+	}
+	embeddedStatsMap, ok := embeddedStats.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("group '%s' embedded stats data was not a map", group.Id)
+	}
+
+	embeddedStatsUsersCount, ok := embeddedStatsMap["usersCount"]
+	if !ok {
+		return nil, fmt.Errorf("users count not present on group '%s' embedded stats data", group.Id)
+	}
+
+	userCount := embeddedStatsUsersCount.(float64)
+
 	profile, err := structpb.NewStruct(map[string]interface{}{
-		"description": group.Profile.Description,
-		"name":        group.Profile.Name,
+		"description":        group.Profile.Description,
+		"name":               group.Profile.Name,
+		usersCountProfileKey: int64(userCount),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to construct role profile for role trait: %w", err)
