@@ -119,6 +119,8 @@ func (o *groupResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
 	var rv []*v2.Grant
 	bag := &pagination.Bag{}
 	err := bag.Unmarshal(token.Token)
@@ -152,6 +154,10 @@ func (o *groupResourceType) Grants(
 		var annos annotations.Annotations
 		nextPage := ""
 		if !ok || usersCount > 0 {
+			if !ok {
+				l.Info("okta-connectorv2: making list group users call because users_count profile attribute was not present")
+			}
+
 			qp := queryParams(token.Size, page)
 
 			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
@@ -167,6 +173,8 @@ func (o *groupResourceType) Grants(
 			for _, user := range users {
 				rv = append(rv, groupGrant(resource, user))
 			}
+		} else {
+			l.Info("okta-connectorv2: skipping list group users")
 		}
 
 		err = bag.Next(nextPage)
@@ -247,6 +255,9 @@ func (o *groupResourceType) Grants(
 			}
 			usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
 			shouldExpand := !ok || usersCount > 0
+			if !shouldExpand {
+				l.Info("okta-connectorv2: skipping expand for role group grant since users_count is 0")
+			}
 			rv = append(rv, roleGroupGrant(groupID, roleResourceVal, shouldExpand))
 		}
 
