@@ -57,13 +57,8 @@ func Generate(name string, schema field.Configuration) {
 		if f.ExportTarget != field.ExportTargetGUI && f.ExportTarget != field.ExportTargetOps && f.ExportTarget != field.ExportTargetCLIOnly {
 			continue
 		}
-		fieldName := f.StructFieldName
-		if fieldName == "" {
-			fieldName = toPascalCase(f.FieldName)
-		}
-
 		nf := FieldInfo{
-			FieldName: fieldName,
+			FieldName: toPascalCase(f.FieldName),
 			Tag:       f.FieldName,
 		}
 		switch f.Variant {
@@ -121,10 +116,12 @@ func (c* {{ .StructName }}) findFieldByTag(tagValue string) (any, bool) {
 	return nil, false
 }
 
+
+
 func (c *{{ .StructName }}) GetStringSlice(fieldName string) []string {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		return []string{}
+		panic("could not find field by tag")
 	}
 	t, ok := v.([]string)
 	if !ok {
@@ -136,7 +133,7 @@ func (c *{{ .StructName }}) GetStringSlice(fieldName string) []string {
 func (c *{{ .StructName }}) GetString(fieldName string) string {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		return ""
+		panic("could not find field by tag")
 	}
 	t, ok := v.(string)
 	if !ok {
@@ -148,7 +145,7 @@ func (c *{{ .StructName }}) GetString(fieldName string) string {
 func (c *{{ .StructName }}) GetInt(fieldName string) int {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		return 0
+		panic("could not find field by tag")
 	}
 	t, ok := v.(int)
 	if !ok {
@@ -160,7 +157,7 @@ func (c *{{ .StructName }}) GetInt(fieldName string) int {
 func (c *{{ .StructName }}) GetBool(fieldName string) bool {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		return false
+		panic("could not find field by tag")
 	}
 	t, ok := v.(bool)
 	if !ok {

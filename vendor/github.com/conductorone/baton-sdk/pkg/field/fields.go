@@ -60,10 +60,9 @@ type SchemaField struct {
 	ExportTarget ExportTarget
 	HelpURL      string
 
-	Variant         Variant
-	Rules           FieldRule
-	Secret          bool
-	StructFieldName string
+	Variant Variant
+	Rules   FieldRule
+	Secret  bool
 
 	// Default fields - syncer side
 	SyncerConfig syncerConfig

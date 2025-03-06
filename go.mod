@@ -1,11 +1,9 @@
 module github.com/conductorone/baton-okta
 
-go 1.23.6
-
-toolchain go1.24.0
+go 1.23.4
 
 require (
-	github.com/conductorone/baton-sdk v0.2.71
+	github.com/conductorone/baton-sdk v0.2.70
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone
 	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
@@ -16,10 +14,6 @@ require (
 )
 
 require (
-	github.com/aws/aws-lambda-go v1.47.0 // indirect
-	github.com/conductorone/dpop v0.1.4 // indirect
-	github.com/conductorone/dpop/integrations/dpop_grpc v0.1.4 // indirect
-	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.1.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
@@ -29,7 +23,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.0 // indirect
-	github.com/jellydator/ttlcache/v3 v3.3.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect

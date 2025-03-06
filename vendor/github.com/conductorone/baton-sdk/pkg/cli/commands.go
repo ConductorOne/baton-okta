@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/spf13/cobra"
@@ -23,12 +24,32 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorrunner"
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/logging"
+	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/conductorone/baton-sdk/pkg/uotel"
 )
 
-type ContrainstSetter func(*cobra.Command, field.Configuration) error
+type GetConnectorFunc[T any] func(context.Context, *T) (types.ConnectorServer, error)
 
-func MakeMainCommand[T field.Configurable](
+func makeGenericConfiguration[T any](v *viper.Viper) (*T, error) {
+	// Create an instance of the struct type T using reflection
+	var config T // Create a zero-value instance of T
+	// Ensure T is a struct (or pointer to struct)
+	tType := reflect.TypeOf(config)
+	if tType == reflect.TypeOf(viper.Viper{}) {
+		return any(v).(*T), nil
+	}
+	if tType.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("T must be a struct, but got %s", tType.Kind())
+	}
+	// Unmarshal into the config struct
+	err := v.Unmarshal(&config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+	return &config, nil
+}
+
+func MakeMainCommand[T any](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,
@@ -121,50 +142,12 @@ func MakeMainCommand[T field.Configurable](
 					))
 			case v.GetBool("event-feed"):
 				opts = append(opts, connectorrunner.WithOnDemandEventStream())
-			case v.GetString("create-account-profile") != "":
+			case v.GetString("create-account-login") != "":
 				profileMap := v.GetStringMap("create-account-profile")
 				if profileMap == nil {
-					return fmt.Errorf("create-account-profile is empty or incorrectly formatted: %v", v.GetString("create-account-profile"))
-				}
-				if v.GetString("create-account-login") != "" {
-					if _, ok := profileMap["login"]; !ok {
-						profileMap["login"] = v.GetString("create-account-login")
-					}
-				}
-				if v.GetString("create-account-email") != "" {
-					if _, ok := profileMap["email"]; !ok {
-						profileMap["email"] = v.GetString("create-account-email")
-					}
-				}
-				login, email := "", ""
-				if l, ok := profileMap["login"]; ok {
-					if l, ok := l.(string); ok {
-						login = l
-					}
-				}
-				if e, ok := profileMap["email"]; ok {
-					if e, ok := e.(string); ok {
-						email = e
-					}
+					profileMap = make(map[string]interface{})
 				}
 				profile, err := structpb.NewStruct(profileMap)
-				if err != nil {
-					return err
-				}
-				opts = append(opts,
-					connectorrunner.WithProvisioningEnabled(),
-					connectorrunner.WithOnDemandCreateAccount(
-						v.GetString("file"),
-						login,
-						email,
-						profile,
-					))
-			case v.GetString("create-account-login") != "":
-				// should only be here if no create-account-profile is provided, so lets make one.
-				profile, err := structpb.NewStruct(map[string]any{
-					"login": v.GetString("create-account-login"),
-					"email": v.GetString("create-account-email"),
-				})
 				if err != nil {
 					return err
 				}
@@ -221,7 +204,7 @@ func MakeMainCommand[T field.Configurable](
 			opts = append(opts, connectorrunner.WithTempDir(v.GetString("c1z-temp-dir")))
 		}
 
-		t, err := MakeGenericConfiguration[T](v)
+		t, err := makeGenericConfiguration[T](v)
 		if err != nil {
 			return fmt.Errorf("failed to make configuration: %w", err)
 		}
@@ -249,7 +232,7 @@ func MakeMainCommand[T field.Configurable](
 	}
 }
 
-func MakeGRPCServerCommand[T field.Configurable](
+func MakeGRPCServerCommand[T any](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,
@@ -297,7 +280,7 @@ func MakeGRPCServerCommand[T field.Configurable](
 		if err := field.Validate(confschema, v); err != nil {
 			return err
 		}
-		t, err := MakeGenericConfiguration[T](v)
+		t, err := makeGenericConfiguration[T](v)
 		if err != nil {
 			return fmt.Errorf("failed to make configuration: %w", err)
 		}
@@ -324,8 +307,6 @@ func MakeGRPCServerCommand[T field.Configurable](
 		case v.GetString("grant-entitlement") != "":
 			copts = append(copts, connector.WithProvisioningEnabled())
 		case v.GetString("revoke-grant") != "":
-			copts = append(copts, connector.WithProvisioningEnabled())
-		case v.GetString("create-account-profile") != "":
 			copts = append(copts, connector.WithProvisioningEnabled())
 		case v.GetString("create-account-login") != "" || v.GetString("create-account-email") != "":
 			copts = append(copts, connector.WithProvisioningEnabled())
@@ -389,7 +370,7 @@ func MakeGRPCServerCommand[T field.Configurable](
 	}
 }
 
-func MakeCapabilitiesCommand[T field.Configurable](
+func MakeCapabilitiesCommand[T any](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,
@@ -420,7 +401,7 @@ func MakeCapabilitiesCommand[T field.Configurable](
 		if err := field.Validate(confschema, v); err != nil {
 			return err
 		}
-		t, err := MakeGenericConfiguration[T](v)
+		t, err := makeGenericConfiguration[T](v)
 		if err != nil {
 			return fmt.Errorf("failed to make configuration: %w", err)
 		}
@@ -464,7 +445,7 @@ func MakeCapabilitiesCommand[T field.Configurable](
 	}
 }
 
-func MakeConfigSchemaCommand[T field.Configurable](
+func MakeConfigSchemaCommand[T any](
 	ctx context.Context,
 	name string,
 	v *viper.Viper,

@@ -10,8 +10,6 @@ github.com/BurntSushi/toml v1.4.0 h1:kuoIxZQy2WRRk1pttg9asf+WVv6tWQuBNVmK8+nqPr0
 github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/DATA-DOG/go-sqlmock v1.5.0 h1:Shsta01QNfFxHCfpW6YH2STWB0MudeXXEWMr20OEh60=
 github.com/DATA-DOG/go-sqlmock v1.5.0/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
-github.com/aws/aws-lambda-go v1.47.0 h1:0H8s0vumYx/YKs4sE7YM0ktwL2eWse+kfopsRI1sXVI=
-github.com/aws/aws-lambda-go v1.47.0/go.mod h1:dpMpZgvWx5vuQJfBt0zqBha60q7Dd7RfgJv23DymV8A=
 github.com/aws/aws-sdk-go-v2 v1.36.2 h1:Ub6I4lq/71+tPb/atswvToaLGVMxKZvjYDVOWEExOcU=
 github.com/aws/aws-sdk-go-v2 v1.36.2/go.mod h1:LLXuLpgzEbD766Z5ECcRmi8AzSwfZItDtmABVkRLGzg=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 h1:zAybnyUQXIZ5mok5Jqwlf58/TFE7uvd3IAsa1aF9cXs=
@@ -58,14 +56,8 @@ github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyY
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
-github.com/conductorone/baton-sdk v0.2.71 h1:U9PnhKC3Wmrr7GvtNN6paOZOhfWojR5BrtFqAqTluOA=
-github.com/conductorone/baton-sdk v0.2.71/go.mod h1:7tap1USJ0Xiy0Ab5WyIxrPrTp3l44KTaSf/cprGxsTY=
-github.com/conductorone/dpop v0.1.4 h1:Y8AWez1jsiw3NFHkeIRVw/QaQRBoek1BFR8evEzse20=
-github.com/conductorone/dpop v0.1.4/go.mod h1:VPpyC2Zcbd6wK16OFSDdYx6t2EfgVdl8q46lxXR3leY=
-github.com/conductorone/dpop/integrations/dpop_grpc v0.1.4 h1:IyFUdl5wu3mu8X+30hnue8nMy7KBYxccfzR/naUou68=
-github.com/conductorone/dpop/integrations/dpop_grpc v0.1.4/go.mod h1:NY1Actp4SLURTt0ipWyeHI7Ed9J/qL2AnLFEyERPyuc=
-github.com/conductorone/dpop/integrations/dpop_oauth2 v0.1.4 h1:qU0yYfmrgLX6L7uAHQ5h32R3bhoDb8ODpeteY8VwbRc=
-github.com/conductorone/dpop/integrations/dpop_oauth2 v0.1.4/go.mod h1:J81c39uyoRKVBsQGTxX41yTJfYDxELNovJd2szK4FTk=
+github.com/conductorone/baton-sdk v0.2.70 h1:OPfZ1hkWfOtncZHgGOnc7obgJA1LAKj5fjhankFIr9c=
+github.com/conductorone/baton-sdk v0.2.70/go.mod h1:vbFwcV+aPjbNcmeWnmvmSo7Mb6JpebcFQcPfdiur5t0=
 github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone h1:uC3LzsqpOxJwdEwBbCvUNVbXS4fiacjtRHT0YKHg4qc=
 github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone/go.mod h1:m26TFqZUtbHD+UjwSSigbl4zgZ8vC74pTMCZyufKQgQ=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
@@ -145,8 +137,6 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/jarcoal/httpmock v1.2.0 h1:gSvTxxFR/MEMfsGrvRbdfpRUMBStovlSRLw0Ep1bwwc=
 github.com/jarcoal/httpmock v1.2.0/go.mod h1:oCoTsnAz4+UoOUIf5lJOWV2QQIW5UoeUI6aM2YnWAZk=
-github.com/jellydator/ttlcache/v3 v3.3.0 h1:BdoC9cE81qXfrxeb9eoJi9dWrdhSuwXMAnHTbnBm4Wc=
-github.com/jellydator/ttlcache/v3 v3.3.0/go.mod h1:bj2/e0l4jRnQdrnSTaGTsh4GSXvMjQcy41i7th0GVGw=
 github.com/kelseyhightower/envconfig v1.4.0 h1:Im6hONhd3pLkfDFsbRgu68RDNkGF1r3dvMUtDTo2cv8=
 github.com/kelseyhightower/envconfig v1.4.0/go.mod h1:cccZRl6mQpaq41TPp5QxidR+Sa3axMbJDNb//FQX6Gg=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
