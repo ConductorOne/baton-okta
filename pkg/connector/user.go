@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -246,10 +247,38 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	if qp.Search == "" {
 		qp.Search = "status pr" // ListUsers doesn't get deactivated users by default. this should fetch them all
 	}
-	oktaUsers, resp, err := client.User.ListUsers(ctx, qp)
-	if err != nil {
-		return nil, nil, handleOktaResponseError(resp, err)
+
+	uri := usersUrl
+	if qp != nil {
+		uri += qp.String()
 	}
+
+	reqUrl, err := url.Parse(uri)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
+	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
+	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
+	oktaUsers := make([]*okta.User, 0)
+	rq := client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
+		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
+	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
+
+	resp, err := rq.Do(ctx, req, &oktaUsers)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	respCtx, err := responseToContext(token, resp)
 	if err != nil {
 		return nil, nil, err
