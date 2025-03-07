@@ -264,6 +264,9 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 		WithAccept(ContentType).
 		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
 		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
 
