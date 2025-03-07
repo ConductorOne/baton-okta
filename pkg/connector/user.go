@@ -258,6 +258,9 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 		return nil, nil, err
 	}
 
+	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
+	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
+	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
 	oktaUsers := make([]*okta.User, 0)
 	rq := client.CloneRequestExecutor()
 	req, err := rq.
@@ -268,6 +271,7 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 		return nil, nil, err
 	}
 
+	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
 	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
 
 	resp, err := rq.Do(ctx, req, &oktaUsers)
