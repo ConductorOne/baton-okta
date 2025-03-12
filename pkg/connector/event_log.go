@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	DefaultLimit       = 25 //200
-	ListLogEventsLimit = 25 //1000
+	DefaultLimit       = 200
+	ListLogEventsLimit = 1000
 )
 
 func parseTarget(logEvent *oktaSDK.LogEvent) (*oktaSDK.LogTarget, bool) {
