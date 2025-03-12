@@ -102,8 +102,11 @@ func (connector *Okta) ListEvents(
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
-	streamState := &pagination.StreamState{Cursor: after, HasMore: after != ""}
-	l.Info("event pagination", zap.Any("streamState", streamState))
+	streamState := &pagination.StreamState{Cursor: after, HasMore: false}
+	if resp.HasNextPage() && after != pToken.Cursor {
+		streamState.HasMore = true
+	}
+	l.Info("event pagination", zap.Any("streamState", streamState), zap.Any("nextPage", resp.NextPage), zap.Bool("hasNextPage", resp.HasNextPage()))
 
 	return rv, streamState, annos, nil
 }
