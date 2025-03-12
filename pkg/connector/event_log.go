@@ -15,11 +15,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const (
-	DefaultLimit       = 200
-	ListLogEventsLimit = 1000
-)
-
 func parseTarget(logEvent *oktaSDK.LogEvent) (*oktaSDK.LogTarget, bool) {
 	targetAppType := "AppInstance"
 	for _, target := range logEvent.Target {
@@ -36,7 +31,6 @@ func (connector *Okta) listOktaSSOEvents(ctx context.Context, earliestEvent *tim
 		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
 	}
 	qp.Filter = `eventType eq "user.authentication.sso" and actor.type eq "User" and target.type eq "AppInstance"`
-	qp.Limit = ListLogEventsLimit
 
 	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
 	if err != nil {
@@ -52,6 +46,7 @@ func (connector *Okta) ListEvents(
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	// TODO(johnallers): remove this
 	l.Info("listing events", zap.Any("earliestEvent", earliestEvent), zap.Any("pToken", pToken))
 
 	logs, resp, err := connector.listOktaSSOEvents(ctx, earliestEvent, pToken)
@@ -106,6 +101,7 @@ func (connector *Okta) ListEvents(
 	if resp.HasNextPage() && after != pToken.Cursor {
 		streamState.HasMore = true
 	}
+	// TODO(johnallers): remove this
 	l.Info("event pagination", zap.Any("streamState", streamState), zap.Any("nextPage", resp.NextPage), zap.Bool("hasNextPage", resp.HasNextPage()))
 
 	return rv, streamState, annos, nil
