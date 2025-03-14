@@ -284,12 +284,32 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 				"email": {
 					DisplayName: "Email",
 					Required:    true,
-					Description: "This email will be used as the login for the user.",
+					Description: "This will be the email of the user. If login is unset this is also the login.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
 					Placeholder: "Email",
 					Order:       3,
+				},
+				"login": {
+					DisplayName: "Login",
+					Required:    false,
+					Description: "This login will be used as the login for the user. Email will be used if login is not present.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Login",
+					Order:       4,
+				},
+				"password_change_on_login_required": {
+					DisplayName: "Password Change Required on Login",
+					Required:    false,
+					Description: "When creating accounts with a random password setting this to 'true' will require the user to change their password on first login.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "True/False",
+					Order:       5,
 				},
 			},
 		},
