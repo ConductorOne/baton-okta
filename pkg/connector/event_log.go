@@ -9,9 +9,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
-	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -45,10 +43,6 @@ func (connector *Okta) ListEvents(
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
-	// TODO(johnallers): remove this
-	l.Info("listing events", zap.Any("earliestEvent", earliestEvent), zap.Any("pToken", pToken))
-
 	logs, resp, err := connector.listOktaSSOEvents(ctx, earliestEvent, pToken)
 	if err != nil {
 		return nil, nil, nil, err
@@ -60,7 +54,6 @@ func (connector *Okta) ListEvents(
 		if !isAppInstance {
 			continue
 		}
-		// (johnallers) copied from baton-entra. Not sure what this is for.
 		userTrait, err := resource.NewUserTrait(resource.WithEmail(log.Actor.AlternateId, true))
 		if err != nil {
 			return nil, nil, nil, err
@@ -101,8 +94,6 @@ func (connector *Okta) ListEvents(
 	if resp.HasNextPage() && after != pToken.Cursor {
 		streamState.HasMore = true
 	}
-	// TODO(johnallers): remove this
-	l.Info("event pagination", zap.Any("streamState", streamState), zap.Any("nextPage", resp.NextPage), zap.Bool("hasNextPage", resp.HasNextPage()))
 
 	return rv, streamState, annos, nil
 }
