@@ -85,3 +85,15 @@ func (c *Okta) GetBool(fieldName string) bool {
 	}
 	return t
 }
+
+func (c *Okta) GetStringMap(fieldName string) map[string]any {
+	v, ok := c.findFieldByTag(fieldName)
+	if !ok {
+		return map[string]any{}
+	}
+	t, ok := v.(map[string]any)
+	if !ok {
+		panic("wrong type")
+	}
+	return t
+}

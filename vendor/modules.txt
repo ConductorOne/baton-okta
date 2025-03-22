@@ -208,14 +208,14 @@ github.com/conductorone/baton-sdk/pkg/uotel
 github.com/conductorone/baton-sdk/pkg/us3
 github.com/conductorone/baton-sdk/pkg/ustrings
 github.com/conductorone/baton-sdk/pkg/utls
-# github.com/conductorone/dpop v0.2.0
-## explicit; go 1.23.6
+# github.com/conductorone/dpop v0.2.2
+## explicit; go 1.23.4
 github.com/conductorone/dpop/pkg/dpop
-# github.com/conductorone/dpop/integrations/dpop_grpc v0.1.4
-## explicit; go 1.23.6
+# github.com/conductorone/dpop/integrations/dpop_grpc v0.2.2
+## explicit; go 1.23.4
 github.com/conductorone/dpop/integrations/dpop_grpc
-# github.com/conductorone/dpop/integrations/dpop_oauth2 v0.2.0
-## explicit; go 1.23.6
+# github.com/conductorone/dpop/integrations/dpop_oauth2 v0.2.2
+## explicit; go 1.23.4
 github.com/conductorone/dpop/integrations/dpop_oauth2
 # github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone
 ## explicit; go 1.20

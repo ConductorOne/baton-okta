@@ -209,6 +209,14 @@ func TimeoutForRequest(req *Request) (time.Duration, bool, error) {
 }
 
 func (s *Server) Handler(ctx context.Context, req *Request) (*Response, error) {
+	fmt.Println("Handler called")
+	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("Handler error:", err)
+		}
+		fmt.Println("Handler done")
+	}()
 	serviceName, methodName, err := parseMethod(req.Method())
 	if err != nil {
 		return ErrorResponse(err), nil
