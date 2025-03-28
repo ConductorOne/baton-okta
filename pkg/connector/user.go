@@ -17,6 +17,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/crypto"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
@@ -342,14 +343,28 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		oktaProfile["secondEmail"] = nil
 	}
 
-	if login, ok := oktaProfile["login"].(string); ok {
-		// If possible, calculate shortname alias from login
-		splitLogin := strings.Split(login, "@")
-		if len(splitLogin) == 2 {
-			options = append(options, resource.WithUserLogin(login, splitLogin[0]))
-		} else {
-			options = append(options, resource.WithUserLogin(login))
+	employeeIDs := mapset.NewSet[string]()
+	for profileKey, profileValue := range oktaProfile {
+		switch strings.ToLower(profileKey) {
+		case "employeenumber", "employeeid", "employeeidnumber", "employee_number", "employee_id", "employee_idnumber":
+			if id, ok := profileValue.(string); ok {
+				employeeIDs.Add(id)
+			}
+		case "login":
+			if login, ok := profileValue.(string); ok {
+				// If possible, calculate shortname alias from login
+				splitLogin := strings.Split(login, "@")
+				if len(splitLogin) == 2 {
+					options = append(options, resource.WithUserLogin(login, splitLogin[0]))
+				} else {
+					options = append(options, resource.WithUserLogin(login))
+				}
+			}
 		}
+	}
+
+	if employeeIDs.Cardinality() > 0 {
+		options = append(options, resource.WithEmployeeID(employeeIDs.ToSlice()...))
 	}
 
 	switch user.Status {

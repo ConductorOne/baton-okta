@@ -57,8 +57,13 @@ func Generate(name string, schema field.Configuration) {
 		if f.ExportTarget != field.ExportTargetGUI && f.ExportTarget != field.ExportTargetOps && f.ExportTarget != field.ExportTargetCLIOnly {
 			continue
 		}
+		fieldName := f.StructFieldName
+		if fieldName == "" {
+			fieldName = toPascalCase(f.FieldName)
+		}
+
 		nf := FieldInfo{
-			FieldName: toPascalCase(f.FieldName),
+			FieldName: fieldName,
 			Tag:       f.FieldName,
 		}
 		switch f.Variant {
@@ -70,6 +75,8 @@ func Generate(name string, schema field.Configuration) {
 			nf.FieldType = "int"
 		case field.StringSliceVariant:
 			nf.FieldType = "[]string"
+		case field.StringMapVariant:
+			nf.FieldType = "map[string]any"
 		}
 		data.Fields = append(data.Fields, nf)
 	}
@@ -116,12 +123,10 @@ func (c* {{ .StructName }}) findFieldByTag(tagValue string) (any, bool) {
 	return nil, false
 }
 
-
-
 func (c *{{ .StructName }}) GetStringSlice(fieldName string) []string {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		panic("could not find field by tag")
+		return []string{}
 	}
 	t, ok := v.([]string)
 	if !ok {
@@ -133,7 +138,7 @@ func (c *{{ .StructName }}) GetStringSlice(fieldName string) []string {
 func (c *{{ .StructName }}) GetString(fieldName string) string {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		panic("could not find field by tag")
+		return ""
 	}
 	t, ok := v.(string)
 	if !ok {
@@ -145,7 +150,7 @@ func (c *{{ .StructName }}) GetString(fieldName string) string {
 func (c *{{ .StructName }}) GetInt(fieldName string) int {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		panic("could not find field by tag")
+		return 0
 	}
 	t, ok := v.(int)
 	if !ok {
@@ -157,9 +162,21 @@ func (c *{{ .StructName }}) GetInt(fieldName string) int {
 func (c *{{ .StructName }}) GetBool(fieldName string) bool {
 	v, ok := c.findFieldByTag(fieldName)
 	if !ok {
-		panic("could not find field by tag")
+		return false
 	}
 	t, ok := v.(bool)
+	if !ok {
+		panic("wrong type")
+	}
+	return t
+}
+
+func (c *{{ .StructName }}) GetStringMap(fieldName string) map[string]any {
+	v, ok := c.findFieldByTag(fieldName)
+	if !ok {
+		return map[string]any{}
+	}
+	t, ok := v.(map[string]any)
 	if !ok {
 		panic("wrong type")
 	}

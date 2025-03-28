@@ -48,7 +48,60 @@ var (
 	skipFullSync          = BoolField("skip-full-sync", WithDescription("This must be set to skip a full sync"), WithPersistent(true), WithExportTarget(ExportTargetNone))
 	otelCollectorEndpoint = StringField("otel-collector-endpoint", WithDescription("The endpoint of the OpenTelemetry collector to send observability data to"),
 		WithPersistent(true), WithExportTarget(ExportTargetOps))
+	externalResourceC1ZField = StringField("external-resource-c1z",
+		WithDescription("The path to the c1z file to sync external baton resources with"),
+		WithPersistent(true),
+		WithExportTarget(ExportTargetNone))
+	externalResourceEntitlementIdFilter = StringField("external-resource-entitlement-id-filter",
+		WithDescription("The entitlement that external users, groups must have access to sync external baton resources"),
+		WithPersistent(true),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerClientIDField = StringField("lambda-client-id", WithRequired(true), WithDescription("The oauth client id to use with the configuration endpoint"),
+		WithExportTarget(ExportTargetNone))
+	LambdaServerClientSecretField = StringField("lambda-client-secret", WithRequired(true), WithDescription("The oauth client secret to use with the configuration endpoint"),
+		WithExportTarget(ExportTargetNone))
+
+	// JWT Authentication Fields.
+	LambdaServerAuthJWTSigner = StringField("lambda-auth-jwt-signer",
+		WithRequired(false),
+		WithDescription("The JWK format public key used to verify JWT signatures (mutually exclusive with lambda-auth-jwt-jwks-url)"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTJWKSUrl = StringField("lambda-auth-jwt-jwks-url",
+		WithRequired(false),
+		WithDescription("The URL to the JWKS endpoint for JWT verification (mutually exclusive with lambda-auth-jwt-signer)"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTExpectedIssuerField = StringField("lambda-auth-jwt-expected-issuer",
+		WithRequired(true),
+		WithDescription("The expected issuer claim in the JWT"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTExpectedSubjectField = StringField("lambda-auth-jwt-expected-subject",
+		WithRequired(true),
+		WithDescription("The expected subject claim in the JWT (optional)"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTExpectedAudienceField = StringField("lambda-auth-jwt-expected-audience",
+		WithRequired(true),
+		WithDescription("The expected audience claim in the JWT (optional)"),
+		WithExportTarget(ExportTargetNone))
 )
+
+func LambdaServerFields() []SchemaField {
+	return []SchemaField{
+		LambdaServerClientIDField,
+		LambdaServerClientSecretField,
+		LambdaServerAuthJWTSigner,
+		LambdaServerAuthJWTJWKSUrl,
+		LambdaServerAuthJWTExpectedIssuerField,
+		LambdaServerAuthJWTExpectedSubjectField,
+		LambdaServerAuthJWTExpectedAudienceField,
+	}
+}
+
+var LambdaServerRelationships = make([]SchemaFieldRelationship, 0)
 
 // DefaultFields list the default fields expected in every single connector.
 var DefaultFields = []SchemaField{
@@ -81,6 +134,8 @@ var DefaultFields = []SchemaField{
 	logLevelField,
 	skipFullSync,
 	otelCollectorEndpoint,
+	externalResourceC1ZField,
+	externalResourceEntitlementIdFilter,
 }
 
 func IsFieldAmongDefaultList(f SchemaField) bool {
