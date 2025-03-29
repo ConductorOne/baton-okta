@@ -436,37 +436,18 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 }
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
-	embedded := group.Embedded
-	if embedded == nil {
-		return nil, fmt.Errorf("group '%s' embedded data was nil", group.Id)
-	}
-	embeddedMap, ok := embedded.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("group '%s' embedded data was not a map", group.Id)
-	}
-	embeddedStats, ok := embeddedMap["stats"]
-	if !ok {
-		return nil, fmt.Errorf("embedded stat data was nil for group '%s'", group.Id)
-	}
-	embeddedStatsMap, ok := embeddedStats.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("group '%s' embedded stats data was not a map", group.Id)
+	profileMap := map[string]interface{}{
+		"description": group.Profile.Description,
+		"name":        group.Profile.Name,
 	}
 
-	embeddedStatsUsersCount, ok := embeddedStatsMap["usersCount"]
-	if !ok {
-		return nil, fmt.Errorf("users count not present on group '%s' embedded stats data", group.Id)
+	if userCount, exists := getGroupUserCount(group); exists {
+		profileMap[usersCountProfileKey] = int64(userCount)
 	}
 
-	userCount := embeddedStatsUsersCount.(float64)
-
-	profile, err := structpb.NewStruct(map[string]interface{}{
-		"description":        group.Profile.Description,
-		"name":               group.Profile.Name,
-		usersCountProfileKey: int64(userCount),
-	})
+	profile, err := structpb.NewStruct(profileMap)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to construct role profile for role trait: %w", err)
+		return nil, fmt.Errorf("okta-connectorv2: failed to construct group profile for group trait: %w", err)
 	}
 
 	ret := &v2.GroupTrait{
@@ -474,6 +455,31 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 	}
 
 	return ret, nil
+}
+
+func getGroupUserCount(group *okta.Group) (float64, bool) {
+	embedded := group.Embedded
+	if embedded == nil {
+		return 0, false
+	}
+	embeddedMap, ok := embedded.(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+	embeddedStats, ok := embeddedMap["stats"]
+	if !ok {
+		return 0, false
+	}
+	embeddedStatsMap, ok := embeddedStats.(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+	embeddedStatsUsersCount, ok := embeddedStatsMap["usersCount"]
+	if !ok {
+		return 0, false
+	}
+	userCount := embeddedStatsUsersCount.(float64)
+	return userCount, true
 }
 
 func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
