@@ -441,7 +441,7 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 		"name":        group.Profile.Name,
 	}
 
-	if userCount, exists := getUserCount(group); exists {
+	if userCount, exists := getGroupUserCount(group); exists {
 		profileMap[usersCountProfileKey] = int64(userCount)
 	}
 
@@ -457,7 +457,7 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 	return ret, nil
 }
 
-func getUserCount(group *okta.Group) (float64, bool) {
+func getGroupUserCount(group *okta.Group) (float64, bool) {
 	embedded := group.Embedded
 	if embedded == nil {
 		return 0, false
