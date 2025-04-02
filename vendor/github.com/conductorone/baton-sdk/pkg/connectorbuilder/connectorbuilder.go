@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -28,6 +29,18 @@ import (
 
 var tracer = otel.Tracer("baton-sdk/pkg.connectorbuilder")
 
+// ResourceSyncer is the primary interface for connector developers to implement.
+//
+// It defines the core functionality for synchronizing resources, entitlements, and grants
+// from external systems into Baton. Every connector must implement at least this interface
+// for each resource type it supports.
+//
+// Extensions to this interface include:
+// - ResourceProvisioner/ResourceProvisionerV2: For adding/removing access
+// - ResourceManager: For creating and managing resources
+// - ResourceDeleter: For deleting resources
+// - AccountManager: For account provisioning operations
+// - CredentialManager: For credential rotation operations.
 type ResourceSyncer interface {
 	ResourceType(ctx context.Context) *v2.ResourceType
 	List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error)
@@ -35,43 +48,97 @@ type ResourceSyncer interface {
 	Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error)
 }
 
+// ResourceProvisioner extends ResourceSyncer to add capabilities for granting and revoking access.
+//
+// Note: ResourceProvisionerV2 is preferred for new connectors as it provides
+// enhanced grant capabilities.
+//
+// Implementing this interface indicates the connector supports provisioning operations
+// for the associated resource type.
 type ResourceProvisioner interface {
+	ResourceSyncer
 	ResourceType(ctx context.Context) *v2.ResourceType
 	Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error)
 	Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error)
 }
 
+// ResourceProvisionerV2 extends ResourceSyncer to add capabilities for granting and revoking access
+// with enhanced functionality compared to ResourceProvisioner.
+//
+// This is the recommended interface for implementing provisioning operations in new connectors.
+// It differs from ResourceProvisioner by returning a list of grants from the Grant method.
 type ResourceProvisionerV2 interface {
+	ResourceSyncer
 	ResourceType(ctx context.Context) *v2.ResourceType
 	Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error)
 	Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error)
 }
 
+// ResourceManager extends ResourceSyncer to add capabilities for creating resources.
+//
+// Implementing this interface indicates the connector supports creating and deleting resources
+// of the associated resource type. A ResourceManager automatically provides ResourceDeleter
+// functionality.
 type ResourceManager interface {
+	ResourceSyncer
 	Create(ctx context.Context, resource *v2.Resource) (*v2.Resource, annotations.Annotations, error)
+	ResourceDeleter
+}
+
+// ResourceDeleter extends ResourceSyncer to add capabilities for deleting resources.
+//
+// Implementing this interface indicates the connector supports deleting resources
+// of the associated resource type.
+type ResourceDeleter interface {
+	ResourceSyncer
 	Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error)
 }
 
+// CreateAccountResponse is a semi-opaque type returned from CreateAccount operations.
+//
+// This is used to communicate the result of account creation back to Baton.
 type CreateAccountResponse interface {
 	proto.Message
 	GetIsCreateAccountResult() bool
 }
 
+// AccountManager extends ResourceSyncer to add capabilities for managing user accounts.
+//
+// Implementing this interface indicates the connector supports creating accounts
+// in the external system. A resource type should implement this interface if it
+// represents users or accounts that can be provisioned.
 type AccountManager interface {
+	ResourceSyncer
 	CreateAccount(ctx context.Context, accountInfo *v2.AccountInfo, credentialOptions *v2.CredentialOptions) (CreateAccountResponse, []*v2.PlaintextData, annotations.Annotations, error)
 	CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error)
 }
 
+// CredentialManager extends ResourceSyncer to add capabilities for managing credentials.
+//
+// Implementing this interface indicates the connector supports rotating credentials
+// for resources of the associated type. This is commonly used for user accounts
+// or service accounts that have rotatable credentials.
 type CredentialManager interface {
+	ResourceSyncer
 	Rotate(ctx context.Context, resourceId *v2.ResourceId, credentialOptions *v2.CredentialOptions) ([]*v2.PlaintextData, annotations.Annotations, error)
 	RotateCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsCredentialRotation, annotations.Annotations, error)
 }
 
+// EventProvider extends ConnectorBuilder to add capabilities for providing event streams.
+//
+// Implementing this interface indicates the connector can provide a stream of events
+// from the external system, enabling near real-time updates in Baton.
 type EventProvider interface {
+	ConnectorBuilder
 	ListEvents(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error)
 }
 
+// TicketManager extends ConnectorBuilder to add capabilities for ticket management.
+//
+// Implementing this interface indicates the connector can integrate with an external
+// ticketing system, allowing Baton to create and track tickets in that system.
 type TicketManager interface {
+	ConnectorBuilder
 	GetTicket(ctx context.Context, ticketId string) (*v2.Ticket, annotations.Annotations, error)
 	CreateTicket(ctx context.Context, ticket *v2.Ticket, schema *v2.TicketSchema) (*v2.Ticket, annotations.Annotations, error)
 	GetTicketSchema(ctx context.Context, schemaID string) (*v2.TicketSchema, annotations.Annotations, error)
@@ -80,6 +147,36 @@ type TicketManager interface {
 	BulkGetTickets(context.Context, *v2.TicketsServiceBulkGetTicketsRequest) (*v2.TicketsServiceBulkGetTicketsResponse, error)
 }
 
+// CustomActionManager defines capabilities for handling custom actions.
+//
+// Note: RegisterActionManager is preferred for new connectors.
+//
+// This interface allows connectors to define and execute custom actions
+// that can be triggered from Baton.
+type CustomActionManager interface {
+	ListActionSchemas(ctx context.Context) ([]*v2.BatonActionSchema, annotations.Annotations, error)
+	GetActionSchema(ctx context.Context, name string) (*v2.BatonActionSchema, annotations.Annotations, error)
+	InvokeAction(ctx context.Context, name string, args *structpb.Struct) (string, v2.BatonActionStatus, *structpb.Struct, annotations.Annotations, error)
+	GetActionStatus(ctx context.Context, id string) (v2.BatonActionStatus, string, *structpb.Struct, annotations.Annotations, error)
+}
+
+// RegisterActionManager extends ConnectorBuilder to add capabilities for registering custom actions.
+//
+// This is the recommended interface for implementing custom action support in new connectors.
+// It provides a mechanism to register a CustomActionManager with the connector.
+type RegisterActionManager interface {
+	ConnectorBuilder
+	RegisterActionManager(ctx context.Context) (CustomActionManager, error)
+}
+
+// ConnectorBuilder is the foundational interface for creating Baton connectors.
+//
+// This interface defines the core capabilities required by all connectors, including
+// metadata, validation, and registering resource syncers. Additional functionality
+// can be added by implementing extension interfaces such as:
+// - RegisterActionManager: For custom action support
+// - EventProvider: For event stream support
+// - TicketManager: For ticket management integration.
 type ConnectorBuilder interface {
 	Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 	Validate(ctx context.Context) (annotations.Annotations, error)
@@ -91,7 +188,9 @@ type builderImpl struct {
 	resourceProvisioners   map[string]ResourceProvisioner
 	resourceProvisionersV2 map[string]ResourceProvisionerV2
 	resourceManagers       map[string]ResourceManager
+	resourceDeleters       map[string]ResourceDeleter
 	accountManager         AccountManager
+	actionManager          CustomActionManager
 	credentialManagers     map[string]CredentialManager
 	eventFeed              EventProvider
 	cb                     ConnectorBuilder
@@ -300,7 +399,9 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 			resourceProvisioners:   make(map[string]ResourceProvisioner),
 			resourceProvisionersV2: make(map[string]ResourceProvisionerV2),
 			resourceManagers:       make(map[string]ResourceManager),
+			resourceDeleters:       make(map[string]ResourceDeleter),
 			accountManager:         nil,
+			actionManager:          nil,
 			credentialManagers:     make(map[string]CredentialManager),
 			cb:                     c,
 			ticketManager:          nil,
@@ -327,6 +428,27 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 			ret.ticketManager = ticketManager
 		}
 
+		if actionManager, ok := c.(CustomActionManager); ok {
+			if ret.actionManager != nil {
+				return nil, fmt.Errorf("error: cannot set multiple action managers")
+			}
+			ret.actionManager = actionManager
+		}
+
+		if registerActionManager, ok := c.(RegisterActionManager); ok {
+			if ret.actionManager != nil {
+				return nil, fmt.Errorf("error: cannot register multiple action managers")
+			}
+			actionManager, err := registerActionManager.RegisterActionManager(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error: registering action manager failed: %w", err)
+			}
+			if actionManager == nil {
+				return nil, fmt.Errorf("error: action manager is nil")
+			}
+			ret.actionManager = actionManager
+		}
+
 		for _, rb := range c.ResourceSyncers(ctx) {
 			rType := rb.ResourceType(ctx)
 			if _, ok := ret.resourceBuilders[rType.Id]; ok {
@@ -351,11 +473,24 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 				ret.resourceProvisionersV2[rType.Id] = provisioner
 			}
 
-			if resourceManagers, ok := rb.(ResourceManager); ok {
+			if resourceManager, ok := rb.(ResourceManager); ok {
 				if _, ok := ret.resourceManagers[rType.Id]; ok {
 					return nil, fmt.Errorf("error: duplicate resource type found for resource manager %s", rType.Id)
 				}
-				ret.resourceManagers[rType.Id] = resourceManagers
+				ret.resourceManagers[rType.Id] = resourceManager
+				// Support DeleteResourceV2 if connector implements both Create and Delete
+				if _, ok := ret.resourceDeleters[rType.Id]; ok {
+					// This should never happen
+					return nil, fmt.Errorf("error: duplicate resource type found for resource deleter %s", rType.Id)
+				}
+				ret.resourceDeleters[rType.Id] = resourceManager
+			} else {
+				if resourceDeleter, ok := rb.(ResourceDeleter); ok {
+					if _, ok := ret.resourceDeleters[rType.Id]; ok {
+						return nil, fmt.Errorf("error: duplicate resource type found for resource deleter %s", rType.Id)
+					}
+					ret.resourceDeleters[rType.Id] = resourceDeleter
+				}
 			}
 
 			if accountManager, ok := rb.(AccountManager); ok {
@@ -665,7 +800,11 @@ func getCapabilities(ctx context.Context, b *builderImpl) (*v2.ConnectorCapabili
 			resourceTypeCapability.Capabilities = append(resourceTypeCapability.Capabilities, v2.Capability_CAPABILITY_RESOURCE_CREATE, v2.Capability_CAPABILITY_RESOURCE_DELETE)
 			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_CREATE] = struct{}{}
 			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_DELETE] = struct{}{}
+		} else if _, ok := rb.(ResourceDeleter); ok {
+			resourceTypeCapability.Capabilities = append(resourceTypeCapability.Capabilities, v2.Capability_CAPABILITY_RESOURCE_DELETE)
+			connectorCaps[v2.Capability_CAPABILITY_RESOURCE_DELETE] = struct{}{}
 		}
+
 		resourceTypeCapabilities = append(resourceTypeCapabilities, resourceTypeCapability)
 	}
 	sort.Slice(resourceTypeCapabilities, func(i, j int) bool {
@@ -678,6 +817,10 @@ func getCapabilities(ctx context.Context, b *builderImpl) (*v2.ConnectorCapabili
 
 	if b.ticketManager != nil {
 		connectorCaps[v2.Capability_CAPABILITY_TICKETING] = struct{}{}
+	}
+
+	if b.actionManager != nil {
+		connectorCaps[v2.Capability_CAPABILITY_ACTIONS] = struct{}{}
 	}
 
 	var caps []v2.Capability
@@ -845,9 +988,9 @@ func (b *builderImpl) CreateResource(ctx context.Context, request *v2.CreateReso
 		b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
 		return &v2.CreateResourceResponse{Created: resource, Annotations: annos}, nil
 	}
-	l.Error("error: resource type does not have resource manager configured", zap.String("resource_type", rt))
+	l.Error("error: resource type does not have resource Create() configured", zap.String("resource_type", rt))
 	b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-	return nil, status.Error(codes.Unimplemented, "resource type does not have resource manager configured")
+	return nil, status.Error(codes.Unimplemented, fmt.Sprintf("resource type %s does not have resource Create() configured", rt))
 }
 
 func (b *builderImpl) DeleteResource(ctx context.Context, request *v2.DeleteResourceRequest) (*v2.DeleteResourceResponse, error) {
@@ -859,7 +1002,12 @@ func (b *builderImpl) DeleteResource(ctx context.Context, request *v2.DeleteReso
 
 	l := ctxzap.Extract(ctx)
 	rt := request.GetResourceId().GetResourceType()
-	manager, ok := b.resourceManagers[rt]
+	var manager ResourceDeleter
+	var ok bool
+	manager, ok = b.resourceManagers[rt]
+	if !ok {
+		manager, ok = b.resourceDeleters[rt]
+	}
 	if ok {
 		annos, err := manager.Delete(ctx, request.GetResourceId())
 		if err != nil {
@@ -870,9 +1018,39 @@ func (b *builderImpl) DeleteResource(ctx context.Context, request *v2.DeleteReso
 		b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
 		return &v2.DeleteResourceResponse{Annotations: annos}, nil
 	}
-	l.Error("error: resource type does not have resource manager configured", zap.String("resource_type", rt))
+	l.Error("error: resource type does not have resource Delete() configured", zap.String("resource_type", rt))
 	b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
-	return nil, status.Error(codes.Unimplemented, "resource type does not have resource manager configured")
+	return nil, status.Error(codes.Unimplemented, fmt.Sprintf("resource type %s does not have resource Delete() configured", rt))
+}
+
+func (b *builderImpl) DeleteResourceV2(ctx context.Context, request *v2.DeleteResourceV2Request) (*v2.DeleteResourceV2Response, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.DeleteResourceV2")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.DeleteResourceType
+
+	l := ctxzap.Extract(ctx)
+	rt := request.GetResourceId().GetResourceType()
+	var manager ResourceDeleter
+	var ok bool
+	manager, ok = b.resourceManagers[rt]
+	if !ok {
+		manager, ok = b.resourceDeleters[rt]
+	}
+	if ok {
+		annos, err := manager.Delete(ctx, request.GetResourceId())
+		if err != nil {
+			l.Error("error: delete resource failed", zap.Error(err))
+			b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+			return nil, fmt.Errorf("error: delete resource failed: %w", err)
+		}
+		b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+		return &v2.DeleteResourceV2Response{Annotations: annos}, nil
+	}
+	l.Error("error: resource type does not have resource Delete() configured", zap.String("resource_type", rt))
+	b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+	return nil, status.Error(codes.Unimplemented, fmt.Sprintf("resource type %s does not have resource Delete() configured", rt))
 }
 
 func (b *builderImpl) RotateCredential(ctx context.Context, request *v2.RotateCredentialRequest) (*v2.RotateCredentialResponse, error) {
@@ -986,4 +1164,114 @@ func (b *builderImpl) CreateAccount(ctx context.Context, request *v2.CreateAccou
 
 	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
 	return rv, nil
+}
+
+func (b *builderImpl) ListActionSchemas(ctx context.Context, request *v2.ListActionSchemasRequest) (*v2.ListActionSchemasResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.ListActionSchemas")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionListSchemasType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	actionSchemas, annos, err := b.actionManager.ListActionSchemas(ctx)
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: listing action schemas failed: %w", err)
+	}
+
+	rv := &v2.ListActionSchemasResponse{
+		Schemas:     actionSchemas,
+		Annotations: annos,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return rv, nil
+}
+
+func (b *builderImpl) GetActionSchema(ctx context.Context, request *v2.GetActionSchemaRequest) (*v2.GetActionSchemaResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetActionSchema")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionGetSchemaType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	actionSchema, annos, err := b.actionManager.GetActionSchema(ctx, request.GetName())
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: getting action schema failed: %w", err)
+	}
+
+	rv := &v2.GetActionSchemaResponse{
+		Schema:      actionSchema,
+		Annotations: annos,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return rv, nil
+}
+
+func (b *builderImpl) InvokeAction(ctx context.Context, request *v2.InvokeActionRequest) (*v2.InvokeActionResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.InvokeAction")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionInvokeType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	id, status, resp, annos, err := b.actionManager.InvokeAction(ctx, request.GetName(), request.GetArgs())
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: invoking action failed: %w", err)
+	}
+
+	rv := &v2.InvokeActionResponse{
+		Id:          id,
+		Name:        request.GetName(),
+		Status:      status,
+		Annotations: annos,
+		Response:    resp,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return rv, nil
+}
+
+func (b *builderImpl) GetActionStatus(ctx context.Context, request *v2.GetActionStatusRequest) (*v2.GetActionStatusResponse, error) {
+	ctx, span := tracer.Start(ctx, "builderImpl.GetActionStatus")
+	defer span.End()
+
+	start := b.nowFunc()
+	tt := tasks.ActionStatusType
+	if b.actionManager == nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: action manager not implemented")
+	}
+
+	status, name, rv, annos, err := b.actionManager.GetActionStatus(ctx, request.GetId())
+	if err != nil {
+		b.m.RecordTaskFailure(ctx, tt, b.nowFunc().Sub(start))
+		return nil, fmt.Errorf("error: getting action status failed: %w", err)
+	}
+
+	resp := &v2.GetActionStatusResponse{
+		Id:          request.GetId(),
+		Name:        name,
+		Status:      status,
+		Annotations: annos,
+		Response:    rv,
+	}
+
+	b.m.RecordTaskSuccess(ctx, tt, b.nowFunc().Sub(start))
+	return resp, nil
 }

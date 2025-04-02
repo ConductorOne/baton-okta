@@ -2,6 +2,15 @@ package field
 
 import "github.com/conductorone/baton-sdk/pkg/logging"
 
+const (
+	OtelCollectorEndpointFieldName            = "otel-collector-endpoint"
+	OtelCollectorEndpointTLSCertPathFieldName = "otel-collector-endpoint-tls-cert-path"
+	OtelCollectorEndpointTLSCertFieldName     = "otel-collector-endpoint-tls-cert"
+	OtelCollectorEndpointTLSInsecureFieldName = "otel-collector-endpoint-tls-insecure"
+	OtelTracingDisabledFieldName              = "otel-tracing-disabled"
+	OtelLoggingDisabledFieldName              = "otel-logging-disabled"
+)
+
 var (
 	createTicketField           = BoolField("create-ticket", WithHidden(true), WithDescription("Create ticket"), WithPersistent(true), WithExportTarget(ExportTargetNone))
 	bulkCreateTicketField       = BoolField("bulk-create-ticket", WithHidden(true), WithDescription("Bulk create tickets"), WithPersistent(true), WithExportTarget(ExportTargetNone))
@@ -45,10 +54,81 @@ var (
 		WithPersistent(true), WithExportTarget(ExportTargetNone))
 	logLevelField = StringField("log-level", WithDefaultValue("info"), WithDescription("The log level: debug, info, warn, error"), WithPersistent(true),
 		WithExportTarget(ExportTargetOps))
-	skipFullSync          = BoolField("skip-full-sync", WithDescription("This must be set to skip a full sync"), WithPersistent(true), WithExportTarget(ExportTargetNone))
-	otelCollectorEndpoint = StringField("otel-collector-endpoint", WithDescription("The endpoint of the OpenTelemetry collector to send observability data to"),
+	skipFullSync = BoolField("skip-full-sync", WithDescription("This must be set to skip a full sync"), WithPersistent(true), WithExportTarget(ExportTargetNone))
+
+	otelCollectorEndpoint = StringField(OtelCollectorEndpointFieldName,
+		WithDescription("The endpoint of the OpenTelemetry collector to send observability data to (used for both tracing and logging if specific endpoints are not provided)"),
 		WithPersistent(true), WithExportTarget(ExportTargetOps))
+	otelCollectorEndpointTLSCertPath = StringField(OtelCollectorEndpointTLSCertPathFieldName,
+		WithDescription("Path to a file containing a PEM-encoded certificate to use as a CA for TLS connections to the OpenTelemetry collector"),
+		WithPersistent(true), WithHidden(true), WithExportTarget(ExportTargetOps))
+	otelCollectorEndpointTlSCert = StringField(OtelCollectorEndpointTLSCertFieldName,
+		WithDescription("A PEM-encoded certificate to use as a CA for TLS connections to the OpenTelemetry collector"),
+		WithPersistent(true), WithHidden(true), WithExportTarget(ExportTargetOps))
+	otelCollectorEndpointTlSInsecure = BoolField(OtelCollectorEndpointTLSInsecureFieldName,
+		WithDescription("Allow insecure connections to the OpenTelemetry collector"),
+		WithPersistent(true), WithHidden(true), WithExportTarget(ExportTargetOps))
+	otelTracingDisabled = BoolField(OtelTracingDisabledFieldName,
+		WithDescription("Disable OpenTelemetry tracing"), WithDefaultValue(false),
+		WithPersistent(true), WithHidden(true), WithExportTarget(ExportTargetOps))
+	otelLoggingDisabled = BoolField(OtelLoggingDisabledFieldName,
+		WithDescription("Disable OpenTelemetry logging"), WithDefaultValue(false),
+		WithPersistent(true), WithHidden(true), WithExportTarget(ExportTargetOps))
+
+	externalResourceC1ZField = StringField("external-resource-c1z",
+		WithDescription("The path to the c1z file to sync external baton resources with"),
+		WithPersistent(true),
+		WithExportTarget(ExportTargetNone))
+	externalResourceEntitlementIdFilter = StringField("external-resource-entitlement-id-filter",
+		WithDescription("The entitlement that external users, groups must have access to sync external baton resources"),
+		WithPersistent(true),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerClientIDField = StringField("lambda-client-id", WithRequired(true), WithDescription("The oauth client id to use with the configuration endpoint"),
+		WithExportTarget(ExportTargetNone))
+	LambdaServerClientSecretField = StringField("lambda-client-secret", WithRequired(true), WithDescription("The oauth client secret to use with the configuration endpoint"),
+		WithExportTarget(ExportTargetNone))
+
+	// JWT Authentication Fields.
+	LambdaServerAuthJWTSigner = StringField("lambda-auth-jwt-signer",
+		WithRequired(false),
+		WithDescription("The JWK format public key used to verify JWT signatures (mutually exclusive with lambda-auth-jwt-jwks-url)"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTJWKSUrl = StringField("lambda-auth-jwt-jwks-url",
+		WithRequired(false),
+		WithDescription("The URL to the JWKS endpoint for JWT verification (mutually exclusive with lambda-auth-jwt-signer)"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTExpectedIssuerField = StringField("lambda-auth-jwt-expected-issuer",
+		WithRequired(true),
+		WithDescription("The expected issuer claim in the JWT"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTExpectedSubjectField = StringField("lambda-auth-jwt-expected-subject",
+		WithRequired(true),
+		WithDescription("The expected subject claim in the JWT (optional)"),
+		WithExportTarget(ExportTargetNone))
+
+	LambdaServerAuthJWTExpectedAudienceField = StringField("lambda-auth-jwt-expected-audience",
+		WithRequired(true),
+		WithDescription("The expected audience claim in the JWT (optional)"),
+		WithExportTarget(ExportTargetNone))
 )
+
+func LambdaServerFields() []SchemaField {
+	return []SchemaField{
+		LambdaServerClientIDField,
+		LambdaServerClientSecretField,
+		LambdaServerAuthJWTSigner,
+		LambdaServerAuthJWTJWKSUrl,
+		LambdaServerAuthJWTExpectedIssuerField,
+		LambdaServerAuthJWTExpectedSubjectField,
+		LambdaServerAuthJWTExpectedAudienceField,
+	}
+}
+
+var LambdaServerRelationships = make([]SchemaFieldRelationship, 0)
 
 // DefaultFields list the default fields expected in every single connector.
 var DefaultFields = []SchemaField{
@@ -80,7 +160,15 @@ var DefaultFields = []SchemaField{
 	ticketTemplatePathField,
 	logLevelField,
 	skipFullSync,
+	externalResourceC1ZField,
+	externalResourceEntitlementIdFilter,
+
 	otelCollectorEndpoint,
+	otelCollectorEndpointTLSCertPath,
+	otelCollectorEndpointTlSCert,
+	otelCollectorEndpointTlSInsecure,
+	otelTracingDisabled,
+	otelLoggingDisabled,
 }
 
 func IsFieldAmongDefaultList(f SchemaField) bool {
