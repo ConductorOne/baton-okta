@@ -421,6 +421,7 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	annos.Update(&v2.V1Identifier{
 		Id: fmtResourceIdV1(group.Id),
 	})
+	annos.Update(&v2.RawId{Id: group.Id})
 
 	etagMd, err := o.etagMd(group)
 	if err != nil {
