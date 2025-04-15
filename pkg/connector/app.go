@@ -323,9 +323,10 @@ func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, erro
 	var appTraitOpts []sdkResource.AppTraitOption
 	appTraitOpts = append(appTraitOpts, sdkResource.WithAppProfile(appProfile))
 
-	return sdkResource.NewAppResource(app.Label, resourceTypeApp, app.Id, appTraitOpts, sdkResource.WithAnnotation(&v2.V1Identifier{
-		Id: fmtResourceIdV1(app.Id),
-	}))
+	return sdkResource.NewAppResource(app.Label, resourceTypeApp, app.Id, appTraitOpts,
+		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(app.Id)}),
+		sdkResource.WithAnnotation(&v2.RawId{Id: app.Id}),
+	)
 }
 
 func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

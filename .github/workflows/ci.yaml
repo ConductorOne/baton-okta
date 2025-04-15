@@ -7,7 +7,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22.x
+          go-version: 1.23.x
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Run linters
@@ -18,7 +18,7 @@ jobs:
   go-test:
     strategy:
       matrix:
-        go-version: [1.22.x]
+        go-version: [1.23.x]
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
@@ -46,10 +46,10 @@ jobs:
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
       BATON_SYNC_CUSTOM_ROLES: true
       # The following parameters are passed to grant/revoke commands
-      CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:access:user:00ug0t0xjvnHRbQuD5d7'
+      CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:access:user:00uacdfcbiu3Igbmz5d7'
       CONNECTOR_ENTITLEMENT: 'app:0oaf4rf37pg7W4B6a5d7:access'
       CONNECTOR_PRINCIPAL_TYPE: 'user'
-      CONNECTOR_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7'
+      CONNECTOR_PRINCIPAL: '00uacdfcbiu3Igbmz5d7'
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
@@ -85,11 +85,11 @@ jobs:
         env:
             BATON_ENTITLEMENT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member'
             BATON_PRINCIPAL_TYPE: 'user'
-            BATON_PRINCIPAL: '00ug0t0xjvnHRbQuD5d7' 
+            BATON_PRINCIPAL: '00uacdfcbiu3Igbmz5d7'
         run: | 
           ./baton-okta && ./baton-okta --grant-entitlement ${{ env.BATON_ENTITLEMENT }} --grant-principal ${{ env.BATON_PRINCIPAL }} --grant-principal-type ${{ env.BATON_PRINCIPAL_TYPE }}
       - name: Revoke custom role grants
         env:
-          BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00ug0t0xjvnHRbQuD5d7'
+          BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00uacdfcbiu3Igbmz5d7'
         run: |
            ./baton-okta && ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}

@@ -384,6 +384,7 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		resourceTypeUser,
 		user.Id,
 		options,
+		resource.WithAnnotation(&v2.RawId{Id: user.Id}),
 	)
 	return ret, err
 }
