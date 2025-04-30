@@ -312,7 +312,7 @@ func (o *accountResourceType) Grants(
 			// TODO(lauren) we only need this cached when !awsConfig.UseGroupMapping & !awsConfig.JoinAllRoles
 			awsConfig.appGroupCache.Store(group.Id, oktaAppGroup)
 			for _, role := range oktaAppGroup.samlRoles {
-				if !awsConfig.UseGroupMapping && !awsConfig.JoinAllRoles {
+				if !awsConfig.UseGroupMapping && !awsConfig.JoinAllRoles && !o.connector.awsConfig.AssumeOnlyGroupAssignments {
 					rv = append(rv, accountGrantGroup(resource, role, oktaAppGroup.oktaGroup.Id))
 				} else {
 					rv = append(rv, accountGrantGroupExpandable(resource, role, oktaAppGroup.oktaGroup.Id))
@@ -325,7 +325,7 @@ func (o *accountResourceType) Grants(
 			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
 		}
 
-		if !awsConfig.UseGroupMapping {
+		if !awsConfig.UseGroupMapping && !o.connector.awsConfig.AssumeOnlyGroupAssignments {
 			bag.Push(pagination.PageState{
 				ResourceTypeID: resourceTypeUser.Id,
 			})

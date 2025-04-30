@@ -44,10 +44,11 @@ type ciamConfig struct {
 }
 
 type awsConfig struct {
-	Enabled                bool
-	OktaAppId              string
-	awsAppConfigCacheMutex sync.Mutex
-	oktaAWSAppSettings     *oktaAWSAppSettings
+	Enabled                    bool
+	AssumeOnlyGroupAssignments bool
+	OktaAppId                  string
+	awsAppConfigCacheMutex     sync.Mutex
+	oktaAWSAppSettings         *oktaAWSAppSettings
 }
 
 /*
@@ -71,6 +72,7 @@ This field should always follow this specific syntax:
 arn:aws:iam::${accountid}:saml-provider/[SAML Provider Name],arn:aws:iam::${accountid}:role/${role}
 */
 type oktaAWSAppSettings struct {
+	AssumeOnlyGroupAssignments   bool
 	JoinAllRoles                 bool
 	IdentityProviderArn          string
 	RoleRegex                    string
@@ -81,23 +83,24 @@ type oktaAWSAppSettings struct {
 }
 
 type Config struct {
-	Domain              string
-	ApiToken            string
-	OktaClientId        string
-	OktaPrivateKey      string
-	OktaPrivateKeyId    string
-	SyncInactiveApps    bool
-	OktaProvisioning    bool
-	Ciam                bool
-	CiamEmailDomains    []string
-	Cache               bool
-	CacheTTI            int32
-	CacheTTL            int32
-	SyncCustomRoles     bool
-	SkipSecondaryEmails bool
-	AWSMode             bool
-	AWSOktaAppId        string
-	SyncSecrets         bool
+	Domain                        string
+	ApiToken                      string
+	OktaClientId                  string
+	OktaPrivateKey                string
+	OktaPrivateKeyId              string
+	SyncInactiveApps              bool
+	OktaProvisioning              bool
+	Ciam                          bool
+	CiamEmailDomains              []string
+	Cache                         bool
+	CacheTTI                      int32
+	CacheTTL                      int32
+	SyncCustomRoles               bool
+	SkipSecondaryEmails           bool
+	AWSMode                       bool
+	AWSAssumeOnlyGroupAssignments bool
+	AWSOktaAppId                  string
+	SyncSecrets                   bool
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -433,8 +436,9 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 	}
 
 	awsConfig := &awsConfig{
-		Enabled:   cfg.AWSMode,
-		OktaAppId: cfg.AWSOktaAppId,
+		Enabled:                    cfg.AWSMode,
+		OktaAppId:                  cfg.AWSOktaAppId,
+		AssumeOnlyGroupAssignments: cfg.AWSAssumeOnlyGroupAssignments,
 	}
 
 	return &Okta{
