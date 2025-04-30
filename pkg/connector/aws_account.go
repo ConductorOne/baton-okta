@@ -8,6 +8,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/bid"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
@@ -270,7 +271,7 @@ func (o *accountResourceType) Grants(
 			}
 
 			for samlRole := range appUserSAMLRolesMap.Iterator().C {
-				rv = append(rv, accountGrant(resource, samlRole, appUser.Id))
+				rv = append(rv, o.accountGrant(resource, samlRole, appUser.Id))
 			}
 		}
 		nextPage, annos, err := parseResp(respContext.OktaResponse)
@@ -313,9 +314,13 @@ func (o *accountResourceType) Grants(
 			awsConfig.appGroupCache.Store(group.Id, oktaAppGroup)
 			for _, role := range oktaAppGroup.samlRoles {
 				if !awsConfig.UseGroupMapping && !awsConfig.JoinAllRoles {
-					rv = append(rv, accountGrantGroup(resource, role, oktaAppGroup.oktaGroup.Id))
+					rv = append(rv, o.accountGrantGroup(resource, role, oktaAppGroup.oktaGroup.Id))
 				} else {
-					rv = append(rv, accountGrantGroupExpandable(resource, role, oktaAppGroup.oktaGroup.Id))
+					grant, err := o.accountGrantGroupExpandable(resource, role, oktaAppGroup.oktaGroup.Id)
+					if err != nil {
+						return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to create expandable group grant: %w", err)
+					}
+					rv = append(rv, grant)
 				}
 			}
 		}
@@ -340,22 +345,46 @@ func (o *accountResourceType) Grants(
 	}
 }
 
-func accountGrant(resource *v2.Resource, samlRole string, oktaUserId string) *v2.Grant {
+func (o *accountResourceType) accountGrant(resource *v2.Resource, samlRole string, oktaUserId string) *v2.Grant {
+	grantOpts := make([]sdkGrant.GrantOption, 0)
+	if o.connector.awsConfig.AWSSourceIdentityMode {
+		grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.ExternalResourceMatchID{Id: oktaUserId}))
+	}
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: oktaUserId}}
-	return sdkGrant.NewGrant(resource, samlRole, ur)
+	return sdkGrant.NewGrant(resource, samlRole, ur, grantOpts...)
 }
 
-func accountGrantGroup(resource *v2.Resource, samlRole string, groupId string) *v2.Grant {
+func (o *accountResourceType) accountGrantGroup(resource *v2.Resource, samlRole string, groupId string) *v2.Grant {
+	grantOpts := make([]sdkGrant.GrantOption, 0)
+	if o.connector.awsConfig.AWSSourceIdentityMode {
+		grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.ExternalResourceMatchID{Id: groupId}))
+	}
 	gr := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupId}}
-	return sdkGrant.NewGrant(resource, samlRole, gr)
+	return sdkGrant.NewGrant(resource, samlRole, gr, grantOpts...)
 }
 
-func accountGrantGroupExpandable(resource *v2.Resource, samlRole string, groupId string) *v2.Grant {
-	gr := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupId}}
-	return sdkGrant.NewGrant(resource, samlRole, gr, sdkGrant.WithAnnotation(&v2.GrantExpandable{
-		EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupId)},
+func (o *accountResourceType) accountGrantGroupExpandable(resource *v2.Resource, samlRole string, groupId string) (*v2.Grant, error) {
+	rID := &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupId}
+	gr := &v2.Resource{Id: rID}
+
+	grantOpts := make([]sdkGrant.GrantOption, 0)
+	expandEntitlementId := fmt.Sprintf("group:%s:member", groupId)
+	if o.connector.awsConfig.AWSSourceIdentityMode {
+		ent := sdkEntitlement.NewAssignmentEntitlement(gr, "member")
+		bidEnt, err := bid.MakeBid(ent)
+		if err != nil {
+			return nil, err
+		}
+		expandEntitlementId = bidEnt
+		grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.ExternalResourceMatchID{Id: groupId}))
+	}
+
+	grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.GrantExpandable{
+		EntitlementIds: []string{expandEntitlementId},
 		Shallow:        true,
 	}))
+
+	return sdkGrant.NewGrant(resource, samlRole, gr, grantOpts...), nil
 }
 
 /*
