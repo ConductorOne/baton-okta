@@ -22,6 +22,8 @@ var (
 	skipSecondaryEmails   = field.BoolField("skip-secondary-emails", field.WithDescription("Skip syncing secondary emails"), field.WithDefaultValue(false))
 	awsIdentityCenterMode = field.BoolField("aws-identity-center-mode",
 		field.WithDescription("Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced"))
+	awsSourceIdentityMode = field.BoolField("aws-source-identity-mode",
+		field.WithDescription("Enable AWS source identity mode. When set, user and group identities are loaded from the source connector .c1z file"))
 	awsOktaAppId = field.StringField("aws-okta-app-id", field.WithDescription("The Okta app id for the AWS application"))
 	SyncSecrets  = field.BoolField("sync-secrets", field.WithDescription("Whether to sync secrets or not"), field.WithDefaultValue(false))
 )
@@ -33,6 +35,7 @@ var relationships = []field.SchemaFieldRelationship{
 	field.FieldsAtLeastOneUsed(apiToken, oktaClientId),
 	field.FieldsMutuallyExclusive(ciam, awsIdentityCenterMode),
 	field.FieldsRequiredTogether(awsIdentityCenterMode, awsOktaAppId),
+	field.FieldsDependentOn([]field.SchemaField{awsSourceIdentityMode}, []field.SchemaField{awsIdentityCenterMode}),
 }
 
 var configuration = field.NewConfiguration([]field.SchemaField{
@@ -53,4 +56,5 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	awsIdentityCenterMode,
 	awsOktaAppId,
 	SyncSecrets,
+	awsSourceIdentityMode,
 }, relationships...)
