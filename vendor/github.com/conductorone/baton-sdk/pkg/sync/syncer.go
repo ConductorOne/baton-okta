@@ -188,6 +188,7 @@ func (p *ProgressCounts) LogExpandProgress(ctx context.Context, actions []*expan
 
 // syncer orchestrates a connector sync and stores the results using the provided datasource.Writer.
 type syncer struct {
+	attempts                            int
 	c1zManager                          manager.Manager
 	c1zPath                             string
 	externalResourceC1ZPath             string
@@ -244,25 +245,23 @@ func (s *syncer) handleProgress(ctx context.Context, a *Action, c int) {
 	}
 }
 
-var attempts = 0
-
-func shouldWaitAndRetry(ctx context.Context, err error) bool {
+func (s *syncer) shouldWaitAndRetry(ctx context.Context, err error) bool {
 	ctx, span := tracer.Start(ctx, "syncer.shouldWaitAndRetry")
 	defer span.End()
 
 	if err == nil {
-		attempts = 0
+		s.attempts = 0
 		return true
 	}
 	if status.Code(err) != codes.Unavailable && status.Code(err) != codes.DeadlineExceeded {
 		return false
 	}
 
-	attempts++
+	s.attempts++
 	l := ctxzap.Extract(ctx)
 
 	// use linear time by default
-	var wait time.Duration = time.Duration(attempts) * time.Second
+	var wait time.Duration = time.Duration(s.attempts) * time.Second
 
 	// If error contains rate limit data, use that instead
 	if st, ok := status.FromError(err); ok {
@@ -420,14 +419,14 @@ func (s *syncer) Sync(ctx context.Context) error {
 
 		case SyncResourceTypesOp:
 			err = s.SyncResourceTypes(ctx)
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
 
 		case SyncResourcesOp:
 			err = s.SyncResources(ctx)
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
@@ -440,7 +439,7 @@ func (s *syncer) Sync(ctx context.Context) error {
 				s.state.FinishAction(ctx)
 				continue
 			}
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
@@ -453,20 +452,20 @@ func (s *syncer) Sync(ctx context.Context) error {
 				s.state.FinishAction(ctx)
 				continue
 			}
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
 
 		case SyncExternalResourcesOp:
 			err = s.SyncExternalResources(ctx)
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
 		case SyncAssetsOp:
 			err = s.SyncAssets(ctx)
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
@@ -479,7 +478,7 @@ func (s *syncer) Sync(ctx context.Context) error {
 			}
 
 			err = s.SyncGrantExpansion(ctx)
-			if !shouldWaitAndRetry(ctx, err) {
+			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
 			continue
@@ -1543,6 +1542,14 @@ func (s *syncer) SyncExternalResourcesWithGrantToEntitlement(ctx context.Context
 	for _, resourceId := range resourceIDs {
 		resourceResp, err := s.externalResourceReader.GetResource(ctx, &reader_v2.ResourcesReaderServiceGetResourceRequest{ResourceId: resourceId})
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				l.Debug(
+					"resource was not found in external sync",
+					zap.String("resource_id", resourceId.Resource),
+					zap.String("resource_type_id", resourceId.ResourceType),
+				)
+				continue
+			}
 			return err
 		}
 		resourceVal := resourceResp.GetResource()
@@ -1983,7 +1990,7 @@ func (s *syncer) processGrantsWithExternalPrincipals(ctx context.Context, princi
 						}
 					}
 					profileVal, ok := resource.GetProfileStringValue(userTrait.Profile, matchExternalResource.Key)
-					if ok && profileVal == matchExternalResource.Value {
+					if ok && strings.EqualFold(profileVal, matchExternalResource.Value) {
 						newGrant := newGrantForExternalPrincipal(grant, userPrincipal)
 						expandedGrants = append(expandedGrants, newGrant)
 					}
@@ -1996,7 +2003,7 @@ func (s *syncer) processGrantsWithExternalPrincipals(ctx context.Context, princi
 						continue
 					}
 					profileVal, ok := resource.GetProfileStringValue(groupTrait.Profile, matchExternalResource.Key)
-					if ok && profileVal == matchExternalResource.Value {
+					if ok && strings.EqualFold(profileVal, matchExternalResource.Value) {
 						newGrant := newGrantForExternalPrincipal(grant, groupPrincipal)
 						newGrantAnnos := annotations.Annotations(newGrant.Annotations)
 
