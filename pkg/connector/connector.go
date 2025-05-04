@@ -585,7 +585,7 @@ func getDefaultAppUserSchema(ctx context.Context, client *okta.Client, appId str
 	var appUserSchema *AppUserSchema
 	_, err = rq.Do(ctx, req, &appUserSchema)
 	if err != nil {
-		return nil, fmt.Errorf("okta-aws-connector: error fetching default application schema: %v", err)
+		return nil, fmt.Errorf("okta-aws-connector: error fetching default application schema: %w", err)
 	}
 	return appUserSchema, nil
 }

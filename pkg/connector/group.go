@@ -355,6 +355,9 @@ func (o *groupResourceType) listAWSGroups(ctx context.Context, token *pagination
 			return nil, nil, err
 		}
 		oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
+		if err != nil {
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch groups from okta: %w", err)
+		}
 		groups = append(groups, oktaGroup)
 		awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
 	}
