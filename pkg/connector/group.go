@@ -29,7 +29,12 @@ type groupResourceType struct {
 	connector    *Okta
 }
 
-func (o *groupResourceType) ResourceType(_ context.Context) *v2.ResourceType {
+func (o *groupResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
+		annos := annotations.Annotations(o.resourceType.Annotations)
+		annos.Update(&v2.SkipEntitlementsAndGrants{})
+		o.resourceType.Annotations = annos
+	}
 	return o.resourceType
 }
 
@@ -47,8 +52,10 @@ func (o *groupResourceType) List(
 	var groups []*okta.Group
 	var respCtx *responseContext
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
-		qp := queryParamsExpand(token.Size, page, "group")
-		groups, respCtx, err = o.listApplicationGroups(ctx, token, qp)
+		if o.connector.awsConfig.AWSSourceIdentityMode {
+			return rv, "", nil, nil
+		}
+		groups, respCtx, err = o.listAWSGroups(ctx, token, page)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
 		}
@@ -93,6 +100,10 @@ func (o *groupResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
+		return rv, "", nil, nil
+	}
+
 	rv = append(rv, o.groupEntitlement(ctx, resource))
 
 	return rv, "", nil, nil
@@ -126,6 +137,10 @@ func (o *groupResourceType) Grants(
 	err := bag.Unmarshal(token.Token)
 	if err != nil {
 		return nil, "", nil, err
+	}
+
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
+		return rv, "", nil, nil
 	}
 
 	if bag.Current() == nil {
@@ -289,66 +304,61 @@ func (o *groupResourceType) Grants(
 }
 
 func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := o.connector.client.Group.ListGroups(ctx, qp)
+	return listGroupsHelper(ctx, o.connector.client, token, qp)
+}
+
+func listGroupsHelper(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+	groups, resp, err := client.Group.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", handleOktaResponseError(resp, err))
 	}
-
 	reqCtx, err := responseToContext(token, resp)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return groups, reqCtx, nil
 }
 
-func (o *groupResourceType) listApplicationGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+func (o *groupResourceType) listAWSGroups(ctx context.Context, token *pagination.Token, page string) ([]*okta.Group, *responseContext, error) {
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	groups := make([]*okta.Group, 0, len(appGroups))
-	for _, appGroup := range appGroups {
-		oktaAppGroup, err := awsConfig.oktaAppGroup(ctx, appGroup)
+	groups := make([]*okta.Group, 0)
+	if awsConfig.UseGroupMapping {
+		qp := queryParams(token.Size, page)
+		groups, respCtx, err := listGroupsHelper(ctx, o.connector.client, token, qp)
 		if err != nil {
 			return nil, nil, err
 		}
-		groups = append(groups, oktaAppGroup.oktaGroup)
-		awsConfig.appGroupCache.Store(appGroup.Id, oktaAppGroup)
+		for _, group := range groups {
+			_, _, matchesRolePattern, err := parseAccountIDAndRoleFromGroupName(ctx, awsConfig.RoleRegex, group.Profile.Name)
+			if err != nil {
+				return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
+			}
+			if matchesRolePattern {
+				groups = append(groups, group)
+			}
+		}
+		return groups, respCtx, nil
 	}
 
-	return groups, reqCtx, nil
-}
-
-func listApplicationGroupsHelper(
-	ctx context.Context,
-	client *okta.Client,
-	appID string,
-	token *pagination.Token,
-	qp *query.Params,
-) ([]*okta.Group, *responseContext, error) {
-	appGroups, reqCtx, err := listApplicationGroupAssignments(ctx, client, appID, token, qp)
+	qp := queryParamsExpand(token.Size, page, "group")
+	appGroups, respCtx, err := listApplicationGroupAssignments(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	groups := make([]*okta.Group, 0, len(appGroups))
 	for _, appGroup := range appGroups {
+		appGroupSAMLRoles, err := appGroupSAMLRolesWrapper(ctx, appGroup)
+		if err != nil {
+			return nil, nil, err
+		}
 		oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		groups = append(groups, oktaGroup)
+		awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
 	}
-
-	return groups, reqCtx, nil
+	return groups, respCtx, nil
 }
 
 /*

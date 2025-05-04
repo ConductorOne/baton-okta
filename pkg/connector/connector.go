@@ -9,13 +9,12 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
-
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
@@ -77,6 +76,7 @@ type oktaAWSAppSettings struct {
 	RoleRegex                    string
 	UseGroupMapping              bool
 	IdentityProviderArnAccountID string
+	SamlRolesUnionEnabled        bool
 	appGroupCache                sync.Map // group ID to app group cache
 	notAppGroupCache             sync.Map // group IDs that are not app groups
 }
@@ -193,9 +193,9 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	}
 
 	if o.awsConfig.Enabled {
-		resourceSyncer := []connectorbuilder.ResourceSyncer{accountBuilder(o)}
+		resourceSyncer := []connectorbuilder.ResourceSyncer{accountBuilder(o), groupBuilder(o)}
 		if !o.awsConfig.AWSSourceIdentityMode {
-			resourceSyncer = append(resourceSyncer, userBuilder(o), groupBuilder(o))
+			resourceSyncer = append(resourceSyncer, userBuilder(o))
 		}
 		return resourceSyncer
 	}
@@ -542,15 +542,63 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 		return nil, err
 	}
 
+	samlRolesUnionEnabled, err := isSamlRolesUnionEnabled(ctx, c.client, c.awsConfig.OktaAppId)
+	if err != nil {
+		return nil, err
+	}
+
 	oktaAWSAppSettings := &oktaAWSAppSettings{
 		JoinAllRoles:                 joinAllRolesBool,
 		IdentityProviderArn:          identityProviderArnString,
 		RoleRegex:                    roleRegex,
 		UseGroupMapping:              useGroupMappingBool,
 		IdentityProviderArnAccountID: accountId,
+		SamlRolesUnionEnabled:        samlRolesUnionEnabled,
 	}
 	c.awsConfig.oktaAWSAppSettings = oktaAWSAppSettings
 	return oktaAWSAppSettings, nil
+}
+
+type AppUserSchema struct {
+	Definitions struct {
+		Base struct {
+			Properties struct {
+				SamlRoles struct {
+					Union string `json:"union,omitempty"`
+				} `json:"samlRoles,omitempty"`
+			} `json:"properties"`
+		} `json:"base"`
+	} `json:"definitions"`
+}
+
+func getDefaultAppUserSchema(ctx context.Context, client *okta.Client, appId string) (*AppUserSchema, error) {
+	url := fmt.Sprintf(apiPathDefaultAppSchema, appId)
+	rq := client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var appUserSchema *AppUserSchema
+	_, err = rq.Do(ctx, req, &appUserSchema)
+	if err != nil {
+		return nil, fmt.Errorf("okta-aws-connector: error fetching default application schema: %v", err)
+	}
+	return appUserSchema, nil
+}
+
+func isSamlRolesUnionEnabled(ctx context.Context, client *okta.Client, appId string) (bool, error) {
+	defaultAppSchema, err := getDefaultAppUserSchema(ctx, client, appId)
+	if err != nil {
+		return false, err
+	}
+	if defaultAppSchema.Definitions.Base.Properties.SamlRoles.Union == "ENABLE" {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (a *oktaAWSAppSettings) getAppGroupFromCache(ctx context.Context, groupId string) (*OktaAppGroupWrapper, error) {
@@ -577,41 +625,13 @@ func (a *oktaAWSAppSettings) checkIfNotAppGroupFromCache(ctx context.Context, gr
 	return notAppGroup, nil
 }
 
-func (a *oktaAWSAppSettings) oktaAppGroup(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
-	oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
+func appGroupSAMLRolesWrapper(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
+	samlRoles, err := getSAMLRolesFromAppGroupProfile(ctx, appGroup)
 	if err != nil {
 		return nil, err
 	}
-
-	appGroupProfile, ok := appGroup.Profile.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("error converting app group profile '%s'", appGroup.Id)
-	}
-
-	samlRoles := make([]string, 0)
-	accountId := a.IdentityProviderArnAccountID
-	var roleName string
-	matchesRolePattern := false
-
-	if a.UseGroupMapping {
-		accountId, roleName, matchesRolePattern, err = parseAccountIDAndRoleFromGroupName(ctx, a.RoleRegex, oktaGroup.Profile.Name)
-		if err != nil {
-			return nil, err
-		}
-		if matchesRolePattern {
-			samlRoles = append(samlRoles, roleName)
-		}
-	} else {
-		samlRoles, err = getSAMLRoles(appGroupProfile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return &OktaAppGroupWrapper{
-		oktaGroup: oktaGroup,
 		samlRoles: samlRoles,
-		accountID: accountId,
 	}, nil
 }
 
