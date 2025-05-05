@@ -30,11 +30,6 @@ type groupResourceType struct {
 }
 
 func (o *groupResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
-	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
-		annos := annotations.Annotations(o.resourceType.Annotations)
-		annos.Update(&v2.SkipEntitlementsAndGrants{})
-		o.resourceType.Annotations = annos
-	}
 	return o.resourceType
 }
 
