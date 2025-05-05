@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -472,6 +473,20 @@ func getSAMLRolesFromAppUserProfile(ctx context.Context, appUser *okta.AppUser) 
 	return getSAMLRoles(appUserProfile)
 }
 
+func getOrCreateAppUserProfile(ctx context.Context, appUser *okta.AppUser) map[string]interface{} {
+	l := ctxzap.Extract(ctx)
+	if appUser.Profile == nil {
+		l.Error("app user profile was nil", zap.Any("userId", appUser.Id))
+		return make(map[string]interface{})
+	}
+	appUserProfile, ok := appUser.Profile.(map[string]interface{})
+	if !ok {
+		l.Error("error casting app user profile", zap.Any("userId", appUser.Id))
+		return make(map[string]interface{})
+	}
+	return appUserProfile
+}
+
 func getSAMLRolesFromAppGroupProfile(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) ([]string, error) {
 	l := ctxzap.Extract(ctx)
 	if appGroup.Profile == nil {
@@ -556,4 +571,307 @@ func (o *accountResourceType) getOktaAppGroupFromCacheOrFetch(ctx context.Contex
 	awsConfig.appGroupCache.Store(groupId, appGroupSAMLRoles)
 
 	return appGroupSAMLRoles, nil
+}
+
+const apiPathApplicationGroup = "/api/v1/apps/%s/groups/%s"
+
+type JsonPatchOperation struct {
+	// The operation (PATCH action)
+	Op string `json:"op,omitempty"`
+	// The resource path of the attribute to update
+	Path string `json:"path,omitempty"`
+	// The update operation value
+	Value interface{} `json:"value,omitempty"`
+}
+
+func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
+		return nil, fmt.Errorf("okta-aws-connector: only users or groups can be granted app membership")
+	}
+	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting aws app settings config")
+	}
+
+	if awsConfig.UseGroupMapping {
+		return nil, fmt.Errorf("okta-aws-connector: group assignments are based on group names matching regex")
+	}
+
+	appID := o.connector.awsConfig.OktaAppId
+	newSamlRole := entitlement.GetSlug()
+
+	if newSamlRole == "" {
+		return nil, fmt.Errorf("okta-aws-connector: entitlement %s had an empty slug", entitlement.Id)
+	}
+
+	switch principal.Id.ResourceType {
+	case resourceTypeUser.Id:
+		userID := principal.Id.Resource
+		appUser, response, err := o.connector.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			if response == nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application user: %w", err)
+			}
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
+				return nil, fmt.Errorf("okta-aws-connector: error fetching application user: %v", errOkta)
+			}
+		}
+
+		if appUser != nil {
+			if appUser.Scope == appGrantGroup {
+				return nil, fmt.Errorf("okta-aws-connector: connect add individual assignment for user with group assignment '%s'", appUser.Id)
+			}
+
+			appUserProfile := getOrCreateAppUserProfile(ctx, appUser)
+			samlRoles, err := getSAMLRoles(appUserProfile)
+			if err != nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to get saml roles for user '%s': %w", appUser.Id, err)
+			}
+
+			if slices.Contains(samlRoles, newSamlRole) {
+				return annotations.New(&v2.GrantAlreadyExists{}), nil
+			}
+
+			if samlRoles == nil {
+				samlRoles = make([]string, 0)
+			}
+
+			samlRoles = append(samlRoles, newSamlRole)
+			appUserProfile["samlRoles"] = samlRoles
+
+			payload := okta.AppUser{
+				Profile: appUserProfile,
+			}
+			_, _, err = o.connector.client.Application.UpdateApplicationUser(ctx, appID, appUser.Id, payload)
+			if err != nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to update application user: %w", err)
+			}
+
+			return nil, nil
+		}
+
+		profile := map[string]interface{}{
+			"samlRoles": []string{newSamlRole},
+		}
+
+		payload := okta.AppUser{
+			Id:      userID,
+			Scope:   appUserScope,
+			Profile: profile,
+		}
+		_, response, err = o.connector.client.Application.AssignUserToApplication(ctx, appID, payload)
+		if err != nil {
+			return nil, fmt.Errorf("okta-aws-connector: error assigning app to user %w", err)
+		}
+	case resourceTypeGroup.Id:
+		groupID := principal.Id.Resource
+		appGroup, response, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil {
+			if response == nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application group assignment: %w", err)
+			}
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
+				return nil, fmt.Errorf("okta-aws-connector: error fetching application group assignment %v", errOkta)
+			}
+		}
+
+		if appGroup != nil {
+			samlRoles, err := getSAMLRolesFromAppGroupProfile(ctx, appGroup)
+			if err != nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to get saml roles for app group profile '%s': %w", groupID, err)
+			}
+			if slices.Contains(samlRoles, newSamlRole) {
+				return annotations.New(&v2.GrantAlreadyExists{}), nil
+			}
+			if samlRoles == nil {
+				samlRoles = make([]string, 0)
+			}
+			samlRoles = append(samlRoles, newSamlRole)
+			_, err = updateApplicationGroup(ctx, o.connector.client, appID, groupID, samlRoles)
+			if err != nil {
+				return nil, fmt.Errorf("okta-aws-connector: error updating application group '%s': %w", groupID, err)
+			}
+			return nil, nil
+		}
+
+		profile := map[string]interface{}{
+			"samlRoles": []string{newSamlRole},
+		}
+		payload := okta.ApplicationGroupAssignment{
+			Profile: profile,
+		}
+		_, response, err = o.connector.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
+		if err != nil {
+			return nil, fmt.Errorf("okta-aws-connector: error creating application group assignment %v", err)
+		}
+	default:
+		return nil, fmt.Errorf("okta-aws-connector: invalid grant resource type: %s", principal.Id.ResourceType)
+	}
+
+	return nil, nil
+}
+
+func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	if grant.Principal.Id.ResourceType != resourceTypeUser.Id && grant.Principal.Id.ResourceType != resourceTypeGroup.Id {
+		return nil, fmt.Errorf("okta-aws-connector: only users or groups can be have aws account role revoked")
+	}
+	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("okta-aws-connector: error getting aws app settings config")
+	}
+
+	if awsConfig.UseGroupMapping {
+		return nil, fmt.Errorf("okta-aws-connector: grants are based on group name matching configured regular expression")
+	}
+
+	appID := o.connector.awsConfig.OktaAppId
+	samlRoleToRemove := grant.GetEntitlement().GetSlug()
+
+	if samlRoleToRemove == "" {
+		return nil, fmt.Errorf("okta-aws-connector: entitlement %s had an empty slug", grant.Entitlement.Id)
+	}
+
+	switch grant.Principal.Id.ResourceType {
+	case resourceTypeUser.Id:
+		userID := grant.Principal.Id.Resource
+		appUser, response, err := o.connector.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		if err != nil {
+			if response == nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application user: %w", err)
+			}
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
+				// TODO(lauren) should we error if app user not found?
+				return nil, fmt.Errorf("okta-aws-connector: error fetching application user: %v", errOkta)
+			}
+			return nil, nil
+		}
+
+		if appUser.Scope == appGrantGroup {
+			return nil, fmt.Errorf("okta-aws-connector: connect remove role granted via group assignment '%s'", appUser.Id)
+		}
+
+		samlRoles, err := getSAMLRolesFromAppUserProfile(ctx, appUser)
+		if err != nil {
+			return nil, fmt.Errorf("okta-aws-connector: failed to get saml roles for user '%s': %w", appUser.Id, err)
+		}
+		if !slices.Contains(samlRoles, samlRoleToRemove) {
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		}
+
+		appUserProfile, ok := appUser.Profile.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("okta-aws-connector: error converting app user profile '%s'", appUser.Id)
+		}
+
+		newSamlRoles := removeSamlRole(samlRoles, samlRoleToRemove)
+
+		appUserProfile["samlRoles"] = newSamlRoles
+
+		payload := okta.AppUser{
+			Profile: appUserProfile,
+		}
+		_, response, err = o.connector.client.Application.UpdateApplicationUser(ctx, appID, appUser.Id, payload)
+		if err != nil {
+			return nil, fmt.Errorf("okta-aws-connector: error updating application user: %w", err)
+		}
+	case resourceTypeGroup.Id:
+		groupID := grant.Principal.Id.Resource
+		appGroup, response, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		if err != nil {
+			if response == nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application group assignment: %w", err)
+			}
+			defer response.Body.Close()
+			errOkta, err := getError(response)
+			if err != nil {
+				return nil, err
+			}
+			// TODO(lauren) should we error if app group not found?
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
+				return nil, fmt.Errorf("okta-aws-connector: error fetching application group assignment %v", errOkta)
+			}
+			return nil, nil
+		}
+
+		samlRoles, err := getSAMLRolesFromAppGroupProfile(ctx, appGroup)
+		if err != nil {
+			return nil, fmt.Errorf("okta-aws-connector: failed to get saml roles for app group '%s': %w", groupID, err)
+		}
+		if !slices.Contains(samlRoles, samlRoleToRemove) {
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		}
+		newSamlRoles := removeSamlRole(samlRoles, samlRoleToRemove)
+		_, err = updateApplicationGroup(ctx, o.connector.client, appID, groupID, newSamlRoles)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("okta-aws-connector: invalid revoke resource type: %s", grant.Principal.Id.ResourceType)
+	}
+	return nil, nil
+}
+
+func updateApplicationGroup(
+	ctx context.Context,
+	client *okta.Client,
+	appID string,
+	groupID string,
+	samlRoles []string,
+) (*okta.ApplicationGroupAssignment, error) {
+	url := fmt.Sprintf(apiPathApplicationGroup, appID, groupID)
+
+	payload := []JsonPatchOperation{
+		{
+			Op:    "replace",
+			Path:  "/profile/samlRoles",
+			Value: samlRoles,
+		},
+	}
+	rq := client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodPatch, url, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var appGroup *okta.ApplicationGroupAssignment
+	resp, err := rq.Do(ctx, req, &appGroup)
+	if err != nil {
+		oktaErr, err := getError(resp)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("okta-aws-connector: error updating application group: %v", oktaErr)
+	}
+
+	return appGroup, nil
+}
+
+func removeSamlRole(samlRoles []string, samlRoleToRemove string) []string {
+	newSamlRoles := make([]string, 0)
+	for _, samlRole := range samlRoles {
+		if samlRole == samlRoleToRemove {
+			continue
+		}
+		newSamlRoles = append(newSamlRoles, samlRole)
+	}
+	return newSamlRoles
 }
