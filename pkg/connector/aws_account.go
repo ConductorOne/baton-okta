@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -194,6 +195,20 @@ func samlRoleEntitlement(resource *v2.Resource, role string) *v2.Entitlement {
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in AWS Okta app", role)),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
 	)
+}
+
+func parseSAMLRoleFromEntitlementID(entitlementID string) (string, error) {
+	parts := strings.Split(entitlementID, ":")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("okta-aws-connector: invalid entitlement ID format: %s, expected format: resource-type:resource-id:samlRole", entitlementID)
+	}
+	resourceType := parts[0]
+	resourceID := parts[1]
+	samlRole := parts[2]
+	if resourceType == "" || resourceID == "" || samlRole == "" {
+		return "", fmt.Errorf("okta-aws-connector: entitlement ID contains empty components: %s", entitlementID)
+	}
+	return samlRole, nil
 }
 
 // Add group principal grant if assigned with a saml role
@@ -473,16 +488,16 @@ func getSAMLRolesFromAppUserProfile(ctx context.Context, appUser *okta.AppUser) 
 	return getSAMLRoles(appUserProfile)
 }
 
-func getOrCreateAppUserProfile(ctx context.Context, appUser *okta.AppUser) map[string]interface{} {
+func getOrCreateAppUserProfile(ctx context.Context, appUser *okta.AppUser) map[string]any {
 	l := ctxzap.Extract(ctx)
 	if appUser.Profile == nil {
 		l.Error("app user profile was nil", zap.Any("userId", appUser.Id))
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
-	appUserProfile, ok := appUser.Profile.(map[string]interface{})
+	appUserProfile, ok := appUser.Profile.(map[string]any)
 	if !ok {
 		l.Error("error casting app user profile", zap.Any("userId", appUser.Id))
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 	return appUserProfile
 }
@@ -575,7 +590,7 @@ func (o *accountResourceType) getOktaAppGroupFromCacheOrFetch(ctx context.Contex
 
 const apiPathApplicationGroup = "/api/v1/apps/%s/groups/%s"
 
-type JsonPatchOperation struct {
+type JSONPatchOperation struct {
 	// The operation (PATCH action)
 	Op string `json:"op,omitempty"`
 	// The resource path of the attribute to update
@@ -598,7 +613,10 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 	}
 
 	appID := o.connector.awsConfig.OktaAppId
-	newSamlRole := entitlement.GetSlug()
+	newSamlRole, err := parseSAMLRoleFromEntitlementID(entitlement.GetId())
+	if err != nil {
+		return nil, err
+	}
 
 	if newSamlRole == "" {
 		return nil, fmt.Errorf("okta-aws-connector: entitlement %s had an empty slug", entitlement.Id)
@@ -655,7 +673,7 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 			return nil, nil
 		}
 
-		profile := map[string]interface{}{
+		profile := map[string]any{
 			"samlRoles": []string{newSamlRole},
 		}
 
@@ -664,7 +682,7 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 			Scope:   appUserScope,
 			Profile: profile,
 		}
-		_, response, err = o.connector.client.Application.AssignUserToApplication(ctx, appID, payload)
+		_, _, err = o.connector.client.Application.AssignUserToApplication(ctx, appID, payload)
 		if err != nil {
 			return nil, fmt.Errorf("okta-aws-connector: error assigning app to user %w", err)
 		}
@@ -705,15 +723,15 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 			return nil, nil
 		}
 
-		profile := map[string]interface{}{
+		profile := map[string]any{
 			"samlRoles": []string{newSamlRole},
 		}
 		payload := okta.ApplicationGroupAssignment{
 			Profile: profile,
 		}
-		_, response, err = o.connector.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
+		_, _, err = o.connector.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
 		if err != nil {
-			return nil, fmt.Errorf("okta-aws-connector: error creating application group assignment %v", err)
+			return nil, fmt.Errorf("okta-aws-connector: error creating application group assignment %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("okta-aws-connector: invalid grant resource type: %s", principal.Id.ResourceType)
@@ -736,7 +754,10 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 	}
 
 	appID := o.connector.awsConfig.OktaAppId
-	samlRoleToRemove := grant.GetEntitlement().GetSlug()
+	samlRoleToRemove, err := parseSAMLRoleFromEntitlementID(grant.GetEntitlement().GetId())
+	if err != nil {
+		return nil, err
+	}
 
 	if samlRoleToRemove == "" {
 		return nil, fmt.Errorf("okta-aws-connector: entitlement %s had an empty slug", grant.Entitlement.Id)
@@ -774,7 +795,7 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 		}
 
-		appUserProfile, ok := appUser.Profile.(map[string]interface{})
+		appUserProfile, ok := appUser.Profile.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("okta-aws-connector: error converting app user profile '%s'", appUser.Id)
 		}
@@ -786,7 +807,7 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		payload := okta.AppUser{
 			Profile: appUserProfile,
 		}
-		_, response, err = o.connector.client.Application.UpdateApplicationUser(ctx, appID, appUser.Id, payload)
+		_, _, err = o.connector.client.Application.UpdateApplicationUser(ctx, appID, appUser.Id, payload)
 		if err != nil {
 			return nil, fmt.Errorf("okta-aws-connector: error updating application user: %w", err)
 		}
@@ -836,7 +857,7 @@ func updateApplicationGroup(
 ) (*okta.ApplicationGroupAssignment, error) {
 	url := fmt.Sprintf(apiPathApplicationGroup, appID, groupID)
 
-	payload := []JsonPatchOperation{
+	payload := []JSONPatchOperation{
 		{
 			Op:    "replace",
 			Path:  "/profile/samlRoles",
