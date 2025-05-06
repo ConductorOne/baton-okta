@@ -8,7 +8,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,6 +20,14 @@ func parseTarget(logEvent *oktaSDK.LogEvent) (*oktaSDK.LogTarget, bool) {
 		}
 	}
 	return nil, false
+}
+
+func targetMap(logEvent *oktaSDK.LogEvent) (map[string][]*oktaSDK.LogTarget, error) {
+	rv := make(map[string][]*oktaSDK.LogTarget)
+	for _, target := range logEvent.Target {
+		rv[target.Type] = append(rv[target.Type], target)
+	}
+	return rv, nil
 }
 
 func (connector *Okta) listOktaSSOEvents(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken) ([]*oktaSDK.LogEvent, *oktaSDK.Response, error) {
@@ -38,50 +45,52 @@ func (connector *Okta) listOktaSSOEvents(ctx context.Context, earliestEvent *tim
 	return logs, resp, nil
 }
 
+func (connector *Okta) listOktaResourceAccessEvents(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken) ([]*oktaSDK.LogEvent, *oktaSDK.Response, error) {
+	qp := queryParams(pToken.Size, pToken.Cursor)
+	if earliestEvent != nil {
+		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
+	}
+	qp.Filter = `eventType eq "group.user_membership.add" and target.type eq "UserGroup"`
+
+	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return logs, resp, nil
+}
+
 func (connector *Okta) ListEvents(
 	ctx context.Context,
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
-	logs, resp, err := connector.listOktaSSOEvents(ctx, earliestEvent, pToken)
+	logs, resp, err := connector.listOktaResourceAccessEvents(ctx, earliestEvent, pToken)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	rv := make([]*v2.Event, 0, len(logs))
 	for _, log := range logs {
-		parsedTarget, isAppInstance := parseTarget(log)
-		if !isAppInstance {
-			continue
-		}
-		userTrait, err := resource.NewUserTrait(resource.WithEmail(log.Actor.AlternateId, true))
+		targetMap, err := targetMap(log)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
+		if len(targetMap["UserGroup"]) != 1 {
+			continue
+		}
+		userGroup := targetMap["UserGroup"][0]
 		rv = append(rv, &v2.Event{
 			Id:         log.Uuid,
 			OccurredAt: timestamppb.New(*log.Published),
-			Event: &v2.Event_UsageEvent{
-				UsageEvent: &v2.UsageEvent{
-					TargetResource: &v2.Resource{
-						Id: &v2.ResourceId{
-							ResourceType: resourceTypeApp.Id,
-							Resource:     parsedTarget.Id,
-						},
-						DisplayName: parsedTarget.DisplayName,
-					},
-					ActorResource: &v2.Resource{
-						Id: &v2.ResourceId{
-							ResourceType: resourceTypeUser.Id,
-							Resource:     log.Actor.Id,
-						},
-						DisplayName: log.Actor.DisplayName,
-						Annotations: annotations.New(userTrait),
+			Event: &v2.Event_ResourceChangeEvent{
+				ResourceChangeEvent: &v2.ResourceChangeEvent{
+					ResourceId: &v2.ResourceId{
+						ResourceType: userGroup.Type,
+						Resource:     userGroup.Id,
 					},
 				},
 			},
-			Annotations: nil,
 		})
 	}
 
