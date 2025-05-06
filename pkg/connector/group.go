@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -587,6 +588,79 @@ func embeddedOktaGroupFromAppGroup(appGroup *okta.ApplicationGroupAssignment) (*
 		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
 	}
 	return oktaGroup, nil
+}
+
+func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	var annos annotations.Annotations
+
+	var group *okta.Group
+	var resp *okta.Response
+	var err error
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
+		if o.connector.awsConfig.AWSSourceIdentityMode {
+			return nil, annos, nil
+		}
+		group, resp, err = o.getAWSGroup(ctx, resourceId.Resource)
+	} else {
+		group, resp, err = o.connector.client.Group.GetGroup(ctx, resourceId.Resource)
+	}
+
+	if err != nil {
+		return nil, nil, handleOktaResponseError(resp, err)
+	}
+
+	if resp != nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+			annos.WithRateLimiting(desc)
+		}
+	}
+
+	resource, err := o.groupResource(ctx, group)
+	if err != nil {
+		return nil, annos, err
+	}
+
+	return resource, annos, nil
+}
+
+func (o *groupResourceType) getAWSGroup(ctx context.Context, groupId string) (*okta.Group, *okta.Response, error) {
+	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if awsConfig.UseGroupMapping {
+		group, resp, err := o.connector.client.Group.GetGroup(ctx, groupId)
+		if err != nil {
+			return nil, nil, handleOktaResponseError(resp, err)
+		}
+
+		_, _, matchesRolePattern, err := parseAccountIDAndRoleFromGroupName(ctx, awsConfig.RoleRegex, group.Profile.Name)
+		if err != nil {
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
+		}
+
+		if matchesRolePattern {
+			return group, resp, nil
+		}
+
+		return nil, nil, nil
+	}
+
+	qp := query.NewQueryParams(query.WithExpand("group"))
+	appGroup, resp, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, o.connector.awsConfig.OktaAppId, groupId, qp)
+	if err != nil {
+		return nil, nil, handleOktaResponseError(resp, err)
+	}
+	appGroupSAMLRoles, err := appGroupSAMLRolesWrapper(ctx, appGroup)
+	if err != nil {
+		return nil, nil, err
+	}
+	oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch groups from okta: %w", err)
+	}
+	awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
+	return oktaGroup, resp, nil
 }
 
 func groupBuilder(connector *Okta) *groupResourceType {
