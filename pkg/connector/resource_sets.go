@@ -60,9 +60,9 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 
 func resourceSetResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":          rs.Id,
-		"label":       rs.Label,
-		"description": rs.Description,
+		"id":          *rs.Id,
+		"label":       *rs.Label,
+		"description": *rs.Description,
 	}
 
 	return sdkResource.NewResource(
