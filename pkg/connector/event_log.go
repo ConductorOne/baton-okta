@@ -3,24 +3,22 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
+	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func parseTarget(logEvent *oktaSDK.LogEvent) (*oktaSDK.LogTarget, bool) {
-	targetAppType := "AppInstance"
-	for _, target := range logEvent.Target {
-		if target.Type == targetAppType {
-			return target, true
-		}
-	}
-	return nil, false
-}
+const (
+	usageFilter           = `eventType eq "user.authentication.sso" and actor.type eq "User" and target.type eq "AppInstance"`
+	groupMembershipFilter = `eventType eq "group.user_membership.add" and target.type eq "UserGroup"`
+)
 
 func targetMap(logEvent *oktaSDK.LogEvent) (map[string][]*oktaSDK.LogTarget, error) {
 	rv := make(map[string][]*oktaSDK.LogTarget)
@@ -30,34 +28,23 @@ func targetMap(logEvent *oktaSDK.LogEvent) (map[string][]*oktaSDK.LogTarget, err
 	return rv, nil
 }
 
-func (connector *Okta) listOktaSSOEvents(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken) ([]*oktaSDK.LogEvent, *oktaSDK.Response, error) {
+func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
 	qp := queryParams(pToken.Size, pToken.Cursor)
 	if earliestEvent != nil {
 		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
 	}
-	qp.Filter = `eventType eq "user.authentication.sso" and actor.type eq "User" and target.type eq "AppInstance"`
 
-	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
-	if err != nil {
-		return nil, nil, err
+	if len(filters) == 0 {
+		return qp
+	} else if len(filters) == 1 {
+		qp.Filter = filters[0]
+		return qp
 	}
 
-	return logs, resp, nil
-}
+	filter := strings.Join(filters, ") or (")
+	qp.Filter = fmt.Sprintf(`(%s)`, filter)
 
-func (connector *Okta) listOktaResourceAccessEvents(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken) ([]*oktaSDK.LogEvent, *oktaSDK.Response, error) {
-	qp := queryParams(pToken.Size, pToken.Cursor)
-	if earliestEvent != nil {
-		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
-	}
-	qp.Filter = `eventType eq "group.user_membership.add" and target.type eq "UserGroup"`
-
-	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return logs, resp, nil
+	return qp
 }
 
 func (connector *Okta) ListEvents(
@@ -65,7 +52,9 @@ func (connector *Okta) ListEvents(
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
-	logs, resp, err := connector.listOktaResourceAccessEvents(ctx, earliestEvent, pToken)
+	qp := connector.createQueryParams(earliestEvent, pToken, groupMembershipFilter, usageFilter)
+
+	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -76,22 +65,58 @@ func (connector *Okta) ListEvents(
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		if len(targetMap["UserGroup"]) != 1 {
-			continue
-		}
-		userGroup := targetMap["UserGroup"][0]
-		rv = append(rv, &v2.Event{
+
+		event := &v2.Event{
 			Id:         log.Uuid,
 			OccurredAt: timestamppb.New(*log.Published),
-			Event: &v2.Event_ResourceChangeEvent{
+		}
+		switch log.EventType {
+		case "user.authentication.sso":
+			if len(targetMap["AppInstance"]) != 1 {
+				continue
+			}
+			appInstance := targetMap["AppInstance"][0]
+			userTrait, err := resource.NewUserTrait(resource.WithEmail(log.Actor.AlternateId, true))
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			event.Event = &v2.Event_UsageEvent{
+				UsageEvent: &v2.UsageEvent{
+					TargetResource: &v2.Resource{
+						Id: &v2.ResourceId{
+							ResourceType: appInstance.Type,
+							Resource:     appInstance.Id,
+						},
+						DisplayName: appInstance.DisplayName,
+					},
+					ActorResource: &v2.Resource{
+						Id: &v2.ResourceId{
+							ResourceType: log.Actor.Type,
+							Resource:     log.Actor.Id,
+						},
+						DisplayName: log.Actor.DisplayName,
+						Annotations: annotations.New(userTrait),
+					},
+				},
+			}
+		case "group.user_membership.add":
+			if len(targetMap["UserGroup"]) != 1 {
+				continue
+			}
+			userGroup := targetMap["UserGroup"][0]
+			event.Event = &v2.Event_ResourceChangeEvent{
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
 					ResourceId: &v2.ResourceId{
 						ResourceType: userGroup.Type,
 						Resource:     userGroup.Id,
 					},
 				},
-			},
-		})
+			}
+		default:
+			continue
+		}
+
+		rv = append(rv, event)
 	}
 
 	after, annos, err := parseResp(resp)
