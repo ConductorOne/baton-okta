@@ -591,6 +591,9 @@ func embeddedOktaGroupFromAppGroup(appGroup *okta.ApplicationGroupAssignment) (*
 }
 
 func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting group", zap.String("group_id", resourceId.Resource))
+
 	var annos annotations.Annotations
 
 	var group *okta.Group

@@ -384,6 +384,9 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 }
 
 func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting resource set binding", zap.String("resource_set_binding_id", resourceId.Resource))
+
 	resourceIDs := strings.Split(resourceId.Resource, ":")
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]

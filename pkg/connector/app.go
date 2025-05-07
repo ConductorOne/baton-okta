@@ -531,6 +531,9 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 }
 
 func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting app", zap.String("app_id", resourceId.Resource))
+
 	var annos annotations.Annotations
 
 	app, respCtx, err := getApp(ctx, o.client, resourceId.Resource)

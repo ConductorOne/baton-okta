@@ -301,6 +301,9 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 }
 
 func (rs *resourceSetsResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting resource set", zap.String("resource_set_id", resourceId.Resource))
+
 	resourceSet, _, err := rs.clientV5.ResourceSetAPI.GetResourceSet(ctx, resourceId.Resource).Execute()
 	if err != nil {
 		return nil, nil, err

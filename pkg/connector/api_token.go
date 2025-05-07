@@ -10,6 +10,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 type apiTokenResourceType struct {
@@ -99,6 +101,9 @@ func apiTokenBuilder(clientV5 *oktav5.APIClient) *apiTokenResourceType {
 }
 
 func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting api token", zap.String("api_token_id", resourceId.Resource))
+
 	var annos annotations.Annotations
 
 	apiToken, resp, err := o.clientV5.ApiTokenAPI.GetApiToken(ctx, resourceId.Resource).Execute()

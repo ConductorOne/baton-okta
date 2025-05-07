@@ -13,8 +13,10 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 )
 
 type customRoleResourceType struct {
@@ -236,6 +238,9 @@ func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, user
 }
 
 func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting custom role", zap.String("role_id", resourceId.Resource))
+
 	var annos annotations.Annotations
 
 	role, respCtx, err := getOktaIamCustomRole(ctx, o.connector.client, resourceId.Resource)

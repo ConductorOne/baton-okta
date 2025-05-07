@@ -19,8 +19,10 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 )
 
 const (
@@ -539,6 +541,9 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 }
 
 func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting user", zap.String("user_id", resourceId.Resource))
+
 	var annos annotations.Annotations
 
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {

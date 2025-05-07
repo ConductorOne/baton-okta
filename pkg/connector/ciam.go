@@ -345,6 +345,9 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 }
 
 func (o *ciamResourceBuilder) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting role", zap.String("role_id", resourceId.Resource))
+
 	for _, role := range standardRoleTypes {
 		if role.Type == resourceId.Resource {
 			resource, err := roleResource(ctx, role, resourceTypeRole)
