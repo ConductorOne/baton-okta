@@ -13,6 +13,7 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
@@ -31,6 +32,7 @@ const (
 type resourceSetsBindingsResourceType struct {
 	resourceType *v2.ResourceType
 	client       *okta.Client
+	clientV5     *oktav5.APIClient
 	domain       string
 }
 
@@ -54,6 +56,21 @@ func resourceSetsBindingsResource(ctx context.Context, rs *ResourceSets, parentR
 	)
 }
 
+func resourceSetBindingsResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+	profile := map[string]interface{}{
+		"id":          rs.GetId(),
+		"label":       rs.GetLabel(),
+		"description": rs.GetDescription(),
+	}
+
+	return sdkResource.NewResource(
+		rs.GetLabel(),
+		resourceTypeResourceSetsBindings,
+		rs.GetId(),
+		sdkResource.WithParentResourceID(parentResourceID),
+		sdkResource.WithAppTrait(sdkResource.WithAppProfile(profile)),
+	)
+}
 func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	var rv []*v2.Resource
 	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id})
@@ -85,7 +102,7 @@ func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentRes
 		}
 
 		for _, role := range roles {
-			resourceSetCpy.ID = resourceSet.ID + ":" + role.ID
+			resourceSetCpy.ID = getResourceSetBindingID(resourceSet.ID, role.ID)
 			resource, err := resourceSetsBindingsResource(ctx, &resourceSetCpy, nil)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-set-binding: %w", err)
@@ -101,6 +118,10 @@ func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentRes
 	}
 
 	return rv, pageToken, nil, nil
+}
+
+func getResourceSetBindingID(resourceSetID string, roleID string) string {
+	return resourceSetID + ":" + roleID
 }
 
 func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
@@ -362,10 +383,41 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 	return nil, nil
 }
 
-func resourceSetsBindingsBuilder(domain string, client *okta.Client) *resourceSetsBindingsResourceType {
+func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	resourceIDs := strings.Split(resourceId.Resource, ":")
+	resourceSetId := resourceIDs[firstItem]
+	customRoleId := resourceIDs[lastItem]
+
+	resp, _, err := rsb.clientV5.ResourceSetAPI.GetBinding(ctx, resourceSetId, customRoleId).Execute()
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get resource set binding: %w", err)
+	}
+
+	if resp == nil {
+		return nil, nil, nil
+	}
+
+	rsResp, _, err := rsb.clientV5.ResourceSetAPI.GetResourceSet(ctx, resourceSetId).Execute()
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get resource set: %w", err)
+	}
+
+	rsCopy := *rsResp
+	rsCopy.SetId(getResourceSetBindingID(resourceSetId, customRoleId))
+
+	resource, err := resourceSetBindingsResource(ctx, &rsCopy, parentResourceId)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create resource set binding: %w", err)
+	}
+
+	return resource, nil, nil
+}
+
+func resourceSetsBindingsBuilder(domain string, client *okta.Client, clientV5 *oktav5.APIClient) *resourceSetsBindingsResourceType {
 	return &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       domain,
 		client:       client,
+		clientV5:     clientV5,
 	}
 }
