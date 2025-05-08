@@ -43,11 +43,12 @@ type ciamConfig struct {
 }
 
 type awsConfig struct {
-	Enabled                bool
-	OktaAppId              string
-	awsAppConfigCacheMutex sync.Mutex
-	oktaAWSAppSettings     *oktaAWSAppSettings
-	AWSSourceIdentityMode  bool
+	Enabled                                               bool
+	OktaAppId                                             string
+	awsAppConfigCacheMutex                                sync.Mutex
+	oktaAWSAppSettings                                    *oktaAWSAppSettings
+	AWSSourceIdentityMode                                 bool
+	AllowGroupToDirectAssignmentConversionForProvisioning bool
 }
 
 /*
@@ -82,24 +83,25 @@ type oktaAWSAppSettings struct {
 }
 
 type Config struct {
-	Domain                string
-	ApiToken              string
-	OktaClientId          string
-	OktaPrivateKey        string
-	OktaPrivateKeyId      string
-	SyncInactiveApps      bool
-	OktaProvisioning      bool
-	Ciam                  bool
-	CiamEmailDomains      []string
-	Cache                 bool
-	CacheTTI              int32
-	CacheTTL              int32
-	SyncCustomRoles       bool
-	SkipSecondaryEmails   bool
-	AWSMode               bool
-	AWSOktaAppId          string
-	AWSSourceIdentityMode bool
-	SyncSecrets           bool
+	Domain                                                string
+	ApiToken                                              string
+	OktaClientId                                          string
+	OktaPrivateKey                                        string
+	OktaPrivateKeyId                                      string
+	SyncInactiveApps                                      bool
+	OktaProvisioning                                      bool
+	Ciam                                                  bool
+	CiamEmailDomains                                      []string
+	Cache                                                 bool
+	CacheTTI                                              int32
+	CacheTTL                                              int32
+	SyncCustomRoles                                       bool
+	SkipSecondaryEmails                                   bool
+	AWSMode                                               bool
+	AWSOktaAppId                                          string
+	AWSSourceIdentityMode                                 bool
+	AllowGroupToDirectAssignmentConversionForProvisioning bool
+	SyncSecrets                                           bool
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -438,6 +440,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		Enabled:               cfg.AWSMode,
 		OktaAppId:             cfg.AWSOktaAppId,
 		AWSSourceIdentityMode: cfg.AWSSourceIdentityMode,
+		AllowGroupToDirectAssignmentConversionForProvisioning: cfg.AllowGroupToDirectAssignmentConversionForProvisioning,
 	}
 
 	return &Okta{
