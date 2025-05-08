@@ -10,6 +10,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -527,4 +528,52 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	}
 
 	return nil, nil
+}
+
+func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting app", zap.String("app_id", resourceId.Resource))
+
+	var annos annotations.Annotations
+
+	app, respCtx, err := getApp(ctx, o.client, resourceId.Resource)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get application: %w", err)
+	}
+
+	resp := respCtx.OktaResponse
+	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+		annos.WithRateLimiting(desc)
+	}
+
+	if app == nil {
+		return nil, annos, nil
+	}
+
+	if !o.syncInactiveApps && app.Status != "ACTIVE" {
+		return nil, annos, nil
+	}
+
+	resource, err := appResource(ctx, app)
+	if err != nil {
+		return nil, annos, err
+	}
+
+	return resource, annos, nil
+}
+
+func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
+	app, resp, err := client.Application.GetApplication(ctx, appID, okta.NewApplication(), nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseError(resp, err))
+	}
+
+	reqCtx := &responseContext{OktaResponse: resp}
+
+	oktaApp, err := oktaAppToOktaApplication(ctx, app)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta app to application: %w", err)
+	}
+
+	return oktaApp, reqCtx, nil
 }

@@ -282,6 +282,11 @@ type rotateCredentialsConfig struct {
 type eventStreamConfig struct {
 }
 
+type syncDifferConfig struct {
+	baseSyncID    string
+	appliedSyncID string
+}
+
 type runnerConfig struct {
 	rlCfg                               *ratelimitV1.RateLimiterConfig
 	rlDescriptors                       []*ratelimitV1.RateLimitDescriptors_Entry
@@ -303,7 +308,9 @@ type runnerConfig struct {
 	bulkCreateTicketConfig              *bulkCreateTicketConfig
 	listTicketSchemasConfig             *listTicketSchemasConfig
 	getTicketConfig                     *getTicketConfig
+	syncDifferConfig                    *syncDifferConfig
 	skipFullSync                        bool
+	targetedSyncResourceIDs             []string
 	externalResourceC1Z                 string
 	externalResourceEntitlementIdFilter string
 }
@@ -481,6 +488,13 @@ func WithFullSyncDisabled() Option {
 	}
 }
 
+func WithTargetedSyncResourceIDs(resourceIDs []string) Option {
+	return func(ctx context.Context, cfg *runnerConfig) error {
+		cfg.targetedSyncResourceIDs = resourceIDs
+		return nil
+	}
+}
+
 func WithTicketingEnabled() Option {
 	return func(ctx context.Context, cfg *runnerConfig) error {
 		cfg.ticketingEnabled = true
@@ -547,6 +561,18 @@ func WithExternalResourceEntitlementFilter(entitlementId string) Option {
 	}
 }
 
+func WithDiffSyncs(c1zPath string, baseSyncID string, newSyncID string) Option {
+	return func(ctx context.Context, cfg *runnerConfig) error {
+		cfg.onDemand = true
+		cfg.c1zPath = c1zPath
+		cfg.syncDifferConfig = &syncDifferConfig{
+			baseSyncID:    baseSyncID,
+			appliedSyncID: newSyncID,
+		}
+		return nil
+	}
+}
+
 // NewConnectorRunner creates a new connector runner.
 func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Option) (*connectorRunner, error) {
 	runner := &connectorRunner{}
@@ -576,6 +602,10 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 
 	if cfg.skipFullSync {
 		wrapperOpts = append(wrapperOpts, connector.WithFullSyncDisabled())
+	}
+
+	if len(cfg.targetedSyncResourceIDs) > 0 {
+		wrapperOpts = append(wrapperOpts, connector.WithTargetedSyncResourceIDs(cfg.targetedSyncResourceIDs))
 	}
 
 	cw, err := connector.NewWrapper(ctx, c, wrapperOpts...)
@@ -623,11 +653,15 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 			tm = local.NewGetTicket(ctx, cfg.getTicketConfig.ticketID)
 		case cfg.bulkCreateTicketConfig != nil:
 			tm = local.NewBulkTicket(ctx, cfg.bulkCreateTicketConfig.templatePath)
+		case cfg.syncDifferConfig != nil:
+			tm = local.NewDiffer(ctx, cfg.c1zPath, cfg.syncDifferConfig.baseSyncID, cfg.syncDifferConfig.appliedSyncID)
 		default:
 			tm, err = local.NewSyncer(ctx, cfg.c1zPath,
 				local.WithTmpDir(cfg.tempDir),
 				local.WithExternalResourceC1Z(cfg.externalResourceC1Z),
-				local.WithExternalResourceEntitlementIdFilter(cfg.externalResourceEntitlementIdFilter))
+				local.WithExternalResourceEntitlementIdFilter(cfg.externalResourceEntitlementIdFilter),
+				local.WithTargetedSyncResourceIDs(cfg.targetedSyncResourceIDs),
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -639,7 +673,7 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 		return runner, nil
 	}
 
-	tm, err := c1api.NewC1TaskManager(ctx, cfg.clientID, cfg.clientSecret, cfg.tempDir, cfg.skipFullSync, cfg.externalResourceC1Z, cfg.externalResourceEntitlementIdFilter)
+	tm, err := c1api.NewC1TaskManager(ctx, cfg.clientID, cfg.clientSecret, cfg.tempDir, cfg.skipFullSync, cfg.externalResourceC1Z, cfg.externalResourceEntitlementIdFilter, cfg.targetedSyncResourceIDs)
 	if err != nil {
 		return nil, err
 	}

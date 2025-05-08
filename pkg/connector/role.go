@@ -642,6 +642,23 @@ func (o *roleResourceType) getUserRolesFromCache(ctx context.Context, userId str
 	return userRoles, nil
 }
 
+func (o *roleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting role", zap.String("role_id", resourceId.Resource))
+
+	for _, role := range standardRoleTypes {
+		if role.Type == resourceId.Resource {
+			resource, err := roleResource(ctx, role, resourceTypeRole)
+			if err != nil {
+				return nil, nil, err
+			}
+			return resource, nil, nil
+		}
+	}
+
+	return nil, nil, nil
+}
+
 func roleBuilder(client *okta.Client, connector *Okta) *roleResourceType {
 	return &roleResourceType{
 		resourceType: resourceTypeRole,

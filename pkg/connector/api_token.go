@@ -7,8 +7,11 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 type apiTokenResourceType struct {
@@ -70,27 +73,7 @@ func (o *apiTokenResourceType) List(
 
 	ret := make([]*v2.Resource, 0, len(apiTokens))
 	for _, apiToken := range apiTokens {
-		options := []resource.SecretTraitOption{
-			resource.WithSecretExpiresAt(*apiToken.ExpiresAt),
-			resource.WithSecretIdentityID(&v2.ResourceId{
-				ResourceType:  resourceTypeUser.Id,
-				Resource:      *apiToken.UserId,
-				BatonResource: false,
-			}),
-			resource.WithSecretCreatedByID(&v2.ResourceId{
-				ResourceType:  resourceTypeUser.Id,
-				Resource:      *apiToken.UserId,
-				BatonResource: false,
-			}),
-			resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
-			resource.WithSecretCreatedAt(*apiToken.Created),
-		}
-		rv, err := resource.NewSecretResource(
-			apiToken.Name,
-			resourceTypeApiToken,
-			*apiToken.Id,
-			options,
-		)
+		rv, err := apiTokenResource(&apiToken)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -115,4 +98,60 @@ func apiTokenBuilder(clientV5 *oktav5.APIClient) *apiTokenResourceType {
 		resourceType: resourceTypeApiToken,
 		clientV5:     clientV5,
 	}
+}
+
+func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting api token", zap.String("api_token_id", resourceId.Resource))
+
+	var annos annotations.Annotations
+
+	apiToken, resp, err := o.clientV5.ApiTokenAPI.GetApiToken(ctx, resourceId.Resource).Execute()
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connector-v5: failed to get api token: %w", err)
+	}
+
+	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+		annos.WithRateLimiting(desc)
+	}
+
+	if apiToken == nil {
+		return nil, annos, nil
+	}
+
+	resource, err := apiTokenResource(apiToken)
+	if err != nil {
+		return nil, annos, err
+	}
+
+	return resource, annos, nil
+}
+
+func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {
+	options := []resource.SecretTraitOption{
+		resource.WithSecretExpiresAt(*apiToken.ExpiresAt),
+		resource.WithSecretIdentityID(&v2.ResourceId{
+			ResourceType:  resourceTypeUser.Id,
+			Resource:      *apiToken.UserId,
+			BatonResource: false,
+		}),
+		resource.WithSecretCreatedByID(&v2.ResourceId{
+			ResourceType:  resourceTypeUser.Id,
+			Resource:      *apiToken.UserId,
+			BatonResource: false,
+		}),
+		resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
+		resource.WithSecretCreatedAt(*apiToken.Created),
+	}
+	rv, err := resource.NewSecretResource(
+		apiToken.Name,
+		resourceTypeApiToken,
+		*apiToken.Id,
+		options,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return rv, nil
 }

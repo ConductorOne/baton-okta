@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 )
 
 type customRoleResourceType struct {
@@ -231,6 +235,66 @@ func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, user
 		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
 	}
 	return userRoles, nil
+}
+
+func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting custom role", zap.String("role_id", resourceId.Resource))
+
+	var annos annotations.Annotations
+
+	role, respCtx, err := getOktaIamCustomRole(ctx, o.connector.client, resourceId.Resource)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp := respCtx.OktaResponse
+	if resp != nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+			annos.WithRateLimiting(desc)
+		}
+	}
+
+	resource, err := roleResource(ctx, role, resourceTypeCustomRole)
+	if err != nil {
+		return nil, annos, err
+	}
+
+	return resource, annos, nil
+}
+
+func getOktaIamCustomRole(
+	ctx context.Context,
+	client *okta.Client,
+	roleId string,
+) (*okta.Role, *responseContext, error) {
+	url, err := url.Parse(apiPathListIamCustomRoles)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	url.Path = path.Join(url.Path, roleId)
+
+	rq := client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, url.String(), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var role *okta.Role
+	resp, err := rq.Do(ctx, req, &role)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	respCtx := &responseContext{
+		OktaResponse: resp,
+	}
+
+	return role, respCtx, nil
 }
 
 func customRoleBuilder(connector *Okta) *customRoleResourceType {

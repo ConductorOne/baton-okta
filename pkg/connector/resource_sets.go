@@ -12,6 +12,7 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
@@ -21,6 +22,7 @@ import (
 type resourceSetsResourceType struct {
 	resourceType *v2.ResourceType
 	client       *okta.Client
+	clientV5     *oktav5.APIClient
 	domain       string
 }
 
@@ -49,6 +51,24 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 		rs.Label,
 		resourceTypeResourceSets,
 		rs.ID,
+		sdkResource.WithParentResourceID(parentResourceID),
+		sdkResource.WithAppTrait(
+			sdkResource.WithAppProfile(profile),
+		),
+	)
+}
+
+func resourceSetResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+	profile := map[string]interface{}{
+		"id":          *rs.Id,
+		"label":       *rs.Label,
+		"description": *rs.Description,
+	}
+
+	return sdkResource.NewResource(
+		*rs.Label,
+		resourceTypeResourceSets,
+		*rs.Id,
 		sdkResource.WithParentResourceID(parentResourceID),
 		sdkResource.WithAppTrait(
 			sdkResource.WithAppProfile(profile),
@@ -280,10 +300,28 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 	return nil, nil
 }
 
-func resourceSetsBuilder(domain string, client *okta.Client) *resourceSetsResourceType {
+func (rs *resourceSetsResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting resource set", zap.String("resource_set_id", resourceId.Resource))
+
+	resourceSet, _, err := rs.clientV5.ResourceSetAPI.GetResourceSet(ctx, resourceId.Resource).Execute()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resource, err := resourceSetResource(ctx, resourceSet, parentResourceId)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create resource-set: %w", err)
+	}
+
+	return resource, nil, nil
+}
+
+func resourceSetsBuilder(domain string, client *okta.Client, clientV5 *oktav5.APIClient) *resourceSetsResourceType {
 	return &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		domain:       domain,
 		client:       client,
+		clientV5:     clientV5,
 	}
 }

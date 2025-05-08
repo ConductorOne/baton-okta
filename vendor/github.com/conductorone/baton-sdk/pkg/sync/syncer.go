@@ -204,6 +204,7 @@ type syncer struct {
 	skipFullSync                        bool
 	lastCheckPointTime                  time.Time
 	counts                              *ProgressCounts
+	targetedSyncResourceIDs             []string
 
 	skipEGForResourceType map[string]bool
 }
@@ -311,6 +312,43 @@ func isWarning(ctx context.Context, err error) bool {
 	return false
 }
 
+func (s *syncer) startOrResumeSync(ctx context.Context) (string, bool, error) {
+	// Sync resuming logic:
+	// If no targetedSyncResourceIDs, find the most recent sync and resume it (regardless of partial or full).
+	// If targetedSyncResourceIDs, start a new partial sync. Use the most recent completed sync as the parent sync ID (if it exists).
+
+	var syncID string
+	var newSync bool
+	var err error
+	if len(s.targetedSyncResourceIDs) == 0 {
+		syncID, newSync, err = s.store.StartSync(ctx)
+		if err != nil {
+			return "", false, err
+		}
+		return syncID, newSync, nil
+	}
+
+	// Get most recent completed full sync if it exists
+	latestFullSyncResponse, err := s.store.GetLatestFinishedSync(ctx, &reader_v2.SyncsReaderServiceGetLatestFinishedSyncRequest{
+		SyncType: string(dotc1z.SyncTypeFull),
+	})
+	if err != nil {
+		return "", false, err
+	}
+	var latestFullSyncId string
+	latestFullSync := latestFullSyncResponse.Sync
+	if latestFullSync != nil {
+		latestFullSyncId = latestFullSync.Id
+	}
+	syncID, err = s.store.StartNewSyncV2(ctx, "partial", latestFullSyncId)
+	if err != nil {
+		return "", false, err
+	}
+	newSync = true
+
+	return syncID, newSync, nil
+}
+
 // Sync starts the syncing process. The sync process is driven by the action stack that is part of the state object.
 // For each page of data that is required to be fetched from the connector, a new action is pushed on to the stack. Once
 // an action is completed, it is popped off of the queue. Before processing each action, we checkpoint the state object
@@ -344,7 +382,17 @@ func (s *syncer) Sync(ctx context.Context) error {
 		return err
 	}
 
-	syncID, newSync, err := s.store.StartSync(ctx)
+	// Validate any targeted resource IDs before starting a sync.
+	targetedResources := []*v2.Resource{}
+	for _, resourceID := range s.targetedSyncResourceIDs {
+		r, err := bid.ParseResourceBid(resourceID)
+		if err != nil {
+			return fmt.Errorf("error parsing resource id %s: %w", resourceID, err)
+		}
+		targetedResources = append(targetedResources, r)
+	}
+
+	syncID, newSync, err := s.startOrResumeSync(ctx)
 	if err != nil {
 		return err
 	}
@@ -400,6 +448,25 @@ func (s *syncer) Sync(ctx context.Context) error {
 		case InitOp:
 			s.state.FinishAction(ctx)
 
+			if len(targetedResources) > 0 {
+				for _, r := range targetedResources {
+					s.state.PushAction(ctx, Action{
+						Op:                   SyncTargetedResourceOp,
+						ResourceID:           r.GetId().GetResource(),
+						ResourceTypeID:       r.GetId().GetResourceType(),
+						ParentResourceID:     r.GetParentResourceId().GetResource(),
+						ParentResourceTypeID: r.GetParentResourceId().GetResourceType(),
+					})
+				}
+				s.state.PushAction(ctx, Action{Op: SyncResourceTypesOp})
+				err = s.Checkpoint(ctx, true)
+				if err != nil {
+					return err
+				}
+				// Don't do grant expansion or external resources in partial syncs, as we likely lack related resources/entitlements/grants
+				continue
+			}
+
 			// FIXME(jirwin): Disabling syncing assets for now
 			// s.state.PushAction(ctx, Action{Op: SyncAssetsOp})
 			s.state.PushAction(ctx, Action{Op: SyncGrantExpansionOp})
@@ -426,6 +493,19 @@ func (s *syncer) Sync(ctx context.Context) error {
 
 		case SyncResourcesOp:
 			err = s.SyncResources(ctx)
+			if !s.shouldWaitAndRetry(ctx, err) {
+				return err
+			}
+			continue
+
+		case SyncTargetedResourceOp:
+			err = s.SyncTargetedResource(ctx)
+			if isWarning(ctx, err) {
+				l.Warn("skipping sync targeted resource action", zap.Any("stateAction", stateAction), zap.Error(err))
+				warnings = append(warnings, err)
+				s.state.FinishAction(ctx)
+				continue
+			}
 			if !s.shouldWaitAndRetry(ctx, err) {
 				return err
 			}
@@ -629,6 +709,68 @@ func (s *syncer) getSubResources(ctx context.Context, parent *v2.Resource) error
 	return nil
 }
 
+func (s *syncer) SyncTargetedResource(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "syncer.SyncTargetedResource")
+	defer span.End()
+
+	resourceID := s.state.ResourceID(ctx)
+	resourceTypeID := s.state.ResourceTypeID(ctx)
+	if resourceID == "" || resourceTypeID == "" {
+		return errors.New("cannot get resource without a resource target")
+	}
+
+	parentResourceID := s.state.ParentResourceID(ctx)
+	parentResourceTypeID := s.state.ParentResourceTypeID(ctx)
+	var prID *v2.ResourceId
+	if parentResourceID != "" && parentResourceTypeID != "" {
+		prID = &v2.ResourceId{
+			ResourceType: parentResourceTypeID,
+			Resource:     parentResourceID,
+		}
+	}
+
+	resourceResp, err := s.connector.GetResource(ctx,
+		&v2.ResourceGetterServiceGetResourceRequest{
+			ResourceId: &v2.ResourceId{
+				ResourceType: resourceTypeID,
+				Resource:     resourceID,
+			},
+			ParentResourceId: prID,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// Save our resource in the DB
+	if err := s.store.PutResources(ctx, resourceResp.Resource); err != nil {
+		return err
+	}
+
+	s.state.FinishAction(ctx)
+
+	// Actions happen in reverse order. We want to sync child resources, then entitlements, then grants
+
+	s.state.PushAction(ctx, Action{
+		Op:             SyncGrantsOp,
+		ResourceTypeID: resourceTypeID,
+		ResourceID:     resourceID,
+	})
+
+	s.state.PushAction(ctx, Action{
+		Op:             SyncEntitlementsOp,
+		ResourceTypeID: resourceTypeID,
+		ResourceID:     resourceID,
+	})
+
+	err = s.getSubResources(ctx, resourceResp.Resource)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SyncResources handles fetching all of the resources from the connector given the provided resource types. For each
 // resource, we gather any child resource types it may emit, and traverse the resource tree.
 func (s *syncer) SyncResources(ctx context.Context) error {
@@ -658,7 +800,14 @@ func (s *syncer) SyncResources(ctx context.Context) error {
 		}
 
 		for _, rt := range resp.List {
-			s.state.PushAction(ctx, Action{Op: SyncResourcesOp, ResourceTypeID: rt.Id})
+			action := Action{Op: SyncResourcesOp, ResourceTypeID: rt.Id}
+			// If this request specified a parent resource, only queue up syncing resources for children of the parent resource
+			if s.state.Current().ParentResourceTypeID != "" && s.state.Current().ParentResourceID != "" {
+				action.ParentResourceID = s.state.Current().ParentResourceID
+				action.ParentResourceTypeID = s.state.Current().ParentResourceTypeID
+			}
+
+			s.state.PushAction(ctx, action)
 		}
 
 		return nil
@@ -2514,6 +2663,12 @@ func WithExternalResourceC1ZPath(path string) SyncOpt {
 func WithExternalResourceEntitlementIdFilter(entitlementId string) SyncOpt {
 	return func(s *syncer) {
 		s.externalResourceEntitlementIdFilter = entitlementId
+	}
+}
+
+func WithTargetedSyncResourceIDs(resourceIDs []string) SyncOpt {
+	return func(s *syncer) {
+		s.targetedSyncResourceIDs = resourceIDs
 	}
 }
 

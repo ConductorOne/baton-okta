@@ -16,10 +16,13 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/crypto"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 )
 
 const (
@@ -535,4 +538,120 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 		params.Activate = ToPtr(true) // This defaults to true anyways, but lets be explicit
 	}
 	return params, nil
+}
+
+func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("getting user", zap.String("user_id", resourceId.Resource))
+
+	var annos annotations.Annotations
+
+	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
+		awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error getting aws app settings config")
+		}
+		// TODO: check if user is in any groups matching pattern when user group mapping enabled
+		if !awsConfig.UseGroupMapping {
+			return o.findAWSAccountUser(ctx, resourceId.Resource)
+		}
+	}
+
+	// If we are in ciam mode, and there are no email filters specified, don't sync user.
+	if o.connector.ciamConfig.Enabled && len(o.emailFilters) == 0 {
+		return nil, nil, nil
+	}
+
+	user, respCtx, err := getUser(ctx, o.connector.client, resourceId.Resource)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to find user: %w", err)
+	}
+
+	resp := respCtx.OktaResponse
+	if resp != nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+			annos.WithRateLimiting(desc)
+		}
+	}
+
+	if user == nil {
+		return nil, annos, nil
+	}
+
+	if o.connector.ciamConfig.Enabled && !shouldIncludeOktaUser(user, o.emailFilters) {
+		return nil, annos, nil
+	}
+
+	resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+	if err != nil {
+		return nil, annos, err
+	}
+
+	return resource, annos, nil
+}
+
+func (o *userResourceType) findAWSAccountUser(
+	ctx context.Context,
+	oktaUserID string,
+) (*v2.Resource, annotations.Annotations, error) {
+	qp := query.NewQueryParams(query.WithExpand("user"))
+	appUser, _, err := getApplicationUser(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, oktaUserID, qp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-aws-connector: find application user %w", err)
+	}
+
+	if appUser == nil {
+		return nil, nil, nil
+	}
+
+	user, err := embeddedOktaUserFromAppUser(appUser)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-aws-connector: failed to get user from find app user response: %w", err)
+	}
+	resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+	if err != nil {
+		return nil, nil, err
+	}
+	return resource, nil, nil
+}
+
+func getApplicationUser(ctx context.Context, client *okta.Client, appID string, oktaUserID string, qp *query.Params) (*okta.AppUser, *responseContext, error) {
+	applicationUser, resp, err := client.Application.GetApplicationUser(ctx, appID, oktaUserID, qp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app user from okta: %w", handleOktaResponseError(resp, err))
+	}
+
+	return applicationUser, &responseContext{OktaResponse: resp}, nil
+}
+
+func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
+	reqUrl, err := url.Parse(usersUrl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reqUrl = reqUrl.JoinPath(oktaUserID)
+
+	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
+	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
+	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
+	oktaUsers := &okta.User{}
+	rq := client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
+		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
+	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
+
+	resp, err := rq.Do(ctx, req, &oktaUsers)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return oktaUsers, &responseContext{OktaResponse: resp}, nil
 }
