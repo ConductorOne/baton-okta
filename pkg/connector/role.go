@@ -405,6 +405,15 @@ func standardRoleFromType(roleType string) *okta.Role {
 	return nil
 }
 
+func StandardRoleTypeFromLabel(label string) *okta.Role {
+	for _, role := range standardRoleTypes {
+		if role.Label == label {
+			return role
+		}
+	}
+	return nil
+}
+
 func roleResource(ctx context.Context, role *okta.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
 	var objectID = role.Type
 	if role.Type == "" && role.Id != "" {
