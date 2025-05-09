@@ -9,24 +9,11 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-const (
-	usageFilter           = `eventType eq "user.authentication.sso" and actor.type eq "User" and target.type eq "AppInstance"`
-	groupMembershipFilter = `eventType eq "group.user_membership.add" and target.type eq "UserGroup"`
-)
-
-func targetMap(logEvent *oktaSDK.LogEvent) (map[string][]*oktaSDK.LogTarget, error) {
-	rv := make(map[string][]*oktaSDK.LogTarget)
-	for _, target := range logEvent.Target {
-		rv[target.Type] = append(rv[target.Type], target)
-	}
-	return rv, nil
-}
 
 func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
 	qp := queryParams(pToken.Size, pToken.Cursor)
@@ -52,72 +39,49 @@ func (connector *Okta) ListEvents(
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
-	qp := connector.createQueryParams(earliestEvent, pToken, groupMembershipFilter, usageFilter)
+	l := ctxzap.Extract(ctx)
+	// MJP this will eventually come from config/request?
+	activeFilters := []EventFilter{
+		UsageFilter,
+		GroupMembershipFilter,
+	}
+
+	// Map from event type to possible filter matches
+	filterMap := make(map[string][]*EventFilter)
+	for _, filter := range activeFilters {
+		for _, eventType := range filter.EventTypes.ToSlice() {
+			filterMap[eventType] = append(filterMap[eventType], &filter)
+		}
+	}
+
+	filters := []string{}
+	for _, filter := range activeFilters {
+		filters = append(filters, filter.Filter())
+	}
+
+	qp := connector.createQueryParams(earliestEvent, pToken, filters...)
 
 	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
+	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
 	rv := make([]*v2.Event, 0, len(logs))
 	for _, log := range logs {
-		targetMap, err := targetMap(log)
-		if err != nil {
-			return nil, nil, nil, err
-		}
 
-		event := &v2.Event{
-			Id:         log.Uuid,
-			OccurredAt: timestamppb.New(*log.Published),
+		relevantFilters := filterMap[log.EventType]
+		for _, filter := range relevantFilters {
+			if filter.Matches(log) {
+				event, err := filter.Handle(log)
+				// MJP we don't want to stop, we should just log the error and continue
+				if err != nil {
+					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
+				} else {
+					rv = append(rv, event)
+				}
+			}
 		}
-		switch log.EventType {
-		case "user.authentication.sso":
-			// we need exactly one AppInstance target otherwise this event is malformed
-			if len(targetMap["AppInstance"]) != 1 {
-				continue
-			}
-			appInstance := targetMap["AppInstance"][0]
-			userTrait, err := resource.NewUserTrait(resource.WithEmail(log.Actor.AlternateId, true))
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			event.Event = &v2.Event_UsageEvent{
-				UsageEvent: &v2.UsageEvent{
-					TargetResource: &v2.Resource{
-						Id: &v2.ResourceId{
-							ResourceType: appInstance.Type,
-							Resource:     appInstance.Id,
-						},
-						DisplayName: appInstance.DisplayName,
-					},
-					ActorResource: &v2.Resource{
-						Id: &v2.ResourceId{
-							ResourceType: resourceTypeUser.Id,
-							Resource:     log.Actor.Id,
-						},
-						DisplayName: log.Actor.DisplayName,
-						Annotations: annotations.New(userTrait),
-					},
-				},
-			}
-		case "group.user_membership.add":
-			if len(targetMap["UserGroup"]) != 1 {
-				continue
-			}
-			userGroup := targetMap["UserGroup"][0]
-			event.Event = &v2.Event_ResourceChangeEvent{
-				ResourceChangeEvent: &v2.ResourceChangeEvent{
-					ResourceId: &v2.ResourceId{
-						ResourceType: resourceTypeGroup.Id,
-						Resource:     userGroup.Id,
-					},
-				},
-			}
-		default:
-			continue
-		}
-
-		rv = append(rv, event)
 	}
 
 	after, annos, err := parseResp(resp)
