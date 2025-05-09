@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	GroupMembershipFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
+	GroupChangeFilter = EventFilter{
+		EventTypes:  mapset.NewSet[string]("group.user_membership.add", "group.user_membership.remove", "group.lifecycle.create", "group.lifecycle.delete"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
 		ActorTypes:  mapset.NewSet[string](),
 		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
@@ -25,6 +25,46 @@ var (
 					ResourceId: &v2.ResourceId{
 						ResourceType: resourceTypeGroup.Id,
 						Resource:     userGroup.Id,
+					},
+				},
+			}
+			return nil
+		},
+	}
+	ApplicationLifecycleFilter = EventFilter{
+		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "app.lifecycle.delete", "application.lifecycle.update"),
+		TargetTypes: mapset.NewSet[string]("AppInstance"),
+		ActorTypes:  mapset.NewSet[string](),
+		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["AppInstance"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
+			}
+			appInstance := targetMap["AppInstance"][0]
+			rv.Event = &v2.Event_ResourceChangeEvent{
+				ResourceChangeEvent: &v2.ResourceChangeEvent{
+					ResourceId: &v2.ResourceId{
+						ResourceType: resourceTypeApp.Id,
+						Resource:     appInstance.Id,
+					},
+				},
+			}
+			return nil
+		},
+	}
+	ApplicationMembershipFilter = EventFilter{
+		EventTypes:  mapset.NewSet[string]("application.user_membership.add", "application.user_membership.remove", "application.user_membership.update"),
+		TargetTypes: mapset.NewSet[string]("AppInstance"),
+		ActorTypes:  mapset.NewSet[string](),
+		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["AppInstance"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
+			}
+			appInstance := targetMap["AppInstance"][0]
+			rv.Event = &v2.Event_ResourceChangeEvent{
+				ResourceChangeEvent: &v2.ResourceChangeEvent{
+					ResourceId: &v2.ResourceId{
+						ResourceType: resourceTypeApp.Id,
+						Resource:     appInstance.Id,
 					},
 				},
 			}
