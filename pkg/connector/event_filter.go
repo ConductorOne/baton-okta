@@ -23,8 +23,13 @@ type EventFilter struct {
 	EventHandler func(*oktaSDK.LogEvent, map[string][]*oktaSDK.LogTarget, *v2.Event) error
 }
 
-func filterJoiner(filters ...string) string {
-	return fmt.Sprintf(`(%s)`, strings.Join(filters, " and "))
+func filterJoiner(joiner string, filters ...string) string {
+	if len(filters) == 0 {
+		return ""
+	} else if len(filters) == 1 {
+		return filters[0]
+	}
+	return fmt.Sprintf(`(%s)`, strings.Join(filters, joiner))
 }
 
 func filterMaker(left string, right string) string {
@@ -34,21 +39,33 @@ func filterMaker(left string, right string) string {
 // MJP need a map from api Type to resource type
 
 func (filter *EventFilter) Filter() string {
-	filters := []string{}
 
+	eventFilters := []string{}
 	for _, eventType := range filter.EventTypes.ToSlice() {
-		filters = append(filters, filterMaker("eventType", eventType))
+		eventFilters = append(eventFilters, filterMaker("eventType", eventType))
 	}
+	eventFilter := filterJoiner(" or ", eventFilters...)
 
+	actorFilters := []string{}
 	for _, actorType := range filter.ActorTypes.ToSlice() {
-		filters = append(filters, filterMaker("actor.type", actorType))
+		actorFilters = append(actorFilters, filterMaker("actor.type", actorType))
 	}
+	actorFilter := filterJoiner(" or ", actorFilters...)
 
+	targetFilters := []string{}
 	for _, targetType := range filter.TargetTypes.ToSlice() {
-		filters = append(filters, filterMaker("target.type", targetType))
+		targetFilters = append(targetFilters, filterMaker("target.type", targetType))
+	}
+	targetFilter := filterJoiner(" or ", targetFilters...)
+
+	filters := []string{}
+	for _, filter := range []string{eventFilter, actorFilter, targetFilter} {
+		if filter != "" {
+			filters = append(filters, filter)
+		}
 	}
 
-	return filterJoiner(filters...)
+	return filterJoiner(" and ", filters...)
 }
 
 func (filter *EventFilter) Matches(event *oktaSDK.LogEvent) bool {
