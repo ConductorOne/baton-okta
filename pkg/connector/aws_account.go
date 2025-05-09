@@ -641,7 +641,7 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 		}
 
 		if appUser != nil {
-			if appUser.Scope == appGrantGroup {
+			if appUser.Scope == appGroupScope && !o.connector.awsConfig.AllowGroupToDirectAssignmentConversionForProvisioning || !awsConfig.JoinAllRoles {
 				return nil, fmt.Errorf("okta-aws-connector: connect add individual assignment for user with group assignment '%s'", appUser.Id)
 			}
 
@@ -664,6 +664,7 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 
 			payload := okta.AppUser{
 				Profile: appUserProfile,
+				Scope:   appUserScope,
 			}
 			_, _, err = o.connector.client.Application.UpdateApplicationUser(ctx, appID, appUser.Id, payload)
 			if err != nil {
@@ -783,7 +784,7 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 			return nil, nil
 		}
 
-		if appUser.Scope == appGrantGroup {
+		if appUser.Scope == appGroupScope && !o.connector.awsConfig.AllowGroupToDirectAssignmentConversionForProvisioning || !awsConfig.JoinAllRoles {
 			return nil, fmt.Errorf("okta-aws-connector: connect remove role granted via group assignment '%s'", appUser.Id)
 		}
 
@@ -806,6 +807,7 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 
 		payload := okta.AppUser{
 			Profile: appUserProfile,
+			Scope:   appUserScope,
 		}
 		_, _, err = o.connector.client.Application.UpdateApplicationUser(ctx, appID, appUser.Id, payload)
 		if err != nil {
