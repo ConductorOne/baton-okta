@@ -72,6 +72,7 @@ func (connector *Okta) ListEvents(
 		}
 		switch log.EventType {
 		case "user.authentication.sso":
+			// we need exactly one AppInstance target otherwise this event is malformed
 			if len(targetMap["AppInstance"]) != 1 {
 				continue
 			}
