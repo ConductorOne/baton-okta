@@ -15,9 +15,10 @@ import (
 type EventFilter struct {
 	// Required, will only get events that match at least one of the event types.
 	EventTypes mapset.Set[string]
-	// Optional, will only match events with at least one of the actor types.
-	ActorTypes mapset.Set[string]
-	// Optional, will only match events with at least one of the target types.
+	// Optional, will only match events with the given actor type.
+	ActorType string
+	// Optional, will only match events which contain the given target types.
+	// May contain additional targets.
 	TargetTypes mapset.Set[string]
 	// Required, will be called for each event that matches the filter.
 	EventHandler func(*oktaSDK.LogEvent, map[string][]*oktaSDK.LogTarget, *v2.Event) error
@@ -46,17 +47,16 @@ func (filter *EventFilter) Filter() string {
 	}
 	eventFilter := filterJoiner(" or ", eventFilters...)
 
-	actorFilters := []string{}
-	for _, actorType := range filter.ActorTypes.ToSlice() {
-		actorFilters = append(actorFilters, filterMaker("actor.type", actorType))
+	actorFilter := ""
+	if filter.ActorType != "" {
+		actorFilter = filterMaker("actor.type", filter.ActorType)
 	}
-	actorFilter := filterJoiner(" or ", actorFilters...)
 
 	targetFilters := []string{}
 	for _, targetType := range filter.TargetTypes.ToSlice() {
 		targetFilters = append(targetFilters, filterMaker("target.type", targetType))
 	}
-	targetFilter := filterJoiner(" or ", targetFilters...)
+	targetFilter := filterJoiner(" and ", targetFilters...)
 
 	filters := []string{}
 	for _, filter := range []string{eventFilter, actorFilter, targetFilter} {
@@ -75,7 +75,7 @@ func (filter *EventFilter) Matches(event *oktaSDK.LogEvent) bool {
 	}
 
 	// if we have actor types, is the actor type in our set?
-	if filter.ActorTypes.Cardinality() > 0 && !filter.ActorTypes.Contains(event.Actor.Type) {
+	if filter.ActorType != "" && filter.ActorType != event.Actor.Type {
 		return false
 	}
 

@@ -28,8 +28,7 @@ func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, p
 		return qp
 	}
 
-	filter := strings.Join(filters, ") or (")
-	qp.Filter = fmt.Sprintf(`(%s)`, filter)
+	qp.Filter = strings.Join(filters, " or ")
 
 	return qp
 }
@@ -46,6 +45,7 @@ func (connector *Okta) ListEvents(
 		GroupChangeFilter,
 		ApplicationLifecycleFilter,
 		ApplicationMembershipFilter,
+		RoleMembershipFilter,
 	}
 
 	// Map from event type to possible filter matches
