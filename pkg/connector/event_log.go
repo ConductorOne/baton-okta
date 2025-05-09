@@ -91,7 +91,7 @@ func (connector *Okta) ListEvents(
 					},
 					ActorResource: &v2.Resource{
 						Id: &v2.ResourceId{
-							ResourceType: log.Actor.Type,
+							ResourceType: resourceTypeUser.Id,
 							Resource:     log.Actor.Id,
 						},
 						DisplayName: log.Actor.DisplayName,
@@ -107,7 +107,7 @@ func (connector *Okta) ListEvents(
 			event.Event = &v2.Event_ResourceChangeEvent{
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
 					ResourceId: &v2.ResourceId{
-						ResourceType: userGroup.Type,
+						ResourceType: resourceTypeGroup.Id,
 						Resource:     userGroup.Id,
 					},
 				},
