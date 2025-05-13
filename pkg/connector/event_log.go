@@ -71,7 +71,6 @@ func (connector *Okta) ListEvents(
 	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
 	rv := make([]*v2.Event, 0, len(logs))
 	for _, log := range logs {
-
 		relevantFilters := filterMap[log.EventType]
 		for _, filter := range relevantFilters {
 			if filter.Matches(log) {

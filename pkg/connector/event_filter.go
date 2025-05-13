@@ -37,10 +37,7 @@ func filterMaker(left string, right string) string {
 	return fmt.Sprintf(`%s eq "%s"`, left, right)
 }
 
-// MJP need a map from api Type to resource type
-
 func (filter *EventFilter) Filter() string {
-
 	eventFilters := []string{}
 	for _, eventType := range filter.EventTypes.ToSlice() {
 		eventFilters = append(eventFilters, filterMaker("eventType", eventType))
