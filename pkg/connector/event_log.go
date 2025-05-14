@@ -31,6 +31,7 @@ func (oef *oktaEventFeed) EventFeedMetadata(ctx context.Context) *v2.EventFeedMe
 			v2.EventType_EVENT_TYPE_USAGE,
 			v2.EventType_EVENT_TYPE_RESOURCE_CHANGE,
 		},
+		StartAt: v2.EventFeedStartAt_EVENT_FEED_START_AT_TAIL, // We're capturing usage events, need old ones
 	}
 }
 
