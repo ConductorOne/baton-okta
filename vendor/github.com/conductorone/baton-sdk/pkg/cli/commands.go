@@ -131,7 +131,7 @@ func MakeMainCommand[T field.Configurable](
 						v.GetString("revoke-grant"),
 					))
 			case v.GetBool("event-feed"):
-				opts = append(opts, connectorrunner.WithOnDemandEventStream())
+				opts = append(opts, connectorrunner.WithOnDemandEventStream(v.GetString("event-feed-id")))
 			case v.GetString("create-account-profile") != "":
 				profileMap := v.GetStringMap("create-account-profile")
 				if profileMap == nil {
@@ -230,6 +230,14 @@ func MakeMainCommand[T field.Configurable](
 						v.GetString("file"),
 						v.GetString("base-sync-id"),
 						v.GetString("applied-sync-id"),
+					),
+				)
+			case v.GetBool("compact-syncs"):
+				opts = append(opts,
+					connectorrunner.WithSyncCompactor(
+						v.GetString("compact-output-path"),
+						v.GetStringSlice("compact-file-paths"),
+						v.GetStringSlice("compact-sync-ids"),
 					),
 				)
 

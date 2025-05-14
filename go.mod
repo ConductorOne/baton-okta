@@ -2,6 +2,8 @@ module github.com/conductorone/baton-okta
 
 go 1.23.4
 
+replace github.com/conductorone/baton-sdk => ../baton-sdk
+
 require (
 	github.com/conductorone/baton-sdk v0.3.2
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone
