@@ -20,6 +20,26 @@ const (
 	groupMembershipFilter = `eventType eq "group.user_membership.add" and target.type eq "UserGroup"`
 )
 
+type oktaEventFeed struct {
+	connector *Okta
+}
+
+func (oef *oktaEventFeed) EventFeedMetadata(ctx context.Context) *v2.EventFeedMetadata {
+	return &v2.EventFeedMetadata{
+		Id: "okta-event-log",
+		SupportedEventTypes: []v2.EventType{
+			v2.EventType_EVENT_TYPE_USAGE,
+			v2.EventType_EVENT_TYPE_RESOURCE_CHANGE,
+		},
+	}
+}
+
+func (connector *Okta) oktaEventFeed() *oktaEventFeed {
+	return &oktaEventFeed{
+		connector: connector,
+	}
+}
+
 func targetMap(logEvent *oktaSDK.LogEvent) (map[string][]*oktaSDK.LogTarget, error) {
 	rv := make(map[string][]*oktaSDK.LogTarget)
 	for _, target := range logEvent.Target {
@@ -28,7 +48,7 @@ func targetMap(logEvent *oktaSDK.LogEvent) (map[string][]*oktaSDK.LogTarget, err
 	return rv, nil
 }
 
-func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
+func (oef *oktaEventFeed) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
 	qp := queryParams(pToken.Size, pToken.Cursor)
 	if earliestEvent != nil {
 		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
@@ -47,14 +67,14 @@ func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, p
 	return qp
 }
 
-func (connector *Okta) ListEvents(
+func (oef *oktaEventFeed) ListEvents(
 	ctx context.Context,
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
-	qp := connector.createQueryParams(earliestEvent, pToken, groupMembershipFilter, usageFilter)
+	qp := oef.createQueryParams(earliestEvent, pToken, groupMembershipFilter, usageFilter)
 
-	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
+	logs, resp, err := oef.connector.client.LogEvent.GetLogs(ctx, qp)
 	if err != nil {
 		return nil, nil, nil, err
 	}

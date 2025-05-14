@@ -222,6 +222,12 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	return resourceSyncer
 }
 
+func (c *Okta) EventFeeds(ctx context.Context) []connectorbuilder.EventFeed {
+	return []connectorbuilder.EventFeed{
+		c.oktaEventFeed(),
+	}
+}
+
 func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
 	resourceTypes := []*v2.ResourceType{
 		resourceTypeUser,
