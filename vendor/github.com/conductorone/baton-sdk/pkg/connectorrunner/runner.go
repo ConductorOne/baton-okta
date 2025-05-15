@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/conductorone/baton-sdk/pkg/synccompactor"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -44,20 +45,36 @@ var ErrSigTerm = errors.New("context cancelled by process shutdown")
 
 // Run starts a connector and creates a new C1Z file.
 func (c *connectorRunner) Run(ctx context.Context) error {
+	l := ctxzap.Extract(ctx)
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(ErrSigTerm)
 
 	if c.tasks.ShouldDebug() && c.debugFile == nil {
 		var err error
-		c.debugFile, err = os.Create(filepath.Join(c.tasks.GetTempDir(), "debug.log"))
+		tempDir := c.tasks.GetTempDir()
+		if tempDir == "" {
+			wd, err := os.Getwd()
+			if err != nil {
+				l.Warn("unable to get the current working directory", zap.Error(err))
+			}
+
+			if wd != "" {
+				l.Warn("no temporal folder found on this system according to our task manager,"+
+					" we may create files in the current working directory by mistake as a result",
+					zap.String("current working directory", wd))
+			} else {
+				l.Warn("no temporal folder found on this system according to our task manager")
+			}
+		}
+		debugFile := filepath.Join(tempDir, "debug.log")
+		c.debugFile, err = os.Create(debugFile)
 		if err != nil {
-			return err
+			l.Warn("cannot create file", zap.String("full file path", debugFile), zap.Error(err))
 		}
 	}
 
 	// modify the context to insert a logger directed to a file
 	if c.debugFile != nil {
-		l := ctxzap.Extract(ctx)
 		writeSyncer := zapcore.AddSync(c.debugFile)
 		encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 		core := zapcore.NewCore(encoder, writeSyncer, zapcore.DebugLevel)
@@ -101,6 +118,7 @@ func (c *connectorRunner) handleContextCancel(ctx context.Context) error {
 	l.Debug("runner: unexpected context cancellation", zap.Error(err))
 	return err
 }
+
 func (c *connectorRunner) processTask(ctx context.Context, task *v1.Task) error {
 	cc, err := c.cw.C(ctx)
 	if err != nil {
@@ -279,12 +297,17 @@ type rotateCredentialsConfig struct {
 	resourceType string
 }
 
-type eventStreamConfig struct {
-}
+type eventStreamConfig struct{}
 
 type syncDifferConfig struct {
 	baseSyncID    string
 	appliedSyncID string
+}
+
+type syncCompactorConfig struct {
+	filePaths  []string
+	syncIDs    []string
+	outputPath string
 }
 
 type runnerConfig struct {
@@ -309,6 +332,7 @@ type runnerConfig struct {
 	listTicketSchemasConfig             *listTicketSchemasConfig
 	getTicketConfig                     *getTicketConfig
 	syncDifferConfig                    *syncDifferConfig
+	syncCompactorConfig                 *syncCompactorConfig
 	skipFullSync                        bool
 	targetedSyncResourceIDs             []string
 	externalResourceC1Z                 string
@@ -402,6 +426,7 @@ func WithOnDemandGrant(c1zPath string, entitlementID string, principalID string,
 		return nil
 	}
 }
+
 func WithClientCredentials(clientID string, clientSecret string) Option {
 	return func(ctx context.Context, cfg *runnerConfig) error {
 		cfg.clientID = clientID
@@ -466,6 +491,7 @@ func WithOnDemandSync(c1zPath string) Option {
 		return nil
 	}
 }
+
 func WithOnDemandEventStream() Option {
 	return func(ctx context.Context, cfg *runnerConfig) error {
 		cfg.onDemand = true
@@ -573,6 +599,20 @@ func WithDiffSyncs(c1zPath string, baseSyncID string, newSyncID string) Option {
 	}
 }
 
+func WithSyncCompactor(outputPath string, filePaths []string, syncIDs []string) Option {
+	return func(ctx context.Context, cfg *runnerConfig) error {
+		cfg.onDemand = true
+		cfg.c1zPath = "dummy"
+
+		cfg.syncCompactorConfig = &syncCompactorConfig{
+			filePaths:  filePaths,
+			syncIDs:    syncIDs,
+			outputPath: outputPath,
+		}
+		return nil
+	}
+}
+
 // NewConnectorRunner creates a new connector runner.
 func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Option) (*connectorRunner, error) {
 	runner := &connectorRunner{}
@@ -655,6 +695,19 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 			tm = local.NewBulkTicket(ctx, cfg.bulkCreateTicketConfig.templatePath)
 		case cfg.syncDifferConfig != nil:
 			tm = local.NewDiffer(ctx, cfg.c1zPath, cfg.syncDifferConfig.baseSyncID, cfg.syncDifferConfig.appliedSyncID)
+		case cfg.syncCompactorConfig != nil:
+			c := cfg.syncCompactorConfig
+			if len(c.filePaths) != len(c.syncIDs) {
+				return nil, errors.New("sync-compactor: must include exactly one syncID per file")
+			}
+			configs := make([]*synccompactor.CompactableSync, 0, len(c.filePaths))
+			for i, filePath := range c.filePaths {
+				configs = append(configs, &synccompactor.CompactableSync{
+					FilePath: filePath,
+					SyncID:   c.syncIDs[i],
+				})
+			}
+			tm = local.NewLocalCompactor(ctx, cfg.syncCompactorConfig.outputPath, configs)
 		default:
 			tm, err = local.NewSyncer(ctx, cfg.c1zPath,
 				local.WithTmpDir(cfg.tempDir),
