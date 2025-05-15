@@ -46,6 +46,7 @@ func (connector *Okta) ListEvents(
 		ApplicationLifecycleFilter,
 		ApplicationMembershipFilter,
 		RoleMembershipFilter,
+		UserLifecycleFilter,
 	}
 
 	// Map from event type to possible filter matches
