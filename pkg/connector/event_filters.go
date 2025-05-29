@@ -12,7 +12,7 @@ import (
 
 var (
 	GroupChangeFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("group.user_membership.add", "group.user_membership.remove", "group.lifecycle.create", "group.lifecycle.delete"),
+		EventTypes:  mapset.NewSet[string]("group.user_membership.add", "group.lifecycle.create"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
 		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
@@ -31,7 +31,7 @@ var (
 		},
 	}
 	ApplicationLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "app.lifecycle.delete", "application.lifecycle.update"),
+		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
 		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
@@ -50,7 +50,7 @@ var (
 		},
 	}
 	ApplicationMembershipFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("application.user_membership.add", "application.user_membership.remove", "application.user_membership.update"),
+		EventTypes:  mapset.NewSet[string]("application.user_membership.add", "application.user_membership.update"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
 		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
@@ -69,7 +69,7 @@ var (
 		},
 	}
 	RoleMembershipFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("user.account.privilege.grant", "user.account.privilege.revoke"),
+		EventTypes:  mapset.NewSet[string]("user.account.privilege.grant"),
 		TargetTypes: mapset.NewSet[string]("ROLE", "User"),
 		EventHandler: func(event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["ROLE"]) != 1 {
