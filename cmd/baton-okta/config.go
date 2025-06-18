@@ -60,4 +60,4 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	SyncSecrets,
 	awsSourceIdentityMode,
 	awsAllowGroupToDirectAssignmentConversionForProvisioning,
-}, relationships...)
+}, field.WithConstraints(relationships...))
