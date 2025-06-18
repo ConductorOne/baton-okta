@@ -88,9 +88,9 @@
   "connectorCapabilities":  [
     "CAPABILITY_PROVISION",
     "CAPABILITY_SYNC",
-    "CAPABILITY_EVENT_FEED",
     "CAPABILITY_ACCOUNT_PROVISIONING",
-    "CAPABILITY_TARGETED_SYNC"
+    "CAPABILITY_TARGETED_SYNC",
+    "CAPABILITY_EVENT_FEED_V2"
   ],
   "credentialDetails":  {
     "capabilityAccountProvisioning":  {
