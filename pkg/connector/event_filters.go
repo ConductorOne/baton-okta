@@ -131,7 +131,7 @@ var (
 				UsageEvent: &v2.UsageEvent{
 					TargetResource: &v2.Resource{
 						Id: &v2.ResourceId{
-							ResourceType: appInstance.Type,
+							ResourceType: resourceTypeApp.Id,
 							Resource:     appInstance.Id,
 						},
 						DisplayName: appInstance.DisplayName,
