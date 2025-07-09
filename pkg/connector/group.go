@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"go.uber.org/zap"
@@ -153,7 +154,7 @@ func (o *groupResourceType) Grants(
 	page := bag.PageToken()
 
 	groupID := resource.Id.GetResource()
-
+	spew.Dump("resource", resource)
 	switch bag.ResourceTypeID() {
 	case resourceTypeUser.Id:
 		groupTrait, err := sdkResource.GetGroupTrait(resource)
@@ -446,6 +447,7 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 }
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
+	spew.Dump("group", group)
 	profileMap := map[string]interface{}{
 		"description": group.Profile.Description,
 		"name":        group.Profile.Name,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -101,6 +102,7 @@ func (o *appResourceType) Entitlements(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	spew.Dump("Annotations", resource.Annotations)
 	var rv []*v2.Entitlement
 	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access",
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Access", resource.DisplayName)),
