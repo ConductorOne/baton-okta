@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"go.uber.org/zap"
@@ -474,7 +475,7 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	if groupManaged != nil {
 		annos.Update(groupManaged)
 	}
-
+	spew.Dump("annos", annos)
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeGroup.Id, group.Id),
 		DisplayName: group.Profile.Name,
