@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"go.uber.org/zap"
@@ -24,6 +23,7 @@ import (
 )
 
 const membershipUpdatedField = "lastMembershipUpdated"
+const groupManagedField = "groupManaged"
 const usersCountProfileKey = "users_count"
 
 type groupResourceType struct {
@@ -122,6 +122,37 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 	return nil, nil
 }
 
+func (o *groupResourceType) groupManaged(group *okta.Group) *v2.EntitlementImmutable {
+	if group.Type != "" {
+		if group.Type == "BUILT_IN" {
+			data, err := structpb.NewStruct(map[string]interface{}{
+				"type":      group.Type,
+				"immutable": true,
+			})
+			if err != nil {
+				return nil
+			}
+			return &v2.EntitlementImmutable{
+				SourceId: group.Id,
+				Metadata: data,
+			}
+		} else {
+			data, err := structpb.NewStruct(map[string]interface{}{
+				"type": group.Type,
+				"immutable": false,
+			})
+			if err != nil {
+				return nil
+			}
+			return &v2.EntitlementImmutable{
+				SourceId: group.Id,
+				Metadata: data,
+			}
+		}
+	}
+	return nil
+}
+
 func (o *groupResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -154,7 +185,7 @@ func (o *groupResourceType) Grants(
 	page := bag.PageToken()
 
 	groupID := resource.Id.GetResource()
-	spew.Dump("resource", resource)
+
 	switch bag.ResourceTypeID() {
 	case resourceTypeUser.Id:
 		groupTrait, err := sdkResource.GetGroupTrait(resource)
@@ -439,6 +470,11 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	}
 	annos.Update(etagMd)
 
+	groupManaged := o.groupManaged(group)
+	if groupManaged != nil {
+		annos.Update(groupManaged)
+	}
+
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeGroup.Id, group.Id),
 		DisplayName: group.Profile.Name,
@@ -447,7 +483,7 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 }
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
-	spew.Dump("group", group)
+
 	profileMap := map[string]interface{}{
 		"description": group.Profile.Description,
 		"name":        group.Profile.Name,
