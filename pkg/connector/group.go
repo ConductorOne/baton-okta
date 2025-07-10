@@ -80,7 +80,7 @@ func (o *groupResourceType) List(
 		if err != nil {
 			return nil, "", nil, err
 		}
-
+		spew.Dump("resource", resource)
 		rv = append(rv, resource)
 	}
 
