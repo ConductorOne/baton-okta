@@ -78,8 +78,8 @@ func (o *groupResourceType) List(
 		if err != nil {
 			return nil, "", nil, err
 		}
-		rv = append(rv, resource)
 
+		rv = append(rv, resource)
 	}
 
 	pageToken, err := bag.Marshal()
