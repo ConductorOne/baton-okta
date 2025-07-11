@@ -122,31 +122,16 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 }
 
 func (o *groupResourceType) groupEntitlementMetadata(group *okta.Group) *v2.EntitlementImmutable {
-	if group.Type != "" {
-		if group.Type == "BUILT_IN" {
-			data, err := structpb.NewStruct(map[string]interface{}{
-				"type":               group.Type,
-				"is_system_built_in": true,
-			})
-			if err != nil {
-				return nil
-			}
-			return &v2.EntitlementImmutable{
-				SourceId: group.Id,
-				Metadata: data,
-			}
-		} else {
-			data, err := structpb.NewStruct(map[string]interface{}{
-				"type":               group.Type,
-				"is_system_built_in": false,
-			})
-			if err != nil {
-				return nil
-			}
-			return &v2.EntitlementImmutable{
-				SourceId: group.Id,
-				Metadata: data,
-			}
+	if group.Type == "BUILT_IN" {
+		data, err := structpb.NewStruct(map[string]interface{}{
+			"is_system_built_in": true,
+		})
+		if err != nil {
+			return nil
+		}
+		return &v2.EntitlementImmutable{
+			SourceId: group.Id,
+			Metadata: data,
 		}
 	}
 	return nil
