@@ -23,7 +23,6 @@ import (
 )
 
 const membershipUpdatedField = "lastMembershipUpdated"
-const groupManagedField = "groupManaged"
 const usersCountProfileKey = "users_count"
 
 type groupResourceType struct {
