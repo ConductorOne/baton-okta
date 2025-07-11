@@ -79,6 +79,7 @@ func (o *groupResourceType) List(
 			return nil, "", nil, err
 		}
 		rv = append(rv, resource)
+
 	}
 
 	pageToken, err := bag.Marshal()
@@ -480,7 +481,6 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 }
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
-
 	profileMap := map[string]interface{}{
 		"description": group.Profile.Description,
 		"name":        group.Profile.Name,
