@@ -24,6 +24,7 @@ import (
 
 const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
+const builtInGroupType = "BUILT_IN"
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
@@ -438,6 +439,9 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	}
 	annos.Update(etagMd)
 
+	if group.Type == builtInGroupType {
+		annos.Update(&v2.EntitlementImmutable{})
+	}
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeGroup.Id, group.Id),
 		DisplayName: group.Profile.Name,
