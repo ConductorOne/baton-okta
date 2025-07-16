@@ -121,22 +121,6 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 	return nil, nil
 }
 
-func (o *groupResourceType) groupEntitlementMetadata(group *okta.Group) *v2.EntitlementImmutable {
-	if group.Type == "BUILT_IN" {
-		data, err := structpb.NewStruct(map[string]interface{}{
-			"is_system_built_in": true,
-		})
-		if err != nil {
-			return nil
-		}
-		return &v2.EntitlementImmutable{
-			SourceId: group.Id,
-			Metadata: data,
-		}
-	}
-	return nil
-}
-
 func (o *groupResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -454,9 +438,8 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	}
 	annos.Update(etagMd)
 
-	groupManaged := o.groupEntitlementMetadata(group)
-	if groupManaged != nil {
-		annos.Update(groupManaged)
+	if group.Type == "BUILT_IN" {
+		annos.Update(&v2.EntitlementImmutable{})
 	}
 	return &v2.Resource{
 		Id:          fmtResourceId(resourceTypeGroup.Id, group.Id),
