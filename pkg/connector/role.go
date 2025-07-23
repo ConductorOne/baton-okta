@@ -166,26 +166,27 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, user := range usersWithRoleAssignments {
-		userId := user.Id
+	userIDs := make([]string, len(usersWithRoleAssignments))
+	for i, user := range usersWithRoleAssignments {
+		userIDs[i] = user.Id
+	}
 
-		userRoles, err := o.getUserRolesFromCache(ctx, userId)
-		if err != nil {
-			return nil, "", nil, err
-		}
+	// TODO(kans): chunk this.
+	allUserRoles, err := o.getUsersRolesFromCache(ctx, userIDs...)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get users roles from cache: %w", err)
+	}
 
-		if userRoles == nil {
-			userRoles = mapset.NewSet[string]()
+	toSet := map[string][]byte{}
+	for _, userId := range userIDs {
+		userRoles, ok := allUserRoles[userId]
+		if !ok {
 			roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
 			if err != nil {
 				return nil, "", nil, err
 			}
 			for _, role := range roles {
-				if role.Status == roleStatusInactive {
-					continue
-				}
-
-				if role.AssignmentType != "USER" {
+				if role.Status == roleStatusInactive || role.AssignmentType != "USER" {
 					continue
 				}
 
@@ -199,11 +200,22 @@ func (o *roleResourceType) Grants(
 					userRoles.Add(role.Type)
 				}
 			}
-			o.connector.userRoleCache.Store(userId, userRoles)
+			userRolesBytes, err := userRoles.MarshalJSON()
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to marshal user roles: %w", err)
+			}
+			toSet[userId] = userRolesBytes
 		}
 
 		if userRoles.ContainsOne(resource.Id.GetResource()) {
 			rv = append(rv, roleGrant(userId, resource))
+		}
+	}
+
+	if len(toSet) > 0 {
+		err = o.connector.sessionCache.SetMany(ctx, toSet)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to set user roles in session cache: %w", err)
 		}
 	}
 
@@ -639,16 +651,22 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	return nil, nil
 }
 
-func (o *roleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
-	appUserRoleCacheVal, ok := o.connector.userRoleCache.Load(userId)
-	if !ok {
-		return nil, nil
+func (o *roleResourceType) getUsersRolesFromCache(ctx context.Context, userId ...string) (map[string]mapset.Set[string], error) {
+	userRolesBytes, err := o.connector.sessionCache.GetMany(ctx, userId)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: failed to get user roles from cache: %w", err)
 	}
-	userRoles, ok := appUserRoleCacheVal.(mapset.Set[string])
-	if !ok {
-		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
+	allUserRoles := make(map[string]mapset.Set[string], len(userId))
+	for i, userRoleBytes := range userRolesBytes {
+		allUserRoles[i] = mapset.NewSet[string]()
+		err = allUserRoles[i].UnmarshalJSON(userRoleBytes)
+		if err != nil {
+			return nil, fmt.Errorf("okta-connectorv2: failed to unmarshal user roles: %w", err)
+		}
 	}
-	return userRoles, nil
+
+	return allUserRoles, nil
+
 }
 
 func (o *roleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {

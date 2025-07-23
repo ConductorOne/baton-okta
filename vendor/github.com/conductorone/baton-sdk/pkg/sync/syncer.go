@@ -107,12 +107,6 @@ func (p *ProgressCounts) LogEntitlementsProgress(ctx context.Context, resourceTy
 	percentComplete := (entitlementsProgress * 100) / resources
 
 	switch {
-	case entitlementsProgress > resources:
-		l.Error("more entitlement resources than resources",
-			zap.String("resource_type_id", resourceType),
-			zap.Int("synced", entitlementsProgress),
-			zap.Int("total", resources),
-		)
 	case percentComplete == 100:
 		l.Info("Synced entitlements",
 			zap.String("resource_type_id", resourceType),
@@ -121,12 +115,20 @@ func (p *ProgressCounts) LogEntitlementsProgress(ctx context.Context, resourceTy
 		)
 		p.LastEntitlementLog[resourceType] = time.Time{}
 	case time.Since(p.LastEntitlementLog[resourceType]) > maxLogFrequency:
-		l.Info("Syncing entitlements",
-			zap.String("resource_type_id", resourceType),
-			zap.Int("synced", entitlementsProgress),
-			zap.Int("total", resources),
-			zap.Int("percent_complete", percentComplete),
-		)
+		if entitlementsProgress > resources {
+			l.Warn("more entitlement resources than resources",
+				zap.String("resource_type_id", resourceType),
+				zap.Int("synced", entitlementsProgress),
+				zap.Int("total", resources),
+			)
+		} else {
+			l.Info("Syncing entitlements",
+				zap.String("resource_type_id", resourceType),
+				zap.Int("synced", entitlementsProgress),
+				zap.Int("total", resources),
+				zap.Int("percent_complete", percentComplete),
+			)
+		}
 		p.LastEntitlementLog[resourceType] = time.Now()
 	}
 }
@@ -151,12 +153,6 @@ func (p *ProgressCounts) LogGrantsProgress(ctx context.Context, resourceType str
 	percentComplete := (grantsProgress * 100) / resources
 
 	switch {
-	case grantsProgress > resources:
-		l.Error("more grant resources than resources",
-			zap.String("resource_type_id", resourceType),
-			zap.Int("synced", grantsProgress),
-			zap.Int("total", resources),
-		)
 	case percentComplete == 100:
 		l.Info("Synced grants",
 			zap.String("resource_type_id", resourceType),
@@ -165,12 +161,20 @@ func (p *ProgressCounts) LogGrantsProgress(ctx context.Context, resourceType str
 		)
 		p.LastGrantLog[resourceType] = time.Time{}
 	case time.Since(p.LastGrantLog[resourceType]) > maxLogFrequency:
-		l.Info("Syncing grants",
-			zap.String("resource_type_id", resourceType),
-			zap.Int("synced", grantsProgress),
-			zap.Int("total", resources),
-			zap.Int("percent_complete", percentComplete),
-		)
+		if grantsProgress > resources {
+			l.Warn("more grant resources than resources",
+				zap.String("resource_type_id", resourceType),
+				zap.Int("synced", grantsProgress),
+				zap.Int("total", resources),
+			)
+		} else {
+			l.Info("Syncing grants",
+				zap.String("resource_type_id", resourceType),
+				zap.Int("synced", grantsProgress),
+				zap.Int("total", resources),
+				zap.Int("percent_complete", percentComplete),
+			)
+		}
 		p.LastGrantLog[resourceType] = time.Now()
 	}
 }
@@ -554,7 +558,11 @@ func (s *syncer) Sync(ctx context.Context) error {
 		return err
 	}
 
-	_, err = s.connector.Cleanup(ctx, &v2.ConnectorServiceCleanupRequest{})
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
+	_, err = s.connector.Cleanup(ctx, &v2.ConnectorServiceCleanupRequest{Annotations: a})
 	if err != nil {
 		l.Error("error clearing connector caches", zap.Error(err))
 	}
@@ -625,7 +633,14 @@ func (s *syncer) SyncResourceTypes(ctx context.Context) error {
 		return err
 	}
 
-	resp, err := s.connector.ListResourceTypes(ctx, &v2.ResourceTypesServiceListResourceTypesRequest{PageToken: pageToken})
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
+	resp, err := s.connector.ListResourceTypes(ctx, &v2.ResourceTypesServiceListResourceTypesRequest{
+		PageToken:   pageToken,
+		Annotations: a,
+	})
 	if err != nil {
 		return err
 	}
@@ -682,10 +697,15 @@ func (s *syncer) getResourceFromConnector(ctx context.Context, resourceID *v2.Re
 	ctx, span := tracer.Start(ctx, "syncer.getResource")
 	defer span.End()
 
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
 	resourceResp, err := s.connector.GetResource(ctx,
 		&v2.ResourceGetterServiceGetResourceRequest{
 			ResourceId:       resourceID,
 			ParentResourceId: parentResourceID,
+			Annotations:      a,
 		},
 	)
 	if err == nil {
@@ -971,7 +991,11 @@ func (s *syncer) SyncEntitlements(ctx context.Context) error {
 			s.handleInitialActionForStep(ctx, *s.state.Current())
 		}
 
-		resp, err := s.store.ListResources(ctx, &v2.ResourcesServiceListResourcesRequest{PageToken: pageToken})
+		a := annotations.New(&v2.SyncId{
+			ActiveSyncId: s.syncID,
+		})
+
+		resp, err := s.store.ListResources(ctx, &v2.ResourcesServiceListResourcesRequest{PageToken: pageToken, Annotations: a})
 		if err != nil {
 			return err
 		}
@@ -1025,9 +1049,21 @@ func (s *syncer) syncEntitlementsForResource(ctx context.Context, resourceID *v2
 
 	pageToken := s.state.PageToken(ctx)
 
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
+	resource := resourceResponse.Resource
+	resourceAnnos := annotations.Annotations(resource.Annotations)
+	resourceAnnos.Append(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+	resource.Annotations = resourceAnnos
+
 	resp, err := s.connector.ListEntitlements(ctx, &v2.EntitlementsServiceListEntitlementsRequest{
-		Resource:  resourceResponse.Resource,
-		PageToken: pageToken,
+		Resource:    resource,
+		PageToken:   pageToken,
+		Annotations: a,
 	})
 	if err != nil {
 		return err
@@ -1349,7 +1385,12 @@ func (s *syncer) SyncGrants(ctx context.Context) error {
 			s.handleInitialActionForStep(ctx, *s.state.Current())
 		}
 
-		resp, err := s.store.ListResources(ctx, &v2.ResourcesServiceListResourcesRequest{PageToken: pageToken})
+		a := annotations.New()
+		a.Append(&v2.SyncId{
+			ActiveSyncId: s.syncID,
+		})
+
+		resp, err := s.store.ListResources(ctx, &v2.ResourcesServiceListResourcesRequest{PageToken: pageToken, Annotations: a})
 		if err != nil {
 			return err
 		}
@@ -1541,9 +1582,17 @@ func (s *syncer) syncGrantsForResource(ctx context.Context, resourceID *v2.Resou
 		return err
 	}
 	resourceAnnos.Update(prevEtag)
+	resourceAnnos.Update(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
 	resource.Annotations = resourceAnnos
 
-	resp, err := s.connector.ListGrants(ctx, &v2.GrantsServiceListGrantsRequest{Resource: resource, PageToken: pageToken})
+	a := annotations.New()
+	a.Append(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
+	resp, err := s.connector.ListGrants(ctx, &v2.GrantsServiceListGrantsRequest{Resource: resource, PageToken: pageToken, Annotations: a})
 	if err != nil {
 		return err
 	}
@@ -1690,10 +1739,15 @@ func (s *syncer) SyncExternalResourcesWithGrantToEntitlement(ctx context.Context
 	l := ctxzap.Extract(ctx)
 	l.Info("Syncing external baton resources with grants to entitlement...")
 
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
 	skipEGForResourceType := make(map[string]bool)
 
 	filterEntitlement, err := s.externalResourceReader.GetEntitlement(ctx, &reader_v2.EntitlementsReaderServiceGetEntitlementRequest{
 		EntitlementId: entitlementId,
+		Annotations:   a,
 	})
 	if err != nil {
 		return err
@@ -1919,10 +1973,14 @@ func (s *syncer) SyncExternalResourcesUsersAndGroups(ctx context.Context) error 
 func (s *syncer) listExternalResourcesForResourceType(ctx context.Context, resourceTypeId string) ([]*v2.Resource, error) {
 	resources := make([]*v2.Resource, 0)
 	pageToken := ""
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
 	for {
 		resourceResp, err := s.externalResourceReader.ListResources(ctx, &v2.ResourcesServiceListResourcesRequest{
 			PageToken:      pageToken,
 			ResourceTypeId: resourceTypeId,
+			Annotations:    a,
 		})
 		if err != nil {
 			return nil, err
@@ -1939,10 +1997,21 @@ func (s *syncer) listExternalResourcesForResourceType(ctx context.Context, resou
 func (s *syncer) listExternalEntitlementsForResource(ctx context.Context, resource *v2.Resource) ([]*v2.Entitlement, error) {
 	ents := make([]*v2.Entitlement, 0)
 	entitlementToken := ""
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+
+	resourceAnnos := annotations.Annotations(resource.Annotations)
+	resourceAnnos.Append(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
+	resource.Annotations = resourceAnnos
+
 	for {
 		entitlementsList, err := s.externalResourceReader.ListEntitlements(ctx, &v2.EntitlementsServiceListEntitlementsRequest{
-			PageToken: entitlementToken,
-			Resource:  resource,
+			PageToken:   entitlementToken,
+			Resource:    resource,
+			Annotations: a,
 		})
 		if err != nil {
 			return nil, err
@@ -1959,10 +2028,14 @@ func (s *syncer) listExternalEntitlementsForResource(ctx context.Context, resour
 func (s *syncer) listExternalGrantsForEntitlement(ctx context.Context, ent *v2.Entitlement) ([]*v2.Grant, error) {
 	grantsForEnts := make([]*v2.Grant, 0)
 	entitlementGrantPageToken := ""
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
 	for {
 		grantsForEntitlementResp, err := s.externalResourceReader.ListGrantsForEntitlement(ctx, &reader_v2.GrantsReaderServiceListGrantsForEntitlementRequest{
 			Entitlement: ent,
 			PageToken:   entitlementGrantPageToken,
+			Annotations: a,
 		})
 		if err != nil {
 			return nil, err
@@ -1979,9 +2052,13 @@ func (s *syncer) listExternalGrantsForEntitlement(ctx context.Context, ent *v2.E
 func (s *syncer) listExternalResourceTypes(ctx context.Context) ([]*v2.ResourceType, error) {
 	resourceTypes := make([]*v2.ResourceType, 0)
 	rtPageToken := ""
+	a := annotations.New(&v2.SyncId{
+		ActiveSyncId: s.syncID,
+	})
 	for {
 		resourceTypesResp, err := s.externalResourceReader.ListResourceTypes(ctx, &v2.ResourceTypesServiceListResourceTypesRequest{
-			PageToken: rtPageToken,
+			PageToken:   rtPageToken,
+			Annotations: a,
 		})
 		if err != nil {
 			return nil, err
@@ -2332,7 +2409,8 @@ func (s *syncer) runGrantExpandActions(ctx context.Context) (bool, error) {
 
 	// Peek the next action on the stack
 	if len(graph.Actions) == 0 {
-		l.Debug("runGrantExpandActions: no actions", zap.Any("graph", graph))
+		l.Debug("runGrantExpandActions: no actions") // zap.Any("graph", graph),
+
 		return true, nil
 	}
 	action := graph.Actions[0]
@@ -2462,12 +2540,6 @@ func (s *syncer) runGrantExpandActions(ctx context.Context) (bool, error) {
 			}
 			// Include the source grant as a source.
 			sourcesMap[sourceGrant.GetEntitlement().GetId()] = &v2.GrantSources_GrantSource{}
-
-			l.Debug(
-				"runGrantExpandActions: updating sources for descendant grant",
-				zap.String("grant_id", descendantGrant.GetId()),
-				zap.Any("sources", sources),
-			)
 		}
 		newGrants = append(newGrants, descendantGrants...)
 	}
@@ -2520,7 +2592,7 @@ func (s *syncer) expandGrantsForEntitlements(ctx context.Context) error {
 
 	graph := s.state.EntitlementGraph(ctx)
 	l = l.With(zap.Int("depth", graph.Depth))
-	l.Debug("expandGrantsForEntitlements: start", zap.Any("graph", graph))
+	l.Debug("expandGrantsForEntitlements: start") // zap.Any("graph", graph)
 
 	s.counts.LogExpandProgress(ctx, graph.Actions)
 
@@ -2547,7 +2619,7 @@ func (s *syncer) expandGrantsForEntitlements(ctx context.Context) error {
 	if int64(graph.Depth) > maxDepth {
 		l.Error(
 			"expandGrantsForEntitlements: exceeded max depth",
-			zap.Any("graph", graph),
+			// zap.Any("graph", graph),
 			zap.Int64("max_depth", maxDepth),
 		)
 		s.state.FinishAction(ctx)
@@ -2583,13 +2655,13 @@ func (s *syncer) expandGrantsForEntitlements(ctx context.Context) error {
 	}
 
 	if graph.IsExpanded() {
-		l.Debug("expandGrantsForEntitlements: graph is expanded", zap.Any("graph", graph))
+		l.Debug("expandGrantsForEntitlements: graph is expanded") // zap.Any("graph", graph)
 		s.state.FinishAction(ctx)
 		return nil
 	}
 
 	graph.Depth++
-	l.Debug("expandGrantsForEntitlements: graph is not expanded", zap.Any("graph", graph))
+	l.Debug("expandGrantsForEntitlements: graph is not expanded") // zap.Any("graph", graph)
 	return nil
 }
 

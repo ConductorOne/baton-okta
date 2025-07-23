@@ -355,7 +355,11 @@ func (o *groupResourceType) listAWSGroups(ctx context.Context, token *pagination
 			return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch groups from okta: %w", err)
 		}
 		groups = append(groups, oktaGroup)
-		awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
+
+		err = awsConfig.storeAppGroup(ctx, appGroup.Id, appGroupSAMLRoles)
+		if err != nil {
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to set app group to cache: %w", err)
+		}
 	}
 	return groups, respCtx, nil
 }
@@ -662,7 +666,10 @@ func (o *groupResourceType) getAWSGroup(ctx context.Context, groupId string) (*o
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch groups from okta: %w", err)
 	}
-	awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
+	err = awsConfig.storeAppGroup(ctx, appGroup.Id, appGroupSAMLRoles)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-aws-connector: failed to set app group to cache: %w", err)
+	}
 	return oktaGroup, resp, nil
 }
 

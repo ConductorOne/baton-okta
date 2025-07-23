@@ -22,7 +22,7 @@ import (
 )
 
 type OktaAppGroupWrapper struct {
-	samlRoles []string
+	SamlRoles []string `json:"samlRoles,omitempty"`
 }
 
 type AWSRoles struct {
@@ -328,14 +328,18 @@ func (o *accountResourceType) collectRolesFromUserGroups(
 
 	roles := mapset.NewSet[string]()
 
-	for _, group := range userGroups {
-		appGroup, err := o.getOktaAppGroupFromCacheOrFetch(ctx, group.Id)
-		if err != nil {
-			return nil, err
-		}
-		if appGroup != nil {
-			roles.Append(appGroup.samlRoles...)
-		}
+	groups := make([]string, 0, len(userGroups))
+	for _, g := range userGroups {
+		groups = append(groups, g.Id)
+	}
+
+	appGroups, err := o.getOktaAppGroupsFromCacheOrFetch(ctx, groups)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, appGroup := range appGroups {
+		roles.Append(appGroup.SamlRoles...)
 	}
 
 	return roles, nil
@@ -383,8 +387,12 @@ func (o *accountResourceType) groupGrants(ctx context.Context, resource *v2.Reso
 		}
 
 		// TODO(lauren) we only need this when !awsConfig.JoinAllRoles
-		awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
-		for _, role := range appGroupSAMLRoles.samlRoles {
+		err = awsConfig.storeAppGroup(ctx, appGroup.Id, appGroupSAMLRoles)
+		if err != nil {
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to set app group to cache: %w", err)
+		}
+
+		for _, role := range appGroupSAMLRoles.SamlRoles {
 			if !awsConfig.JoinAllRoles {
 				rv = append(rv, o.accountGrantGroup(resource, role, appGroup.Id))
 			} else {
@@ -538,54 +546,70 @@ func getSAMLRoles(profile map[string]interface{}) ([]string, error) {
 	return ret, nil
 }
 
-func (o *accountResourceType) getOktaAppGroupFromCacheOrFetch(ctx context.Context, groupId string) (*OktaAppGroupWrapper, error) {
+func (o *accountResourceType) getOktaAppGroupsFromCacheOrFetch(ctx context.Context, groupIDs []string) ([]*OktaAppGroupWrapper, error) {
 	l := ctxzap.Extract(ctx)
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
-	appGroupSAMLRoles, err := awsConfig.getAppGroupFromCache(ctx, groupId)
+	appGroupSAMLRoles, err := awsConfig.loadAppGroups(ctx, groupIDs)
 	if err != nil {
 		return nil, err
-	}
-	if appGroupSAMLRoles != nil {
-		l.Debug("okta-aws-connector: found group in cache", zap.String("groupId", groupId))
-		return appGroupSAMLRoles, nil
-	}
-	notAnAppGroup, err := awsConfig.checkIfNotAppGroupFromCache(ctx, groupId)
-	if err != nil {
-		return nil, err
-	}
-	if notAnAppGroup {
-		return nil, nil
 	}
 
-	oktaAppGroup, resp, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, o.connector.awsConfig.OktaAppId, groupId, nil)
-	if err != nil {
-		if resp == nil {
-			return nil, fmt.Errorf("okta-aws-connector: failed to fetch application group assignment: %w", err)
+	for _, groupId := range groupIDs {
+		if appGroupSAMLRoles[groupId] != nil {
+			continue
+		}
+		// TODO(kans): bulk load these too.
+		notAnAppGroup, err := awsConfig.loadIfNotAppGroupIsNotCached(ctx, groupId)
+		if err != nil {
+			// TODO(kans): do not return an error here
+			return nil, err
+		}
+		if notAnAppGroup {
+			continue
+		}
+		oktaAppGroup, resp, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, o.connector.awsConfig.OktaAppId, groupId, nil)
+		if err != nil {
+			if resp == nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application group assignment: %w", err)
+			}
+
+			defer resp.Body.Close()
+			errOkta, err := getError(resp)
+			if err != nil {
+				return nil, err
+			}
+			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
+				l.Warn("okta-aws-connector: ", zap.String("ErrorCode", errOkta.ErrorCode), zap.String("ErrorSummary", errOkta.ErrorSummary))
+				return nil, fmt.Errorf("okta-aws-connector: %v", errOkta)
+			}
+			err = awsConfig.storeDoNotCacheAppGroup(ctx, groupId)
+			if err != nil {
+				return nil, fmt.Errorf("okta-aws-connector: failed to set not app group to cache: %w", err)
+			}
+			continue
 		}
 
-		defer resp.Body.Close()
-		errOkta, err := getError(resp)
+		wrappedAppGroup, err := appGroupSAMLRolesWrapper(ctx, oktaAppGroup)
 		if err != nil {
 			return nil, err
 		}
-		if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
-			l.Warn("okta-aws-connector: ", zap.String("ErrorCode", errOkta.ErrorCode), zap.String("ErrorSummary", errOkta.ErrorSummary))
-			return nil, fmt.Errorf("okta-aws-connector: %v", errOkta)
+
+		err = awsConfig.storeAppGroup(ctx, groupId, wrappedAppGroup)
+		if err != nil {
+			return nil, fmt.Errorf("okta-aws-connector: failed to set app group to cache: %w", err)
 		}
-		awsConfig.notAppGroupCache.Store(groupId, true)
-		return nil, nil
+		appGroupSAMLRoles[groupId] = wrappedAppGroup
 	}
 
-	appGroupSAMLRoles, err = appGroupSAMLRolesWrapper(ctx, oktaAppGroup)
-	if err != nil {
-		return nil, err
+	rv := make([]*OktaAppGroupWrapper, 0, len(appGroupSAMLRoles))
+	for _, groupId := range groupIDs {
+		rv = append(rv, appGroupSAMLRoles[groupId])
 	}
-	awsConfig.appGroupCache.Store(groupId, appGroupSAMLRoles)
 
-	return appGroupSAMLRoles, nil
+	return rv, nil
 }
 
 const apiPathApplicationGroup = "/api/v1/apps/%s/groups/%s"

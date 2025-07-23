@@ -180,7 +180,15 @@ func (o *customRoleResourceType) Grants(
 					userRoles.Add(role.Type)
 				}
 			}
-			o.connector.userRoleCache.Store(userId, userRoles)
+			userRolesBytes, err := userRoles.MarshalJSON()
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to marshal user roles: %w", err)
+			}
+
+			err = o.connector.sessionCache.Set(ctx, userId, userRolesBytes)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to set user roles in session cache: %w", err)
+			}
 		}
 
 		if userRoles.ContainsOne(resource.Id.GetResource()) {
@@ -226,13 +234,17 @@ func (o *customRoleResourceType) listCustomRoles(
 }
 
 func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
-	appUserRoleCacheVal, ok := o.connector.userRoleCache.Load(userId)
+	userRolesBytes, ok, err := o.connector.sessionCache.Get(ctx, userId)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: failed to get user roles from cache: %w", err)
+	}
 	if !ok {
 		return nil, nil
 	}
-	userRoles, ok := appUserRoleCacheVal.(mapset.Set[string])
-	if !ok {
-		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
+	userRoles := mapset.NewSet[string]()
+	err = userRoles.UnmarshalJSON(userRolesBytes)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: failed to unmarshal user roles: %w", err)
 	}
 	return userRoles, nil
 }

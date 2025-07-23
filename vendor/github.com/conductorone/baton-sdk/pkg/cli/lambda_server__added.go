@@ -74,7 +74,7 @@ func OptionallyAddLambdaCommand[T field.Configurable](
 			return err
 		}
 
-		runCtx, otelShutdown, err := initOtel(context.Background(), name, v, initalLogFields)
+		runCtx, otelShutdown, err := initOtel(runCtx, name, v, initalLogFields)
 		if err != nil {
 			return err
 		}
@@ -143,6 +143,12 @@ func OptionallyAddLambdaCommand[T field.Configurable](
 
 		if err := field.Validate(connectorSchema, t); err != nil {
 			return fmt.Errorf("lambda-run: failed to validate config: %w", err)
+		}
+
+		// Create session cache and add to context
+		runCtx, err = WithSessionCache(runCtx, defaultSessionCacheConstructor)
+		if err != nil {
+			return fmt.Errorf("lambda-run: failed to create session cache: %w", err)
 		}
 
 		c, err := getconnector(runCtx, t)
