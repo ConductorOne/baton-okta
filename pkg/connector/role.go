@@ -193,12 +193,16 @@ func (o *roleResourceType) Grants(
 				if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
 					continue
 				}
-
+				userRoles = mapset.NewSet[string]()
+				allUserRoles[userId] = userRoles
 				if role.Type == roleTypeCustom {
 					userRoles.Add(role.Role)
 				} else {
 					userRoles.Add(role.Type)
 				}
+			}
+			if userRoles == nil {
+				continue
 			}
 			userRolesBytes, err := userRoles.MarshalJSON()
 			if err != nil {
