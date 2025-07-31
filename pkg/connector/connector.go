@@ -15,6 +15,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
@@ -82,8 +83,7 @@ type oktaAWSAppSettings struct {
 	UseGroupMapping              bool
 	IdentityProviderArnAccountID string
 	SamlRolesUnionEnabled        bool
-	appGroupSession              types.SessionCache
-	notAppGroupSession           types.SessionCache
+	sessionCache                 types.SessionCache
 }
 
 type Config struct {
@@ -569,11 +569,9 @@ func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings
 		SamlRolesUnionEnabled:        samlRolesUnionEnabled,
 	}
 
-	oktaAWSAppSettings.appGroupSession = c.sessionCache.WithNamespace("app-group")
-	oktaAWSAppSettings.notAppGroupSession = c.sessionCache.WithNamespace("not-app-group")
-	if err != nil {
-		return nil, fmt.Errorf("okta-connector: error creating notAppGroupSession: %w", err)
-	}
+	oktaAWSAppSettings.sessionCache = c.sessionCache
+	// oktaAWSAppSettings.appGroupSession = c.sessionCache
+	// oktaAWSAppSettings.notAppGroupSession = c.sessionCache
 
 	c.awsConfig.oktaAWSAppSettings = oktaAWSAppSettings
 	return oktaAWSAppSettings, nil
@@ -626,15 +624,11 @@ func (a *oktaAWSAppSettings) storeAppGroup(ctx context.Context, groupId string, 
 	if err != nil {
 		return fmt.Errorf("okta-aws-connector: error marshalling app group to cache: %w", err)
 	}
-	return a.appGroupSession.Set(ctx, "app-group"+groupId, appGroupCacheVal)
+	return a.sessionCache.Set(ctx, groupId, appGroupCacheVal, session.WithPrefix("app-group"))
 }
 
 func (a *oktaAWSAppSettings) loadAppGroups(ctx context.Context, groupIDs []string) (map[string]*OktaAppGroupWrapper, error) {
-	prefixed := make([]string, len(groupIDs))
-	for i, groupId := range groupIDs {
-		prefixed[i] = "app-group:" + groupId
-	}
-	appGroupCacheVals, err := a.appGroupSession.GetMany(ctx, prefixed)
+	appGroupCacheVals, err := a.sessionCache.GetMany(ctx, groupIDs, session.WithPrefix("app-group"))
 	if err != nil {
 		return nil, fmt.Errorf("okta-aws-connector: error getting app groups from cache: %w", err)
 	}
@@ -660,11 +654,15 @@ func (a *oktaAWSAppSettings) storeDoNotCacheAppGroup(ctx context.Context, groupI
 	if err != nil {
 		return fmt.Errorf("okta-aws-connector: error marshalling not app group to cache: %w", err)
 	}
-	return a.notAppGroupSession.Set(ctx, groupId, notAppGroupCacheVal)
+	err = a.sessionCache.Set(ctx, groupId, notAppGroupCacheVal, session.WithPrefix("not-app-group"))
+	if err != nil {
+		return fmt.Errorf("okta-aws-connector: error storing not app group to cache: %w", err)
+	}
+	return nil
 }
 
 func (a *oktaAWSAppSettings) loadIfNotAppGroupIsNotCached(ctx context.Context, groupId string) (bool, error) {
-	_, ok, err := a.notAppGroupSession.Get(ctx, groupId)
+	_, ok, err := a.sessionCache.Get(ctx, groupId, session.WithPrefix("not-app-group"))
 	if err != nil {
 		return false, fmt.Errorf("okta-aws-connector: error getting not app group from cache: %w", err)
 	}

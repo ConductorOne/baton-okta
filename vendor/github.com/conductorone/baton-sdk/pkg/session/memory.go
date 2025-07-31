@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -46,7 +45,7 @@ func (m *MemorySessionCache) Get(ctx context.Context, key string, opt ...types.S
 	}
 
 	if bag.Prefix != "" {
-		key = bag.Prefix + "::" + key
+		key = bag.Prefix + KeyPrefixDelimiter + key
 	}
 
 	m.mu.RLock()
@@ -69,7 +68,7 @@ func (m *MemorySessionCache) Set(ctx context.Context, key string, value []byte, 
 	}
 
 	if bag.Prefix != "" {
-		key = bag.Prefix + "::" + key
+		key = bag.Prefix + KeyPrefixDelimiter + key
 	}
 
 	m.mu.Lock()
@@ -96,7 +95,7 @@ func (m *MemorySessionCache) Delete(ctx context.Context, key string, opt ...type
 	defer m.mu.Unlock()
 
 	if bag.Prefix != "" {
-		key = bag.Prefix + "::" + key
+		key = bag.Prefix + KeyPrefixDelimiter + key
 	}
 
 	syncCache, ok := m.cache[bag.SyncID]
@@ -138,7 +137,7 @@ func (m *MemorySessionCache) GetAll(ctx context.Context, opt ...types.SessionCac
 	result := make(map[string][]byte)
 	for key, value := range syncCache {
 		if bag.Prefix != "" {
-			key = bag.Prefix + "::" + key
+			key = bag.Prefix + KeyPrefixDelimiter + key
 		}
 		result[key] = value
 	}
@@ -163,7 +162,7 @@ func (m *MemorySessionCache) GetMany(ctx context.Context, keys []string, opt ...
 	result := make(map[string][]byte)
 	for _, key := range keys {
 		if bag.Prefix != "" {
-			key = bag.Prefix + "::" + key
+			key = bag.Prefix + KeyPrefixDelimiter + key
 		}
 		if value, found := syncCache[key]; found {
 			result[key] = value
@@ -193,7 +192,7 @@ func (m *MemorySessionCache) SetMany(ctx context.Context, values map[string][]by
 
 	for key, value := range values {
 		if bag.Prefix != "" {
-			key = bag.Prefix + "::" + key
+			key = bag.Prefix + KeyPrefixDelimiter + key
 		}
 		syncCache[key] = value
 	}
@@ -208,137 +207,4 @@ func (m *MemorySessionCache) Close() error {
 	// Clear all data
 	m.cache = make(map[string]map[string][]byte)
 	return nil
-}
-
-// namespacedSessionCache wraps a SessionCache to operate within a fixed namespace.
-type namespacedSessionCache struct {
-	cache     types.SessionCache
-	namespace string
-}
-
-// prefixKey adds the namespace as a prefix to the key.
-func (n *namespacedSessionCache) prefixKey(key string) string {
-	if n.namespace == "" {
-		return key
-	}
-	return n.namespace + "::" + key
-}
-
-// Get retrieves a value from the cache by key (namespace is fixed).
-func (n *namespacedSessionCache) Get(ctx context.Context, key string, opt ...types.SessionCacheOption) ([]byte, bool, error) {
-	// Prefix the key with the namespace for isolation
-	prefixedKey := n.prefixKey(key)
-	return n.cache.Get(ctx, prefixedKey, opt...)
-}
-
-// GetMany retrieves multiple values from the cache by keys (namespace is fixed).
-func (n *namespacedSessionCache) GetMany(ctx context.Context, keys []string, opt ...types.SessionCacheOption) (map[string][]byte, error) {
-	// Prefix all keys with the namespace for isolation
-	prefixedKeys := make([]string, len(keys))
-	for i, key := range keys {
-		prefixedKeys[i] = n.prefixKey(key)
-	}
-
-	result, err := n.cache.GetMany(ctx, prefixedKeys, opt...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove the namespace prefix from the result keys
-	unprefixedResult := make(map[string][]byte)
-	for prefixedKey, value := range result {
-		unprefixedKey := strings.TrimPrefix(prefixedKey, n.namespace+"::")
-		unprefixedResult[unprefixedKey] = value
-	}
-
-	return unprefixedResult, nil
-}
-
-// Set stores a value in the cache with the given key (namespace is fixed).
-func (n *namespacedSessionCache) Set(ctx context.Context, key string, value []byte, opt ...types.SessionCacheOption) error {
-	// Prefix the key with the namespace for isolation
-	prefixedKey := n.prefixKey(key)
-	return n.cache.Set(ctx, prefixedKey, value, opt...)
-}
-
-// SetMany stores multiple values in the cache (namespace is fixed).
-func (n *namespacedSessionCache) SetMany(ctx context.Context, values map[string][]byte, opt ...types.SessionCacheOption) error {
-	// Prefix all keys with the namespace for isolation
-	prefixedValues := make(map[string][]byte)
-	for key, value := range values {
-		prefixedKey := n.prefixKey(key)
-		prefixedValues[prefixedKey] = value
-	}
-	return n.cache.SetMany(ctx, prefixedValues, opt...)
-}
-
-// Delete removes a value from the cache by key (namespace is fixed).
-func (n *namespacedSessionCache) Delete(ctx context.Context, key string, opt ...types.SessionCacheOption) error {
-	// Prefix the key with the namespace for isolation
-	prefixedKey := n.prefixKey(key)
-	return n.cache.Delete(ctx, prefixedKey, opt...)
-}
-
-// GetAll returns all key-value pairs in the fixed namespace.
-func (n *namespacedSessionCache) GetAll(ctx context.Context, opt ...types.SessionCacheOption) (map[string][]byte, error) {
-	// Get all values and filter by namespace prefix
-	allValues, err := n.cache.GetAll(ctx, opt...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter to only include keys with our namespace prefix
-	namespacePrefix := n.namespace + "::"
-	result := make(map[string][]byte)
-	for key, value := range allValues {
-		if strings.HasPrefix(key, namespacePrefix) {
-			unprefixedKey := strings.TrimPrefix(key, namespacePrefix)
-			result[unprefixedKey] = value
-		}
-	}
-
-	return result, nil
-}
-
-// Clear removes all values from the cache.
-func (n *namespacedSessionCache) Clear(ctx context.Context, opt ...types.SessionCacheOption) error {
-	// Get all values and delete only those with our namespace prefix
-	allValues, err := n.cache.GetAll(ctx, opt...)
-	if err != nil {
-		return err
-	}
-
-	namespacePrefix := n.namespace + "::"
-	for key := range allValues {
-		if strings.HasPrefix(key, namespacePrefix) {
-			err := n.cache.Delete(ctx, key, opt...)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// Close performs any necessary cleanup when the cache is no longer needed.
-func (n *namespacedSessionCache) Close() error {
-	return n.cache.Close()
-}
-
-// WithNamespace returns a curried session cache that operates within a fixed namespace.
-func (n *namespacedSessionCache) WithNamespace(namespace string) types.SessionCache {
-	// For a namespaced cache, we can create another namespaced cache with the new namespace
-	return &namespacedSessionCache{
-		cache:     n.cache,
-		namespace: namespace,
-	}
-}
-
-// WithNamespace returns a curried session cache that operates within a fixed namespace.
-func (m *MemorySessionCache) WithNamespace(namespace string) types.SessionCache {
-	return &namespacedSessionCache{
-		cache:     m,
-		namespace: namespace,
-	}
 }
