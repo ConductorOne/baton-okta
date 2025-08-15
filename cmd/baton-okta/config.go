@@ -26,10 +26,12 @@ var (
 		field.WithDescription("Whether to allow group to direct assignment conversion when provisioning"))
 	awsSourceIdentityMode = field.BoolField("aws-source-identity-mode",
 		field.WithDescription("Enable AWS source identity mode. When set, user and group identities are loaded from the source connector .c1z file"))
-	awsOktaAppId = field.StringField("aws-okta-app-id", field.WithDescription("The Okta app id for the AWS application"))
-	SyncSecrets  = field.BoolField("sync-secrets", field.WithDescription("Whether to sync secrets or not"), field.WithDefaultValue(false))
+	awsOktaAppId       = field.StringField("aws-okta-app-id", field.WithDescription("The Okta app id for the AWS application"))
+	SyncSecrets        = field.BoolField("sync-secrets", field.WithDescription("Whether to sync secrets or not"), field.WithDefaultValue(false))
+	filterEmailDomains = field.StringSliceField("filter-email-domains", field.WithDescription("Only sync users with primary email addresses that match one of the provided domains. Any users that don't match will be ignored. When empty, all users will be synced."))
 )
 
+// TODO(steve): how do i know if some of these relationships are only for v1 or for v2?
 var relationships = []field.SchemaFieldRelationship{
 	field.FieldsDependentOn([]field.SchemaField{oktaPrivateKeyId, oktaPrivateKey}, []field.SchemaField{oktaClientId}),
 	field.FieldsDependentOn([]field.SchemaField{awsOktaAppId}, []field.SchemaField{awsIdentityCenterMode}),
@@ -60,4 +62,5 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	SyncSecrets,
 	awsSourceIdentityMode,
 	awsAllowGroupToDirectAssignmentConversionForProvisioning,
+	filterEmailDomains,
 }, field.WithConstraints(relationships...))

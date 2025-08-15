@@ -35,6 +35,7 @@ type Okta struct {
 	awsConfig           *awsConfig
 	SyncSecrets         bool
 	userRoleCache       sync.Map
+	filterEmailDomains  []string
 }
 
 type ciamConfig struct {
@@ -102,6 +103,7 @@ type Config struct {
 	AWSSourceIdentityMode                                 bool
 	AllowGroupToDirectAssignmentConversionForProvisioning bool
 	SyncSecrets                                           bool
+	FilterEmailDomains                                    []string
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -456,7 +458,8 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,
 		},
-		awsConfig: awsConfig,
+		awsConfig:          awsConfig,
+		filterEmailDomains: cfg.FilterEmailDomains,
 	}, nil
 }
 
