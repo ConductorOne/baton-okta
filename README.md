@@ -65,6 +65,7 @@ We have also introduced resourceset-bindings(resourcesetID and custom roles ID) 
 ## Resourceset-bindings, custom roles and members(Users or Groups) usage:
 
 - Let's use some IDs for this example
+
 ```
 Resource Set `iamkuwy3gqcfNexfQ697`
 Custom Role `cr0kuwv5507zJCtSy697`
@@ -72,6 +73,7 @@ Member `00ujp51vjgWd6ylZ6697`
 ```
 
 - Granting custom roles for users.
+
 ```
 BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 --grant-entitlement 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member' --grant-principal-type 'user' --grant-principal '00ujp51vjgWd6ylZ6697'
@@ -80,15 +82,17 @@ BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 In the previous example we granted the custom role `cr0kuwv5507zJCtSy697` to user `00ujp5a9z0rMTsPRW697`.
 
 - Revoking custom role grants(Unassigns a Member)
+
 ```
 BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
---revoke-grant 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member:user:00ujp51vjgWd6ylZ6697' 
+--revoke-grant 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member:user:00ujp51vjgWd6ylZ6697'
 ```
 
 - Revoking everything associated to custom role(Deletes a Binding of a Role)
+
 ```
 BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
-resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697 
+resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697
 ```
 
 # Contributing, Support and Issues
@@ -109,36 +113,44 @@ Usage:
 Available Commands:
   capabilities       Get connector capabilities
   completion         Generate the autocompletion script for the specified shell
+  config             Get the connector config schema
   help               Help about any command
 
 Flags:
-      --api-token string             The API token for the service account ($BATON_API_TOKEN)
-      --aws-identity-center-mode     Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced ($BATON_AWS_IDENTITY_CENTER_MODE)
-      --aws-okta-app-id string       The Okta app id for the AWS application ($BATON_AWS_OKTA_APP_ID)
-      --cache                        Enable response cache ($BATON_CACHE) (default true)
-      --cache-tti int                Response cache cleanup interval in seconds ($BATON_CACHE_TTI) (default 60)
-      --cache-ttl int                Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
-      --ciam                         Whether to run in CIAM mode or not. In CIAM mode, only roles and the users assigned to roles are synced ($BATON_CIAM)
-      --ciam-email-domains strings   The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role ($BATON_CIAM_EMAIL_DOMAINS)
-      --client-id string             The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
-      --client-secret string         The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
-      --domain string                required: The URL for the Okta organization ($BATON_DOMAIN)
-  -f, --file string                  The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
-  -h, --help                         help for baton-okta
-      --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
-      --log-level string             The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
-      --okta-client-id string        The Okta Client ID ($BATON_OKTA_CLIENT_ID)
-      --okta-private-key string      The Okta Private Key. This can be the whole private key or the path to the private key ($BATON_OKTA_PRIVATE_KEY)
-      --okta-private-key-id string   The Okta Private Key ID ($BATON_OKTA_PRIVATE_KEY_ID)
-      --okta-provisioning            ($BATON_OKTA_PROVISIONING)
-  -p, --provisioning                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
-      --skip-full-sync               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
-      --skip-secondary-emails        Skip syncing secondary emails ($BATON_SKIP_SECONDARY_EMAILS)
-      --sync-custom-roles            Enable syncing custom roles ($BATON_SYNC_CUSTOM_ROLES)
-      --sync-inactive-apps           Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
-      --sync-secrets                 Whether to sync secrets or not ($BATON_SYNC_SECRETS)
-      --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
-  -v, --version                      version for baton-okta
+      --api-token string                                                   The API token for the service account ($BATON_API_TOKEN)
+      --aws-allow-group-to-direct-assignment-conversion-for-provisioning   Whether to allow group to direct assignment conversion when provisioning ($BATON_AWS_ALLOW_GROUP_TO_DIRECT_ASSIGNMENT_CONVERSION_FOR_PROVISIONING)
+      --aws-identity-center-mode                                           Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced ($BATON_AWS_IDENTITY_CENTER_MODE)
+      --aws-okta-app-id string                                             The Okta app id for the AWS application ($BATON_AWS_OKTA_APP_ID)
+      --aws-source-identity-mode                                           Enable AWS source identity mode. When set, user and group identities are loaded from the source connector .c1z file ($BATON_AWS_SOURCE_IDENTITY_MODE)
+      --cache                                                              Enable response cache ($BATON_CACHE) (default true)
+      --cache-tti int                                                      Response cache cleanup interval in seconds ($BATON_CACHE_TTI) (default 60)
+      --cache-ttl int                                                      Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
+      --ciam                                                               Whether to run in CIAM mode or not. In CIAM mode, only roles and the users assigned to roles are synced ($BATON_CIAM)
+      --ciam-email-domains strings                                         The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role ($BATON_CIAM_EMAIL_DOMAINS)
+      --client-id string                                                   The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
+      --client-secret string                                               The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
+      --domain string                                                      required: The URL for the Okta organization ($BATON_DOMAIN)
+      --external-resource-c1z string                                       The path to the c1z file to sync external baton resources with ($BATON_EXTERNAL_RESOURCE_C1Z)
+      --external-resource-entitlement-id-filter string                     The entitlement that external users, groups must have access to sync external baton resources ($BATON_EXTERNAL_RESOURCE_ENTITLEMENT_ID_FILTER)
+  -f, --file string                                                        The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
+      --filter-email-domains strings                                       Only sync users with primary email addresses that match atleast one of the provided domains. When unset or empty, all users will be synced. ($BATON_FILTER_EMAIL_DOMAINS)
+  -h, --help                                                               help for baton-okta
+      --log-format string                                                  The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
+      --log-level string                                                   The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
+      --okta-client-id string                                              The Okta Client ID ($BATON_OKTA_CLIENT_ID)
+      --okta-private-key string                                            The Okta Private Key. This can be the whole private key or the path to the private key ($BATON_OKTA_PRIVATE_KEY)
+      --okta-private-key-id string                                         The Okta Private Key ID ($BATON_OKTA_PRIVATE_KEY_ID)
+      --okta-provisioning                                                  ($BATON_OKTA_PROVISIONING)
+      --otel-collector-endpoint string                                     The endpoint of the OpenTelemetry collector to send observability data to (used for both tracing and logging if specific endpoints are not provided) ($BATON_OTEL_COLLECTOR_ENDPOINT)
+  -p, --provisioning                                                       This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
+      --skip-full-sync                                                     This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
+      --skip-secondary-emails                                              Skip syncing secondary emails ($BATON_SKIP_SECONDARY_EMAILS)
+      --sync-custom-roles                                                  Enable syncing custom roles ($BATON_SYNC_CUSTOM_ROLES)
+      --sync-inactive-apps                                                 Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
+      --sync-resources strings                                             The resource IDs to sync ($BATON_SYNC_RESOURCES)
+      --sync-secrets                                                       Whether to sync secrets or not ($BATON_SYNC_SECRETS)
+      --ticketing                                                          This must be set to enable ticketing support ($BATON_TICKETING)
+  -v, --version                                                            version for baton-okta
 
 Use "baton-okta [command] --help" for more information about a command.
 ```
