@@ -27,9 +27,8 @@ const usersCountProfileKey = "users_count"
 const builtInGroupType = "BUILT_IN"
 
 type groupResourceType struct {
-	resourceType     *v2.ResourceType
-	connector        *Okta
-	userEmailFilters []string
+	resourceType *v2.ResourceType
+	connector    *Okta
 }
 
 func (o *groupResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
