@@ -35,7 +35,7 @@ type Okta struct {
 	awsConfig           *awsConfig
 	SyncSecrets         bool
 	userRoleCache       sync.Map
-	filterEmailDomains  []string
+	userFilters         *userFilterConfig
 }
 
 type ciamConfig struct {
@@ -81,6 +81,12 @@ type oktaAWSAppSettings struct {
 	SamlRolesUnionEnabled        bool
 	appGroupCache                sync.Map // group ID to app group cache
 	notAppGroupCache             sync.Map // group IDs that are not app groups
+}
+
+type userFilterConfig struct {
+	includedEmailDomains []string
+	resultsCache         map[string]userFilterResult // user ID to userFilterResult
+	resultsCacheMutex    sync.Mutex
 }
 
 type Config struct {
@@ -208,7 +214,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.filterEmailDomains, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client),
 	}
 
 	if o.syncCustomRoles {
@@ -458,9 +464,21 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,
 		},
-		awsConfig:          awsConfig,
-		filterEmailDomains: cfg.FilterEmailDomains,
+		awsConfig: awsConfig,
+		userFilters: &userFilterConfig{
+			includedEmailDomains: lowerEmailDomains(cfg.FilterEmailDomains),
+			resultsCache:         make(map[string]userFilterResult),
+			resultsCacheMutex:    sync.Mutex{},
+		},
 	}, nil
+}
+
+func lowerEmailDomains(emailDomains []string) []string {
+	var loweredDomains []string
+	for _, domain := range emailDomains {
+		loweredDomains = append(loweredDomains, strings.ToLower(domain))
+	}
+	return loweredDomains
 }
 
 func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings, error) {
@@ -647,4 +665,44 @@ func accountIdFromARN(input string) (string, error) {
 		return "", fmt.Errorf("okta-aws-connector: invalid ARN: '%s': %w", input, err)
 	}
 	return parsedArn.AccountID, nil
+}
+
+type userFilterResult struct {
+	matchedEmailDomains bool
+}
+
+// write through cache
+func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User) bool {
+	// don't bother writing to cache if no email filters are set
+	if len(o.userFilters.includedEmailDomains) == 0 {
+		return true
+	}
+
+	userEmails := extractEmailsFromUserProfile(user)
+	shouldInclude := shouldIncludeUserByEmails(userEmails, o.userFilters.includedEmailDomains)
+
+	o.userFilters.resultsCacheMutex.Lock()
+	defer o.userFilters.resultsCacheMutex.Unlock()
+	o.userFilters.resultsCache[user.Id] = userFilterResult{
+		matchedEmailDomains: shouldInclude,
+	}
+
+	return shouldInclude
+}
+
+// read from cache
+func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, userId string) (bool, bool) {
+	// don't bother reading from cache if no email filters are set
+	if len(o.userFilters.includedEmailDomains) == 0 {
+		return true, true
+	}
+
+	o.userFilters.resultsCacheMutex.Lock()
+	defer o.userFilters.resultsCacheMutex.Unlock()
+	result, ok := o.userFilters.resultsCache[userId]
+	if !ok {
+		return false, false
+	}
+
+	return result.matchedEmailDomains, true
 }

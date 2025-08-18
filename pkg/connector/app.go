@@ -44,17 +44,13 @@ func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 }
 
 func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
-	var loweredFilters []string
-	for _, ef := range filterEmailDomains {
-		loweredFilters = append(loweredFilters, strings.ToLower(ef))
-	}
 	return &appResourceType{
 		resourceType:     resourceTypeApp,
 		domain:           domain,
 		apiToken:         apiToken,
 		client:           client,
 		syncInactiveApps: syncInactiveApps,
-		userEmailFilters: loweredFilters,
+		userEmailFilters: filterEmailDomains,
 	}
 }
 

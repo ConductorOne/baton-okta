@@ -40,7 +40,6 @@ const (
 type userResourceType struct {
 	resourceType     *v2.ResourceType
 	ciamEmailFilters []string
-	emailFilters     []string
 	connector        *Okta
 }
 
@@ -96,7 +95,8 @@ func (o *userResourceType) List(
 			continue
 		}
 		// for okta v2, we only attempt to filter users by email domains when a list is provided
-		if len(o.emailFilters) > 0 && !shouldIncludeOktaUser(user, o.emailFilters) {
+		shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+		if !shouldInclude {
 			continue
 		}
 		resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
@@ -363,13 +363,8 @@ func ciamUserBuilder(connector *Okta) *userResourceType {
 }
 
 func userBuilder(connector *Okta) *userResourceType {
-	var loweredFilters []string
-	for _, ef := range connector.filterEmailDomains {
-		loweredFilters = append(loweredFilters, strings.ToLower(ef))
-	}
 	return &userResourceType{
 		resourceType: resourceTypeUser,
-		emailFilters: loweredFilters,
 		connector:    connector,
 	}
 }
@@ -648,7 +643,8 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	}
 
 	// for okta v2, we only attempt to filter users by email domains when a list is provided
-	if len(o.emailFilters) > 0 && !shouldIncludeOktaUser(user, o.emailFilters) {
+	shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+	if !shouldInclude {
 		return nil, annos, nil
 	}
 

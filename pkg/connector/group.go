@@ -27,8 +27,9 @@ const usersCountProfileKey = "users_count"
 const builtInGroupType = "BUILT_IN"
 
 type groupResourceType struct {
-	resourceType *v2.ResourceType
-	connector    *Okta
+	resourceType     *v2.ResourceType
+	connector        *Okta
+	userEmailFilters []string
 }
 
 func (o *groupResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -183,6 +184,11 @@ func (o *groupResourceType) Grants(
 			}
 
 			for _, user := range users {
+				shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+				if !shouldInclude {
+					continue
+				}
+
 				rv = append(rv, groupGrant(resource, user))
 			}
 		} else {
