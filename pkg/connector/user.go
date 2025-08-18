@@ -187,22 +187,81 @@ func embeddedOktaUserFromAppUser(appUser *okta.AppUser) (*okta.User, error) {
 	return oktaUser, nil
 }
 
-func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
+// extractEmailsFromUserProfile safely extracts email addresses from a regular user profile.
+// It checks for email, secondEmail, and login fields that contain email addresses.
+func extractEmailsFromUserProfile(user *okta.User) []string {
 	var userEmails []string
-	oktaProfile := *u.Profile
-	if email, ok := oktaProfile["email"].(string); ok {
+
+	// Check if profile exists
+	if user == nil || user.Profile == nil {
+		return userEmails
+	}
+
+	oktaProfile := *user.Profile
+
+	// Extract primary email
+	if email, ok := oktaProfile["email"].(string); ok && email != "" {
 		userEmails = append(userEmails, email)
 	}
-	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok {
+
+	// Extract secondary email
+	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" {
 		userEmails = append(userEmails, secondEmail)
 	}
 
-	if login, ok := oktaProfile["login"].(string); ok {
+	// Check if login field contains an email address
+	if login, ok := oktaProfile["login"].(string); ok && login != "" {
 		if strings.Contains(login, "@") {
 			userEmails = append(userEmails, login)
 		}
 	}
 
+	return userEmails
+}
+
+// extractEmailsFromAppUserProfile safely extracts email addresses from an app user profile.
+// It checks for email, secondEmail, and login fields that contain email addresses.
+func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
+	var userEmails []string
+
+	// Check if profile exists
+	if appUser == nil || appUser.Profile == nil {
+		return userEmails
+	}
+
+	// Type assert the profile to map[string]interface{}
+	oktaProfile, ok := appUser.Profile.(map[string]interface{})
+	if !ok {
+		return userEmails
+	}
+
+	// Extract primary email
+	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+		userEmails = append(userEmails, email)
+	}
+
+	// Extract secondary email
+	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" {
+		userEmails = append(userEmails, secondEmail)
+	}
+
+	// Check if login field contains an email address
+	if login, ok := oktaProfile["login"].(string); ok && login != "" {
+		if strings.Contains(login, "@") {
+			userEmails = append(userEmails, login)
+		}
+	}
+
+	return userEmails
+}
+
+func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
+	userEmails := extractEmailsFromUserProfile(u)
+	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
+}
+
+func shouldIncludeOktaAppUser(u *okta.AppUser, emailDomainFilters []string) bool {
+	userEmails := extractEmailsFromAppUserProfile(u)
 	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
 }
 
