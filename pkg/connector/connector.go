@@ -208,7 +208,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.filterEmailDomains, o.client),
 	}
 
 	if o.syncCustomRoles {

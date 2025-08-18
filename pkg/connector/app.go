@@ -25,6 +25,7 @@ type appResourceType struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
+	userEmailFilters []string
 	client           *okta.Client
 }
 
@@ -42,13 +43,18 @@ func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
+	var loweredFilters []string
+	for _, ef := range filterEmailDomains {
+		loweredFilters = append(loweredFilters, strings.ToLower(ef))
+	}
 	return &appResourceType{
 		resourceType:     resourceTypeApp,
 		domain:           domain,
 		apiToken:         apiToken,
 		client:           client,
 		syncInactiveApps: syncInactiveApps,
+		userEmailFilters: loweredFilters,
 	}
 }
 
@@ -219,6 +225,11 @@ func (o *appResourceType) listAppUsersGrants(
 	}
 
 	for _, applicationUser := range applicationUsers {
+		// for okta v2, we only attempt to filter app users by email domains when a list is provided
+		if len(o.userEmailFilters) > 0 && !shouldIncludeOktaAppUser(applicationUser, o.userEmailFilters) {
+			continue
+		}
+
 		userID := applicationUser.Id
 		principalID := &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}
 		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,

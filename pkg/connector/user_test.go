@@ -29,6 +29,14 @@ func Test_shouldIncludeUserByEmails(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "no match, user email domain is a substring",
+			args: args{
+				userEmails:         []string{"alice@foo.com"},
+				emailDomainFilters: []string{"food.com"},
+			},
+			want: false,
+		},
+		{
 			name: "multiple filters",
 			args: args{
 				userEmails:         []string{"alice@foo.com"},
@@ -57,6 +65,38 @@ func Test_shouldIncludeUserByEmails(t *testing.T) {
 			args: args{
 				userEmails:         []string{"alice@foo.com"},
 				emailDomainFilters: make([]string, 0, 100),
+			},
+			want: false,
+		},
+		{
+			name: "one empty email in list",
+			args: args{
+				userEmails:         []string{""},
+				emailDomainFilters: []string{"foo.com"},
+			},
+			want: false,
+		},
+		{
+			name: "no emails in list",
+			args: args{
+				userEmails:         []string{},
+				emailDomainFilters: []string{"foo.com"},
+			},
+			want: false,
+		},
+		{
+			name: "nil email list",
+			args: args{
+				userEmails:         nil,
+				emailDomainFilters: []string{"foo.com"},
+			},
+			want: false,
+		},
+		{
+			name: "empty email list (has capacity)",
+			args: args{
+				userEmails:         make([]string, 0, 100),
+				emailDomainFilters: []string{"foo.com"},
 			},
 			want: false,
 		},

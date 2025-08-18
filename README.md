@@ -133,7 +133,7 @@ Flags:
       --external-resource-c1z string                                       The path to the c1z file to sync external baton resources with ($BATON_EXTERNAL_RESOURCE_C1Z)
       --external-resource-entitlement-id-filter string                     The entitlement that external users, groups must have access to sync external baton resources ($BATON_EXTERNAL_RESOURCE_ENTITLEMENT_ID_FILTER)
   -f, --file string                                                        The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
-      --filter-email-domains strings                                       Only sync users with primary email addresses that match atleast one of the provided domains. When unset or empty, all users will be synced. ($BATON_FILTER_EMAIL_DOMAINS)
+      --filter-email-domains strings                                       Only sync users with primary email addresses that match at least one of the provided domains. When unset or empty, all users will be synced. ($BATON_FILTER_EMAIL_DOMAINS)
   -h, --help                                                               help for baton-okta
       --log-format string                                                  The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
       --log-level string                                                   The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")

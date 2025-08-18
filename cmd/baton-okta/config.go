@@ -30,7 +30,7 @@ var (
 	SyncSecrets        = field.BoolField("sync-secrets", field.WithDescription("Whether to sync secrets or not"), field.WithDefaultValue(false))
 	filterEmailDomains = field.StringSliceField(
 		"filter-email-domains",
-		field.WithDescription("Only sync users with primary email addresses that match atleast one of the provided domains. When unset or empty, all users will be synced."),
+		field.WithDescription("Only sync users with primary email addresses that match at least one of the provided domains. When unset or empty, all users will be synced."),
 	)
 )
 
