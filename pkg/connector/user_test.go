@@ -77,6 +77,14 @@ func Test_shouldIncludeUserByEmails(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "one empty email, one matching email in list",
+			args: args{
+				userEmails:         []string{"", "alice@foo.com"},
+				emailDomainFilters: []string{"foo.com"},
+			},
+			want: true,
+		},
+		{
 			name: "no emails in list",
 			args: args{
 				userEmails:         []string{},
