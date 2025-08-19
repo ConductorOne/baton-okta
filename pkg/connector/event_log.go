@@ -80,6 +80,8 @@ func (connector *Okta) ListEvents(
 				if err != nil {
 					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
 				} else {
+					resourceEvent := event.GetResourceChangeEvent()
+					l.Debug("okta-connectorv2: event", zap.String("event_type", log.EventType), zap.String("resource_type", resourceEvent.GetResourceId().GetResourceType()), zap.String("resource_id", resourceEvent.GetResourceId().GetResource()))
 					rv = append(rv, event)
 				}
 			}
