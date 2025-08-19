@@ -183,6 +183,11 @@ func (o *groupResourceType) Grants(
 			}
 
 			for _, user := range users {
+				shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+				if !shouldInclude {
+					continue
+				}
+
 				rv = append(rv, groupGrant(resource, user))
 			}
 		} else {
