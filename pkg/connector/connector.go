@@ -671,7 +671,8 @@ type userFilterResult struct {
 	matchedEmailDomains bool
 }
 
-// shouldIncludeUserAndSetCache writes to the user filter cache
+// shouldIncludeUserAndSetCache evaluates and returns if the user meets the filtering criteria,
+// while also writing the result to the user filter cache.
 func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User) bool {
 	// don't bother writing to cache if no email filters are set
 	if len(o.userFilters.includedEmailDomains) == 0 {
@@ -690,7 +691,7 @@ func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User
 	return shouldInclude
 }
 
-// shouldIncludeUserFromCache reads from the user filter cache
+// shouldIncludeUserFromCache reads from the user filter cache and returns if the user meets the filtering criteria.
 func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, userId string) (bool, bool) {
 	// don't bother reading from cache if no email filters are set
 	if len(o.userFilters.includedEmailDomains) == 0 {
