@@ -3,7 +3,7 @@ module github.com/conductorone/baton-okta
 go 1.23.4
 
 require (
-	github.com/conductorone/baton-sdk v0.3.15
+	github.com/conductorone/baton-sdk v0.3.35
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.5-conductorone
 	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
@@ -51,6 +51,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.11.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
 )
 

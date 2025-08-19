@@ -14,10 +14,13 @@ import (
 	c1zmanager "github.com/conductorone/baton-sdk/pkg/dotc1z/manager"
 	"github.com/conductorone/baton-sdk/pkg/sdk"
 	"github.com/conductorone/baton-sdk/pkg/sync"
-	sync_compactor "github.com/conductorone/baton-sdk/pkg/synccompactor/naive"
+	"github.com/conductorone/baton-sdk/pkg/synccompactor/attached"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
+
+var tracer = otel.Tracer("baton-sdk/pkg.synccompactor")
 
 type Compactor struct {
 	entries []*CompactableSync
@@ -74,20 +77,32 @@ func NewCompactor(ctx context.Context, outputDir string, compactableSyncs []*Com
 }
 
 func (c *Compactor) Compact(ctx context.Context) (*CompactableSync, error) {
+	ctx, span := tracer.Start(ctx, "Compactor.Compact")
+	defer span.End()
 	if len(c.entries) < 2 {
 		return nil, nil
 	}
 
 	base := c.entries[0]
-	for i := 1; i < len(c.entries); i++ {
-		applied := c.entries[i]
+	incrementals := c.entries[1:]
 
-		compactable, err := c.doOneCompaction(ctx, base, applied)
-		if err != nil {
-			return nil, err
+	// Lets compact all the incrementals together first.
+	compactedIncrementals := incrementals[0]
+	if len(incrementals) > 1 {
+		for i := 1; i < len(incrementals); i++ {
+			nextEntry := incrementals[i]
+			compacted, err := c.doOneCompaction(ctx, compactedIncrementals, nextEntry)
+			if err != nil {
+				return nil, err
+			}
+			compactedIncrementals = compacted
 		}
+	}
 
-		base = compactable
+	// Then apply that onto our base.
+	base, err := c.doOneCompaction(ctx, base, compactedIncrementals)
+	if err != nil {
+		return nil, err
 	}
 
 	l := ctxzap.Extract(ctx)
@@ -191,6 +206,8 @@ func getLatestObjects(ctx context.Context, info *CompactableSync) (*reader_v2.Sy
 }
 
 func (c *Compactor) doOneCompaction(ctx context.Context, base *CompactableSync, applied *CompactableSync) (*CompactableSync, error) {
+	ctx, span := tracer.Start(ctx, "Compactor.doOneCompaction")
+	defer span.End()
 	l := ctxzap.Extract(ctx)
 	l.Info(
 		"running compaction",
@@ -231,9 +248,9 @@ func (c *Compactor) doOneCompaction(ctx context.Context, base *CompactableSync, 
 		return nil, err
 	}
 
-	runner := sync_compactor.NewNaiveCompactor(baseFile, appliedFile, newFile)
-
-	if err := runner.Compact(ctx); err != nil {
+	// runner := naive.NewNaiveCompactor(baseFile, appliedFile, newFile)
+	runner := attached.NewAttachedCompactor(baseFile, appliedFile, newFile)
+	if err := runner.CompactWithSyncID(ctx, newSync); err != nil {
 		l.Error("error running compaction", zap.Error(err))
 		return nil, err
 	}
