@@ -75,13 +75,11 @@ func (connector *Okta) ListEvents(
 		relevantFilters := filterMap[log.EventType]
 		for _, filter := range relevantFilters {
 			if filter.Matches(log) {
-				event, err := filter.Handle(log)
+				event, err := filter.Handle(l, log)
 				// MJP we don't want to stop, we should just log the error and continue
 				if err != nil {
 					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
 				} else {
-					resourceEvent := event.GetResourceChangeEvent()
-					l.Debug("okta-connectorv2: event", zap.String("event_type", log.EventType), zap.String("resource_type", resourceEvent.GetResourceId().GetResourceType()), zap.String("resource_id", resourceEvent.GetResourceId().GetResource()))
 					rv = append(rv, event)
 				}
 			}
