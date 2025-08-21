@@ -671,9 +671,9 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		}
 		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
 		if ok && usersCount == 0 {
-			annos := annotations.Annotations(resource.GetAnnotations())
-			annos.Update(&v2.SkipGrants{})
-			resource.Annotations = annos
+			groupAnnos := annotations.Annotations(resource.GetAnnotations())
+			groupAnnos.Update(&v2.SkipGrants{})
+			resource.Annotations = groupAnnos
 		}
 	}
 
