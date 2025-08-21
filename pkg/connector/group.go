@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -25,6 +27,7 @@ import (
 const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
 const builtInGroupType = "BUILT_IN"
+const apiPathGetGroupFmt = "/api/v1/groups/%s"
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
@@ -366,6 +369,35 @@ func (o *groupResourceType) listAWSGroups(ctx context.Context, token *pagination
 	return groups, respCtx, nil
 }
 
+func (o *groupResourceType) GetGroupWithParams(
+	ctx context.Context,
+	groupID string,
+) (*okta.Group, *okta.Response, error) {
+	reqUrl, err := url.Parse(fmt.Sprintf(apiPathGetGroupFmt, groupID))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reqUrl.RawQuery = query.NewQueryParams(query.WithExpand("stats,app")).String()
+
+	rq := o.connector.client.CloneRequestExecutor()
+	req, err := rq.
+		WithAccept(ContentType).
+		WithContentType(ContentType).
+		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var group *okta.Group
+	resp, err := rq.Do(ctx, req, &group)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return group, resp, nil
+}
+
 /*
 This filter field uses a regular expression to filter AWS-related groups and extract the accountid and role.
 
@@ -614,7 +646,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		}
 		group, resp, err = o.getAWSGroup(ctx, resourceId.Resource)
 	} else {
-		group, resp, err = o.connector.client.Group.GetGroup(ctx, resourceId.Resource)
+		group, resp, err = o.GetGroupWithParams(ctx, resourceId.Resource)
 	}
 
 	if err != nil {
@@ -630,6 +662,19 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 	resource, err := o.groupResource(ctx, group)
 	if err != nil {
 		return nil, annos, err
+	}
+
+	if o.connector.awsConfig == nil || o.connector.awsConfig.Enabled {
+		groupTrait, err := sdkResource.GetGroupTrait(resource)
+		if err != nil {
+			return nil, annos, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
+		}
+		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+		if ok && usersCount == 0 {
+			annos := annotations.Annotations(resource.GetAnnotations())
+			annos.Update(&v2.SkipGrants{})
+			resource.Annotations = annos
+		}
 	}
 
 	return resource, annos, nil
