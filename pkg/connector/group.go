@@ -664,7 +664,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		return nil, annos, err
 	}
 
-	if o.connector.awsConfig == nil || o.connector.awsConfig.Enabled {
+	if o.connector.awsConfig == nil || !o.connector.awsConfig.Enabled {
 		groupTrait, err := sdkResource.GetGroupTrait(resource)
 		if err != nil {
 			return nil, annos, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
