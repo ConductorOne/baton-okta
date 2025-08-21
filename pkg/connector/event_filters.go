@@ -37,49 +37,49 @@ var (
 			)
 			return nil
 		},
-	},
+	}
 	CreateGrantFilter = EventFilter{
-        EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
-        TargetTypes: mapset.NewSet[string]("UserGroup"),
-        EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
-            if len(targetMap["UserGroup"]) != 1 {
-                return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
-            }
-            userGroup := targetMap["UserGroup"][0]
-            if len(targetMap["User"]) != 1 {
-                return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
-            }
-            user := targetMap["User"][0]
+		EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
+		TargetTypes: mapset.NewSet[string]("UserGroup"),
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["UserGroup"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
+			}
+			userGroup := targetMap["UserGroup"][0]
+			if len(targetMap["User"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			}
+			user := targetMap["User"][0]
 
-            resourceId := &v2.ResourceId{
-                ResourceType: resourceTypeGroup.Id,
-                Resource:     userGroup.Id,
-            }
+			resourceId := &v2.ResourceId{
+				ResourceType: resourceTypeGroup.Id,
+				Resource:     userGroup.Id,
+			}
 
-            entitlementId := fmtGrantIdV1(V1MembershipEntitlementID(resourceId.Resource), user.Id)
+			entitlementId := fmtGrantIdV1(V1MembershipEntitlementID(resourceId.Resource), user.Id)
 
-            // Change the type here to be the new grant add type
-            rv.Event = &v2.Event_CreateGrantEvent{
-                CreateGrantEvent: &v2.CreateGrantEvent{
-                    ResourceId:    resourceId,
-                    PrincipalId:   user.Id,
-                    EntitlementId: entitlementId,
-                    // parent_principal_id ??
-                    // parent_resource_id ??
-                },
-            }
+			// Change the type here to be the new grant add type
+			rv.Event = &v2.Event_CreateGrantEvent{
+				CreateGrantEvent: &v2.CreateGrantEvent{
+					ResourceId:    resourceId,
+					PrincipalId:   user.Id,
+					EntitlementId: entitlementId,
+					// parent_principal_id ??
+					// parent_resource_id ??
+				},
+			}
 
-            l.Debug("okta-event-feed: GrantAddFilter",
-                zap.String("event_type", event.EventType),
-                zap.String("resource_type", resourceId.ResourceType),
-                zap.String("resource_id", resourceId.Resource),
-                zap.String("group_display_name", userGroup.DisplayName),
-                zap.String("user_id", user.Id),
-                zap.String("entitlement_id", entitlementId),
-            )
-            return nil
-        },
-    },
+			l.Debug("okta-event-feed: GrantAddFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceId.ResourceType),
+				zap.String("resource_id", resourceId.Resource),
+				zap.String("group_display_name", userGroup.DisplayName),
+				zap.String("user_id", user.Id),
+				zap.String("entitlement_id", entitlementId),
+			)
+			return nil
+		},
+	}
 	ApplicationLifecycleFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
