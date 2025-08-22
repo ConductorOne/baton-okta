@@ -378,13 +378,14 @@ func (o *groupResourceType) GetGroupWithParams(
 		return nil, nil, err
 	}
 
-	reqUrl.RawQuery = query.NewQueryParams(query.WithExpand("stats,app")).String()
+	qp := query.NewQueryParams(query.WithExpand("stats,app")).String()
+	reqUrlStr := reqUrl.String() + qp
 
 	rq := o.connector.client.CloneRequestExecutor()
 	req, err := rq.
 		WithAccept(ContentType).
 		WithContentType(ContentType).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
+		NewRequest(http.MethodGet, reqUrlStr, nil)
 	if err != nil {
 		return nil, nil, err
 	}
