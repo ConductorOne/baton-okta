@@ -61,11 +61,15 @@ var (
 			// Change the type here to be the new grant add type
 			rv.Event = &v2.Event_CreateGrantEvent{
 				CreateGrantEvent: &v2.CreateGrantEvent{
-					ResourceId:    resourceId,
-					PrincipalId:   user.Id,
-					EntitlementId: entitlementId,
-					// parent_principal_id ??
-					// parent_resource_id ??
+					Entitlement: &v2.Entitlement{
+						Id: entitlementId,
+					},
+					Principal: &v2.Resource{
+						Id: &v2.ResourceId{
+							ResourceType: resourceTypeUser.Id,
+							Resource:     user.Id,
+						},
+					},
 				},
 			}
 
