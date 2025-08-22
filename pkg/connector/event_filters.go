@@ -14,7 +14,7 @@ import (
 
 var (
 	GroupChangeFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("group.user_membership.add", "group.lifecycle.create"),
+		EventTypes:  mapset.NewSet[string]("group.lifecycle.create"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
