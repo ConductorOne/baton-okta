@@ -47,10 +47,8 @@ func (connector *Okta) ListEvents(
 		ApplicationMembershipFilter,
 		RoleMembershipFilter,
 		UserLifecycleFilter,
-		CreateAddFilter,
+		CreateGrantFilter,
 	}
-
-	fmt.Println("************* Recieved event")
 
 	// Map from event type to possible filter matches
 	filterMap := make(map[string][]*EventFilter)

@@ -14,7 +14,7 @@ import (
 
 var (
 	GroupChangeFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("group.lifecycle.create"),
+		EventTypes:  mapset.NewSet[string]("group.user_membership.add", "group.lifecycle.create"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
@@ -39,7 +39,7 @@ var (
 			return nil
 		},
 	}
-	CreateAddFilter = EventFilter{
+	CreateGrantFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
@@ -62,7 +62,6 @@ var (
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
 
-			// Change the type here to be the new grant add type
 			rv.Event = &v2.Event_CreateGrantEvent{
 				CreateGrantEvent: &v2.CreateGrantEvent{
 					Entitlement: sdkEntitlement.NewAssignmentEntitlement(resource, "member"),
@@ -70,7 +69,7 @@ var (
 				},
 			}
 
-			l.Debug("okta-event-feed: GrantAddFilter",
+			l.Debug("okta-event-feed: CreateGrantFilter",
 				zap.String("event_type", event.EventType),
 				zap.String("resource_type", resourceTypeGroup.Id),
 				zap.String("resource_id", userGroup.Id),
