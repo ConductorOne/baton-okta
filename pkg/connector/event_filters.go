@@ -41,7 +41,7 @@ var (
 	}
 	CreateGrantFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
-		TargetTypes: mapset.NewSet[string]("UserGroup"),
+		TargetTypes: mapset.NewSet[string]("UserGroup", "User"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
