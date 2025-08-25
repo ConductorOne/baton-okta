@@ -137,12 +137,16 @@ var (
 				return false, nil
 			}
 
+			transactionType := "unknown"
+			if event.Transaction != nil {
+				transactionType = event.Transaction.Type
+			}
 			l.Debug("okta-event-feed: ApplicationMembershipFilter",
 				zap.String("event_type", event.EventType),
 				zap.String("resource_type", resourceId.ResourceType),
 				zap.String("resource_id", resourceId.Resource),
 				zap.String("app_display_name", appInstance.DisplayName),
-				zap.String("transaction_type", event.Transaction.Type),
+				zap.String("transaction_type", transactionType),
 			)
 			return true, nil
 		},
