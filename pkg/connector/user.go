@@ -17,7 +17,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/crypto"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -289,7 +290,31 @@ func (o *userResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+	appLinks, resp, err := o.connector.client.User.ListAppLinks(ctx, resource.Id.Resource)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch app links from okta: %w", handleOktaResponseError(resp, err))
+	}
+	rv := make([]*v2.Grant, 0)
+	for _, appLink := range appLinks {
+		var appTraitOpts []sdkResource.AppTraitOption
+		appResource, err := sdkResource.NewAppResource(appLink.Label, resourceTypeApp, appLink.AppInstanceId, appTraitOpts,
+			sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(appLink.AppInstanceId)}),
+			sdkResource.WithAnnotation(&v2.RawId{Id: appLink.AppInstanceId}),
+		)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		rv = append(rv, sdkGrant.NewGrant(appResource, "access", resource,
+			sdkGrant.WithAnnotation(
+				&v2.V1Identifier{
+					Id: fmtGrantIdV1(V1MembershipEntitlementID(appResource.Id.Resource), resource.Id.Resource),
+				},
+			),
+		))
+	}
+
+	return rv, "", nil, nil
 }
 
 func userName(user *okta.User) (string, string) {
@@ -376,8 +401,8 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 	oktaProfile := *user.Profile
 	oktaProfile["c1_okta_raw_user_status"] = user.Status
 
-	options := []resource.UserTraitOption{
-		resource.WithUserProfile(oktaProfile),
+	options := []sdkResource.UserTraitOption{
+		sdkResource.WithUserProfile(oktaProfile),
 		// TODO?: use the user types API to figure out the account type
 		// https://developer.okta.com/docs/reference/api/user-types/
 		// resource.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_UNSPECIFIED),
@@ -389,17 +414,17 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 	}
 
 	if user.Created != nil {
-		options = append(options, resource.WithCreatedAt(*user.Created))
+		options = append(options, sdkResource.WithCreatedAt(*user.Created))
 	}
 	if user.LastLogin != nil {
-		options = append(options, resource.WithLastLogin(*user.LastLogin))
+		options = append(options, sdkResource.WithLastLogin(*user.LastLogin))
 	}
 
 	if email, ok := oktaProfile["email"].(string); ok && email != "" {
-		options = append(options, resource.WithEmail(email, true))
+		options = append(options, sdkResource.WithEmail(email, true))
 	}
 	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" && !skipSecondaryEmails {
-		options = append(options, resource.WithEmail(secondEmail, false))
+		options = append(options, sdkResource.WithEmail(secondEmail, false))
 	}
 
 	if skipSecondaryEmails {
@@ -418,16 +443,16 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 				// If possible, calculate shortname alias from login
 				splitLogin := strings.Split(login, "@")
 				if len(splitLogin) == 2 {
-					options = append(options, resource.WithUserLogin(login, splitLogin[0]))
+					options = append(options, sdkResource.WithUserLogin(login, splitLogin[0]))
 				} else {
-					options = append(options, resource.WithUserLogin(login))
+					options = append(options, sdkResource.WithUserLogin(login))
 				}
 			}
 		}
 	}
 
 	if employeeIDs.Cardinality() > 0 {
-		options = append(options, resource.WithEmployeeID(employeeIDs.ToSlice()...))
+		options = append(options, sdkResource.WithEmployeeID(employeeIDs.ToSlice()...))
 	}
 
 	switch user.Status {
@@ -435,19 +460,19 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 	// case userStatusDeprovisioned:
 	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
 	case userStatusSuspended, userStatusDeprovisioned:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DISABLED, user.Status))
+		options = append(options, sdkResource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DISABLED, user.Status))
 	case userStatusActive, userStatusProvisioned, userStatusStaged, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_ENABLED, user.Status))
+		options = append(options, sdkResource.WithDetailedStatus(v2.UserTrait_Status_STATUS_ENABLED, user.Status))
 	default:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_UNSPECIFIED, user.Status))
+		options = append(options, sdkResource.WithDetailedStatus(v2.UserTrait_Status_STATUS_UNSPECIFIED, user.Status))
 	}
 
-	ret, err := resource.NewUserResource(
+	ret, err := sdkResource.NewUserResource(
 		displayName,
 		resourceTypeUser,
 		user.Id,
 		options,
-		resource.WithAnnotation(&v2.RawId{Id: user.Id}),
+		sdkResource.WithAnnotation(&v2.RawId{Id: user.Id}),
 	)
 	return ret, err
 }

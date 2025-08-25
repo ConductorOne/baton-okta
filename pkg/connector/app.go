@@ -21,12 +21,13 @@ import (
 )
 
 type appResourceType struct {
-	resourceType     *v2.ResourceType
-	domain           string
-	apiToken         string
-	syncInactiveApps bool
-	userEmailFilters []string
-	client           *okta.Client
+	resourceType             *v2.ResourceType
+	domain                   string
+	apiToken                 string
+	syncInactiveApps         bool
+	userEmailFilters         []string
+	client                   *okta.Client
+	useAppLinksForUserGrants bool
 }
 
 const (
@@ -34,23 +35,19 @@ const (
 	appGrantUser  = "user"
 )
 
-var appGrantTypes = []string{
-	appGrantGroup,
-	appGrantUser,
-}
-
 func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, useAppLinksForUserGrants bool, client *okta.Client) *appResourceType {
 	return &appResourceType{
-		resourceType:     resourceTypeApp,
-		domain:           domain,
-		apiToken:         apiToken,
-		client:           client,
-		syncInactiveApps: syncInactiveApps,
-		userEmailFilters: filterEmailDomains,
+		resourceType:             resourceTypeApp,
+		domain:                   domain,
+		apiToken:                 apiToken,
+		client:                   client,
+		syncInactiveApps:         syncInactiveApps,
+		userEmailFilters:         filterEmailDomains,
+		useAppLinksForUserGrants: useAppLinksForUserGrants,
 	}
 }
 
@@ -129,10 +126,14 @@ func (o *appResourceType) Grants(
 	switch bag.ResourceID() {
 	case "":
 		bag.Pop()
-		for _, appGrantType := range appGrantTypes {
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeApp.Id,
+			ResourceID:     appGrantGroup,
+		})
+		if !o.useAppLinksForUserGrants {
 			bag.Push(pagination.PageState{
 				ResourceTypeID: resourceTypeApp.Id,
-				ResourceID:     appGrantType,
+				ResourceID:     appGrantUser,
 			})
 		}
 	case appGrantGroup:
