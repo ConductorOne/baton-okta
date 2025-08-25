@@ -540,12 +540,12 @@ func getGroupStat(group *okta.Group, statName string) (float64, bool) {
 	return value, true
 }
 
-// getGroupUserCount retrieves the user count for a group
+// getGroupUserCount retrieves the user count for a group.
 func getGroupUserCount(group *okta.Group) (float64, bool) {
 	return getGroupStat(group, "usersCount")
 }
 
-// getGroupAppsCount retrieves the apps count for a group
+// getGroupAppsCount retrieves the apps count for a group.
 func getGroupAppsCount(group *okta.Group) (float64, bool) {
 	return getGroupStat(group, "appsCount")
 }
