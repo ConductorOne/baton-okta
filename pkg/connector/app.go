@@ -190,6 +190,10 @@ func (o *appResourceType) listAppGroupGrants(
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 				},
 			),
+			sdkGrant.WithAnnotation(&v2.GrantExpandable{
+				EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
+				Shallow:        true,
+			}),
 		))
 	}
 
