@@ -497,6 +497,10 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 		profileMap[usersCountProfileKey] = int64(userCount)
 	}
 
+	if appCount, exists := getGroupAppsCount(group); exists {
+		profileMap["apps_count"] = int64(appCount)
+	}
+
 	profile, err := structpb.NewStruct(profileMap)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to construct group profile for group trait: %w", err)
@@ -509,29 +513,41 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 	return ret, nil
 }
 
+func getGroupStat(group *okta.Group, statName string) (float64, bool) {
+	if group.Embedded == nil {
+		return 0, false
+	}
+	embeddedMap, ok := group.Embedded.(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+	stats, ok := embeddedMap["stats"]
+	if !ok {
+		return 0, false
+	}
+	statsMap, ok := stats.(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+	statValue, ok := statsMap[statName]
+	if !ok {
+		return 0, false
+	}
+	value, ok := statValue.(float64)
+	if !ok {
+		return 0, false
+	}
+	return value, true
+}
+
+// getGroupUserCount retrieves the user count for a group.
 func getGroupUserCount(group *okta.Group) (float64, bool) {
-	embedded := group.Embedded
-	if embedded == nil {
-		return 0, false
-	}
-	embeddedMap, ok := embedded.(map[string]interface{})
-	if !ok {
-		return 0, false
-	}
-	embeddedStats, ok := embeddedMap["stats"]
-	if !ok {
-		return 0, false
-	}
-	embeddedStatsMap, ok := embeddedStats.(map[string]interface{})
-	if !ok {
-		return 0, false
-	}
-	embeddedStatsUsersCount, ok := embeddedStatsMap["usersCount"]
-	if !ok {
-		return 0, false
-	}
-	userCount := embeddedStatsUsersCount.(float64)
-	return userCount, true
+	return getGroupStat(group, "usersCount")
+}
+
+// getGroupAppsCount retrieves the apps count for a group.
+func getGroupAppsCount(group *okta.Group) (float64, bool) {
+	return getGroupStat(group, "appsCount")
 }
 
 func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
