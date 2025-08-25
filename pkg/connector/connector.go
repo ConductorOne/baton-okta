@@ -396,6 +396,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			oktav5.WithCache(cfg.Cache),
 			oktav5.WithCacheTti(cfg.CacheTTI),
 			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithRateLimitPrevent(true),
 		)
 		if err != nil {
 			return nil, err
@@ -437,6 +438,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 			oktav5.WithCache(cfg.Cache),
 			oktav5.WithCacheTti(cfg.CacheTTI),
 			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithRateLimitPrevent(true),
 		)
 		if err != nil {
 			return nil, err
