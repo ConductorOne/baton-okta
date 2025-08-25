@@ -488,8 +488,16 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
-		_, _, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		_, resp, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
+			if resp != nil && resp.StatusCode == http.StatusNotFound {
+				l.Debug(
+					"okta-connector: revoke: user does not have app membership",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+				)
+				return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+			}
 			l.Warn(
 				"okta-connector: user does not have app membership",
 				zap.String("principal_id", principal.Id.String()),
