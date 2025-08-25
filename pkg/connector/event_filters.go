@@ -126,7 +126,7 @@ var (
 
 			// Filter out job transactions for application.user_membership.add events. We assume these are triggered by the
 			// group.application_assignment.add event for each user in the group.
-			if event.EventType == "application.user_membership.add" && event.Transaction.Type == "JOB" {
+			if event.EventType == "application.user_membership.add" && event.Transaction != nil && event.Transaction.Type == "JOB" {
 				l.Debug("okta-event-feed: ApplicationMembershipFilter - skipping job transaction",
 					zap.String("event_type", event.EventType),
 					zap.String("resource_type", resourceId.ResourceType),
