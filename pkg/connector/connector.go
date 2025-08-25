@@ -146,6 +146,12 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: v1AnnotationsForResourceType("user", true),
 	}
+	resourceTypeUserWithGrants = &v2.ResourceType{
+		Id:          "user-with-grants",
+		DisplayName: "User with Grants",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
+		Annotations: v1AnnotationsForResourceType("user", false),
+	}
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
 		DisplayName: "Group",
@@ -371,11 +377,6 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		oktaClient *okta.Client
 		scopes     = defaultScopes
 	)
-
-	if cfg.UseAppLinksForUserGrants {
-		// We need to fetch app links for users, so don't skip grants for user resource type.
-		resourceTypeUser.Annotations = v1AnnotationsForResourceType("user", false)
-	}
 
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {

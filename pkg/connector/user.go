@@ -375,13 +375,20 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	return oktaUsers, respCtx, nil
 }
 
+func getResourceType(useAppLinksForUserGrants bool) *v2.ResourceType {
+	if useAppLinksForUserGrants {
+		return resourceTypeUserWithGrants
+	}
+	return resourceTypeUser
+}
+
 func ciamUserBuilder(connector *Okta) *userResourceType {
 	var loweredFilters []string
 	for _, ef := range connector.ciamConfig.EmailDomains {
 		loweredFilters = append(loweredFilters, strings.ToLower(ef))
 	}
 	return &userResourceType{
-		resourceType:     resourceTypeUser,
+		resourceType:     getResourceType(connector.useAppLinksForUserGrants),
 		ciamEmailFilters: loweredFilters,
 		connector:        connector,
 	}
@@ -389,7 +396,7 @@ func ciamUserBuilder(connector *Okta) *userResourceType {
 
 func userBuilder(connector *Okta) *userResourceType {
 	return &userResourceType{
-		resourceType: resourceTypeUser,
+		resourceType: getResourceType(connector.useAppLinksForUserGrants),
 		connector:    connector,
 	}
 }
