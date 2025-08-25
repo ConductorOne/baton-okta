@@ -1,5 +1,10 @@
 name: ci
-on: pull_request
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches:
+      - main
 jobs:
   go-lint:
     runs-on: ubuntu-latest
@@ -41,55 +46,30 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BATON_LOG_LEVEL: debug
-      # Add any environment variables needed to run baton-bitbucket-datacenter
+      # Add any environment variables needed to run baton-okta
       BATON_API_TOKEN: ${{ secrets.BATON_API_TOKEN }}
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
       BATON_SYNC_CUSTOM_ROLES: true
-      # The following parameters are passed to grant/revoke commands
-      CONNECTOR_GRANT: 'app:0oaf4rf37pg7W4B6a5d7:access:user:00uacdfcbiu3Igbmz5d7'
-      CONNECTOR_ENTITLEMENT: 'app:0oaf4rf37pg7W4B6a5d7:access'
-      CONNECTOR_PRINCIPAL_TYPE: 'user'
-      CONNECTOR_PRINCIPAL: '00uacdfcbiu3Igbmz5d7'
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22.x
+          go-version: 1.23.x
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Install baton
-        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
       - name: Build baton-okta
         run: go build ./cmd/baton-okta
-      - name: Run baton-okta
-        run: ./baton-okta
-      - name: Grant entitlement (even though it probably already exists)
-        run: |
-          ./baton-okta --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
-      - name: Check for grant before revoking
-        run: |
-          ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
-      - name: Revoke grants
-        run: |
-          ./baton-okta --revoke-grant ${{ env.CONNECTOR_GRANT }}
-      - name: Check grant was revoked
-        run: |
-           ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource !=\"${{ env.CONNECTOR_PRINCIPAL }}\")"
-      - name: Grant entitlement
-        run: | 
-          ./baton-okta && ./baton-okta --grant-entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --grant-principal ${{ env.CONNECTOR_PRINCIPAL }} --grant-principal-type ${{ env.CONNECTOR_PRINCIPAL_TYPE }}
-      - name: Check grant was re-granted
-        run: |
-          ./baton-okta && baton grants --entitlement ${{ env.CONNECTOR_ENTITLEMENT }} --output-format=json | jq -e ".grants | any(.principal.id.resource ==\"${{ env.CONNECTOR_PRINCIPAL }}\")"
-      - name: Grant custom roles for users
-        env:
-            BATON_ENTITLEMENT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member'
-            BATON_PRINCIPAL_TYPE: 'user'
-            BATON_PRINCIPAL: '00uacdfcbiu3Igbmz5d7'
-        run: | 
-          ./baton-okta && ./baton-okta --grant-entitlement ${{ env.BATON_ENTITLEMENT }} --grant-principal ${{ env.BATON_PRINCIPAL }} --grant-principal-type ${{ env.BATON_PRINCIPAL_TYPE }}
-      - name: Revoke custom role grants
-        env:
-          BATON_GRANT: 'resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member:user:00uacdfcbiu3Igbmz5d7'
-        run: |
-           ./baton-okta && ./baton-okta --revoke-grant ${{ env.BATON_GRANT }}
+      - name: Test grant/revoke
+        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        with:
+          connector: ./baton-okta
+          baton-entitlement: app:0oaf4rf37pg7W4B6a5d7:access
+          baton-principal: 00uacdfcbiu3Igbmz5d7
+          baton-principal-type: user
+      - name: Test grant/revoke with custom role
+        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        with:
+          connector: ./baton-okta
+          baton-entitlement: resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member
+          baton-principal: 00uacdfcbiu3Igbmz5d7
+          baton-principal-type: user
