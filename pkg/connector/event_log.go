@@ -80,7 +80,9 @@ func (connector *Okta) ListEvents(
 				// MJP we don't want to stop, we should just log the error and continue
 				if err != nil {
 					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
-				} else {
+					continue
+				}
+				if event != nil {
 					rv = append(rv, event)
 				}
 			}

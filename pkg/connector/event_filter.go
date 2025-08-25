@@ -22,7 +22,7 @@ type EventFilter struct {
 	// May contain additional targets.
 	TargetTypes mapset.Set[string]
 	// Required, will be called for each event that matches the filter.
-	EventHandler func(*zap.Logger, *oktaSDK.LogEvent, map[string][]*oktaSDK.LogTarget, *v2.Event) error
+	EventHandler func(*zap.Logger, *oktaSDK.LogEvent, map[string][]*oktaSDK.LogTarget, *v2.Event) (bool, error)
 }
 
 func filterJoiner(joiner string, filters ...string) string {
@@ -103,9 +103,13 @@ func (filter *EventFilter) Handle(l *zap.Logger, event *oktaSDK.LogEvent) (*v2.E
 		OccurredAt: timestamppb.New(*event.Published),
 	}
 
-	err := filter.EventHandler(l, event, targetMap, rv)
+	ok, err := filter.EventHandler(l, event, targetMap, rv)
 	if err != nil {
 		return nil, err
+	}
+
+	if !ok {
+		return nil, nil
 	}
 
 	return rv, nil
