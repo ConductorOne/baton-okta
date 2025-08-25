@@ -290,6 +290,12 @@ func (o *userResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	// This shouldn't be necessary since we skip grants if useAppLinksForUserGrants is false, but it's good to be safe.
+	if !o.connector.useAppLinksForUserGrants {
+		return nil, "", nil, nil
+	}
+
+	// This API is not paginated. It returns all app links for a user.
 	appLinks, resp, err := o.connector.client.User.ListAppLinks(ctx, resource.Id.Resource)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch app links from okta: %w", handleOktaResponseError(resp, err))
