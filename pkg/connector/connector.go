@@ -147,8 +147,8 @@ var (
 		Annotations: v1AnnotationsForResourceType("user", true),
 	}
 	resourceTypeUserWithGrants = &v2.ResourceType{
-		Id:          "user-with-grants",
-		DisplayName: "User with Grants",
+		Id:          "user",
+		DisplayName: "User",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: v1AnnotationsForResourceType("user", false),
 	}
