@@ -64,9 +64,16 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 		return "", nil
 	}
 
+	var url string
+
+	// The request is nil when the response is cached.
+	if resp.Response.Request != nil {
+		url = resp.Response.Request.URL.String()
+	}
+
 	serializable := &SerializableOktaResponseV5{
 		Link: resp.Response.Header["Link"],
-		Url:  resp.Response.Request.URL.String(),
+		Url:  url,
 	}
 
 	jsonBytes, err := json.Marshal(serializable)
