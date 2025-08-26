@@ -4,33 +4,40 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	oktaV5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
-	qp := queryParams(pToken.Size, pToken.Cursor)
+func (connector *Okta) newListLogEventsRequest(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *oktaV5.ApiListLogEventsRequest {
+	request := connector.clientV5.SystemLogAPI.ListLogEvents(ctx)
+
+	size := pToken.Size
+	if size == 0 || size > defaultLimit {
+		request = request.Limit(int32(defaultLimit))
+	} else {
+		request = request.Limit(int32(size))
+	}
+
+	after := pToken.Cursor
+	if after != "" {
+		request = request.After(after)
+	}
+
 	if earliestEvent != nil {
-		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
+		request = request.Since(earliestEvent.AsTime())
 	}
 
-	if len(filters) == 0 {
-		return qp
-	} else if len(filters) == 1 {
-		qp.Filter = filters[0]
-		return qp
+	if len(filters) > 0 {
+		request = request.Filter(strings.Join(filters, " or "))
 	}
 
-	qp.Filter = strings.Join(filters, " or ")
-
-	return qp
+	return &request
 }
 
 func (connector *Okta) ListEvents(
@@ -63,23 +70,22 @@ func (connector *Okta) ListEvents(
 		filters = append(filters, filter.Filter())
 	}
 
-	qp := connector.createQueryParams(earliestEvent, pToken, filters...)
-
-	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
+	apiRequest := connector.newListLogEventsRequest(ctx, earliestEvent, pToken, filters...)
+	logs, resp, err := apiRequest.Execute()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list events: %w", err)
 	}
 
 	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
 	rv := make([]*v2.Event, 0, len(logs))
 	for _, log := range logs {
-		relevantFilters := filterMap[log.EventType]
+		relevantFilters := filterMap[*log.EventType]
 		for _, filter := range relevantFilters {
-			if filter.Matches(log) {
-				event, err := filter.Handle(l, log)
+			if filter.Matches(&log) {
+				event, err := filter.Handle(l, &log)
 				// MJP we don't want to stop, we should just log the error and continue
 				if err != nil {
-					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
+					l.Error("error handling event", zap.Error(err), zap.String("event_type", *log.EventType))
 				} else {
 					rv = append(rv, event)
 				}
@@ -87,7 +93,7 @@ func (connector *Okta) ListEvents(
 		}
 	}
 
-	after, annos, err := parseResp(resp)
+	after, annos, err := parseRespV5WithAfter(resp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}

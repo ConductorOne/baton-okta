@@ -31,6 +31,29 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 	return nextPage, annos, nil
 }
 
+func parseRespV5WithAfter(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
+	var annos annotations.Annotations
+	var nextPage string
+
+	if resp == nil {
+		return "", nil, nil
+	}
+
+	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+		annos.WithRateLimiting(desc)
+	}
+
+	u, err := url.Parse(resp.NextPage())
+	if err != nil {
+		return "", nil, err
+	}
+	after := u.Query().Get("after")
+
+	nextPage = after
+
+	return nextPage, annos, nil
+}
+
 type SerializableOktaResponseV5 struct {
 	Link []string
 	Url  string
