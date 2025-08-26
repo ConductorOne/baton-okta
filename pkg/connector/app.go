@@ -134,7 +134,10 @@ func (o *appResourceType) Grants(
 		appTrait, err := sdkResource.GetAppTrait(resource)
 		// If we can't get the app trait on the app resource, we don't know if it's active or not, so we have to fall back to the slow listAppUsersGrants().
 		if err == nil {
-			appStatus = appTrait.Profile.AsMap()["status"].(string)
+			appStatusValue, ok := appTrait.Profile.AsMap()["status"]
+			if ok {
+				appStatus, _ = appStatusValue.(string)
+			}
 		}
 		// The app links API for users does not return inactive apps, so we have to fall back to the slow listAppUsersGrants().
 		if !o.useAppLinksForUserGrants || strings.ToUpper(appStatus) != "ACTIVE" {
