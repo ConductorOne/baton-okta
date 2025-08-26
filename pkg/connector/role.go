@@ -600,7 +600,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.String("role_type", entitlement.Resource.Id.Resource),
 			)
-			return nil, fmt.Errorf("okta-connector: user does not have role membership")
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 		}
 
 		roleId = roles[rolePos].Id
@@ -631,7 +631,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.String("role_type", entitlement.Resource.Id.Resource),
 			)
-			return nil, fmt.Errorf("okta-connector: group does not have role membership")
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 		}
 
 		roleId = roles[rolePos].Id
