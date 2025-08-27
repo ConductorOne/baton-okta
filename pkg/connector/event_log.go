@@ -8,13 +8,13 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	oktaV5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	oktaSDK "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Okta) newListLogEventsRequest(ctx context.Context, earliestEvent *timestamppb.Timestamp, pageSize int, filters ...string) *oktaV5.ApiListLogEventsRequest {
+func (c *Okta) newListLogEventsRequest(ctx context.Context, earliestEvent *timestamppb.Timestamp, pageSize int, filters ...string) *oktaSDK.ApiListLogEventsRequest {
 	request := c.clientV5.SystemLogAPI.ListLogEvents(ctx)
 
 	if pageSize == 0 || pageSize > defaultLimit {
@@ -64,8 +64,8 @@ func (c *Okta) ListEvents(
 		filters = append(filters, filter.Filter())
 	}
 
-	var logs []oktaV5.LogEvent
-	var resp *oktaV5.APIResponse
+	var logs []oktaSDK.LogEvent
+	var resp *oktaSDK.APIResponse
 	var err error
 
 	if pToken.Cursor == "" {
@@ -79,7 +79,7 @@ func (c *Okta) ListEvents(
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to deserialize cursor: %w", err)
 		}
-		prevAPIResponse := oktaV5.NewAPIResponse(prevResp.Response, c.clientV5, nil)
+		prevAPIResponse := oktaSDK.NewAPIResponse(prevResp.Response, c.clientV5, nil)
 		if prevAPIResponse.HasNextPage() {
 			l.Debug("okta-connectorv2: getting next page for ListLogEvents", zap.String("next_page", prevAPIResponse.NextPage()))
 			resp, err = prevAPIResponse.Next(&logs)
