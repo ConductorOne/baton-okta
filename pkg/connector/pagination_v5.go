@@ -8,6 +8,7 @@ import (
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 )
 
 func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
@@ -17,10 +18,10 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 		return "", nil, nil
 	}
 
-	// (jallers) Do we need the annotations if rate limiting is handled by the Okta SDK?
-	// if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
-	// 	annos.WithRateLimiting(desc)
-	// }
+	// (jallers) This might be redundant since we are using WithRateLimitPrevent(true) in the Okta SDK config
+	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+		annos.WithRateLimiting(desc)
+	}
 
 	nextPage, err := serializeOktaResponseV5(resp)
 	if err != nil {
