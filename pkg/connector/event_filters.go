@@ -7,7 +7,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktaV5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	oktaSDK "github.com/conductorone/okta-sdk-golang/v5/okta"
 	mapset "github.com/deckarep/golang-set/v2"
 	"go.uber.org/zap"
 )
@@ -16,7 +16,7 @@ var (
 	GroupChangeFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("group.lifecycle.create"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
-		EventHandler: func(l *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
 			}
@@ -42,7 +42,7 @@ var (
 	CreateGrantFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
 		TargetTypes: mapset.NewSet[string]("UserGroup", "User"),
-		EventHandler: func(l *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
 			}
@@ -82,7 +82,7 @@ var (
 	ApplicationLifecycleFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
-		EventHandler: func(l *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
 			}
@@ -108,7 +108,7 @@ var (
 	ApplicationMembershipFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("application.user_membership.add", "application.user_membership.update"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
-		EventHandler: func(l *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
 			}
@@ -134,7 +134,7 @@ var (
 	RoleMembershipFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("user.account.privilege.grant"),
 		TargetTypes: mapset.NewSet[string]("ROLE", "User"),
-		EventHandler: func(_ *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["ROLE"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 ROLE target, got %d", len(targetMap["ROLE"]))
 			}
@@ -161,7 +161,7 @@ var (
 	UserLifecycleFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("user.lifecycle.create", "user.lifecycle.activate", "user.account.update_profile"),
 		TargetTypes: mapset.NewSet[string]("User"),
-		EventHandler: func(_ *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["User"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
 			}
@@ -181,7 +181,7 @@ var (
 		EventTypes:  mapset.NewSet[string]("user.authentication.sso"),
 		ActorType:   "User",
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
-		EventHandler: func(_ *zap.Logger, event *oktaV5.LogEvent, targetMap map[string][]*oktaV5.LogTarget, rv *v2.Event) error {
+		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
 			}
