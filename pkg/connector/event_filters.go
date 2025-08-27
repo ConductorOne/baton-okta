@@ -7,8 +7,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	oktaSDK "github.com/conductorone/okta-sdk-golang/v5/okta"
 	mapset "github.com/deckarep/golang-set/v2"
-	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +23,7 @@ var (
 			userGroup := targetMap["UserGroup"][0]
 			resourceId := &v2.ResourceId{
 				ResourceType: resourceTypeGroup.Id,
-				Resource:     userGroup.Id,
+				Resource:     *userGroup.Id,
 			}
 			rv.Event = &v2.Event_ResourceChangeEvent{
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
@@ -31,10 +31,10 @@ var (
 				},
 			}
 			l.Debug("okta-event-feed: GroupChangeFilter",
-				zap.String("event_type", event.EventType),
+				zap.String("event_type", *event.EventType),
 				zap.String("resource_type", resourceId.ResourceType),
 				zap.String("resource_id", resourceId.Resource),
-				zap.String("group_display_name", userGroup.DisplayName),
+				zap.String("group_display_name", *userGroup.DisplayName),
 			)
 			return nil
 		},
@@ -52,12 +52,12 @@ var (
 			}
 			user := targetMap["User"][0]
 
-			resource, err := sdkResource.NewResource(userGroup.DisplayName, resourceTypeGroup, userGroup.Id)
+			resource, err := sdkResource.NewResource(*userGroup.DisplayName, resourceTypeGroup, *userGroup.Id)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
 
-			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			principal, err := sdkResource.NewResource(*user.DisplayName, resourceTypeUser, *user.Id)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
@@ -70,11 +70,11 @@ var (
 			}
 
 			l.Debug("okta-event-feed: CreateGrantFilter",
-				zap.String("event_type", event.EventType),
+				zap.String("event_type", *event.EventType),
 				zap.String("resource_type", resourceTypeGroup.Id),
-				zap.String("resource_id", userGroup.Id),
-				zap.String("group_display_name", userGroup.DisplayName),
-				zap.String("user_id", user.Id),
+				zap.String("resource_id", *userGroup.Id),
+				zap.String("group_display_name", *userGroup.DisplayName),
+				zap.String("user_id", *user.Id),
 			)
 			return nil
 		},
@@ -89,7 +89,7 @@ var (
 			appInstance := targetMap["AppInstance"][0]
 			resourceId := &v2.ResourceId{
 				ResourceType: resourceTypeApp.Id,
-				Resource:     appInstance.Id,
+				Resource:     *appInstance.Id,
 			}
 			rv.Event = &v2.Event_ResourceChangeEvent{
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
@@ -97,10 +97,10 @@ var (
 				},
 			}
 			l.Debug("okta-event-feed: ApplicationLifecycleFilter",
-				zap.String("event_type", event.EventType),
+				zap.String("event_type", *event.EventType),
 				zap.String("resource_type", resourceId.ResourceType),
 				zap.String("resource_id", resourceId.Resource),
-				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("app_display_name", *appInstance.DisplayName),
 			)
 			return nil
 		},
@@ -115,7 +115,7 @@ var (
 			appInstance := targetMap["AppInstance"][0]
 			resourceId := &v2.ResourceId{
 				ResourceType: resourceTypeApp.Id,
-				Resource:     appInstance.Id,
+				Resource:     *appInstance.Id,
 			}
 			rv.Event = &v2.Event_ResourceChangeEvent{
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
@@ -123,10 +123,10 @@ var (
 				},
 			}
 			l.Debug("okta-event-feed: ApplicationMembershipFilter",
-				zap.String("event_type", event.EventType),
+				zap.String("event_type", *event.EventType),
 				zap.String("resource_type", resourceId.ResourceType),
 				zap.String("resource_id", resourceId.Resource),
-				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("app_display_name", *appInstance.DisplayName),
 			)
 			return nil
 		},
@@ -142,9 +142,9 @@ var (
 
 			// for some reason we don't get the role ID (or type) formatted properly.
 			// hack to look it up via DisplayName
-			roleType := StandardRoleTypeFromLabel(role.DisplayName)
+			roleType := StandardRoleTypeFromLabel(*role.DisplayName)
 			if roleType == nil {
-				return fmt.Errorf("okta-connectorv2: error getting role from label: %s", role.DisplayName)
+				return fmt.Errorf("okta-connectorv2: error getting role from label: %s", *role.DisplayName)
 			}
 
 			rv.Event = &v2.Event_ResourceChangeEvent{
@@ -170,7 +170,7 @@ var (
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
 					ResourceId: &v2.ResourceId{
 						ResourceType: resourceTypeUser.Id,
-						Resource:     user.Id,
+						Resource:     *user.Id,
 					},
 				},
 			}
@@ -186,7 +186,7 @@ var (
 				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
 			}
 			appInstance := targetMap["AppInstance"][0]
-			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(event.Actor.AlternateId, true))
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(*event.Actor.AlternateId, true))
 			if err != nil {
 				return err
 			}
@@ -195,16 +195,16 @@ var (
 					TargetResource: &v2.Resource{
 						Id: &v2.ResourceId{
 							ResourceType: resourceTypeApp.Id,
-							Resource:     appInstance.Id,
+							Resource:     *appInstance.Id,
 						},
-						DisplayName: appInstance.DisplayName,
+						DisplayName: *appInstance.DisplayName,
 					},
 					ActorResource: &v2.Resource{
 						Id: &v2.ResourceId{
 							ResourceType: resourceTypeUser.Id,
-							Resource:     event.Actor.Id,
+							Resource:     *event.Actor.Id,
 						},
-						DisplayName: event.Actor.DisplayName,
+						DisplayName: *event.Actor.DisplayName,
 						Annotations: annotations.New(userTrait),
 					},
 				},

@@ -5,11 +5,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 )
 
 func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
@@ -19,6 +18,7 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 		return "", nil, nil
 	}
 
+	// (jallers) This might be redundant since we are using WithRateLimitPrevent(true) in the Okta SDK config
 	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
 		annos.WithRateLimiting(desc)
 	}
@@ -41,9 +41,16 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 		return "", nil
 	}
 
+	var url string
+
+	// The request is nil when the response is cached.
+	if resp.Response.Request != nil {
+		url = resp.Response.Request.URL.String()
+	}
+
 	serializable := &SerializableOktaResponseV5{
 		Link: resp.Response.Header["Link"],
-		Url:  resp.Response.Request.URL.String(),
+		Url:  url,
 	}
 
 	jsonBytes, err := json.Marshal(serializable)

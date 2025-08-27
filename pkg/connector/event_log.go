@@ -4,36 +4,37 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	oktaSDK "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
-	qp := queryParams(pToken.Size, pToken.Cursor)
+func (c *Okta) newListLogEventsRequest(ctx context.Context, earliestEvent *timestamppb.Timestamp, pageSize int, filters ...string) *oktaSDK.ApiListLogEventsRequest {
+	request := c.clientV5.SystemLogAPI.ListLogEvents(ctx)
+
+	if pageSize == 0 || pageSize > defaultLimit {
+		request = request.Limit(int32(defaultLimit))
+	} else {
+		request = request.Limit(int32(pageSize))
+	}
+
 	if earliestEvent != nil {
-		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
+		request = request.Since(earliestEvent.AsTime())
 	}
 
-	if len(filters) == 0 {
-		return qp
-	} else if len(filters) == 1 {
-		qp.Filter = filters[0]
-		return qp
+	if len(filters) > 0 {
+		request = request.Filter(strings.Join(filters, " or "))
 	}
 
-	qp.Filter = strings.Join(filters, " or ")
-
-	return qp
+	return &request
 }
 
-func (connector *Okta) ListEvents(
+func (c *Okta) ListEvents(
 	ctx context.Context,
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
@@ -63,23 +64,44 @@ func (connector *Okta) ListEvents(
 		filters = append(filters, filter.Filter())
 	}
 
-	qp := connector.createQueryParams(earliestEvent, pToken, filters...)
+	var logs []oktaSDK.LogEvent
+	var resp *oktaSDK.APIResponse
+	var err error
 
-	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
-	if err != nil {
-		return nil, nil, nil, err
+	if pToken.Cursor == "" {
+		apiRequest := c.newListLogEventsRequest(ctx, earliestEvent, pToken.Size, filters...)
+		logs, resp, err = apiRequest.Execute()
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list events: %w", err)
+		}
+	} else {
+		prevResp, err := deserializeOktaResponseV5(pToken.Cursor)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to deserialize cursor: %w", err)
+		}
+		prevAPIResponse := oktaSDK.NewAPIResponse(prevResp.Response, c.clientV5, nil)
+		if prevAPIResponse.HasNextPage() {
+			l.Debug("okta-connectorv2: getting next page for ListLogEvents", zap.String("next_page", prevAPIResponse.NextPage()))
+			resp, err = prevAPIResponse.Next(&logs)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to get next page for ListLogEvents: %w", err)
+			}
+		} else {
+			// (jallers) we don't expect this to happen
+			l.Warn("okta-connectorv2: no next page for ListLogEvents", zap.String("cursor", pToken.Cursor))
+		}
 	}
 
 	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
 	rv := make([]*v2.Event, 0, len(logs))
 	for _, log := range logs {
-		relevantFilters := filterMap[log.EventType]
+		relevantFilters := filterMap[*log.EventType]
 		for _, filter := range relevantFilters {
-			if filter.Matches(log) {
-				event, err := filter.Handle(l, log)
+			if filter.Matches(&log) {
+				event, err := filter.Handle(l, &log)
 				// MJP we don't want to stop, we should just log the error and continue
 				if err != nil {
-					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
+					l.Error("error handling event", zap.Error(err), zap.String("event_type", *log.EventType))
 				} else {
 					rv = append(rv, event)
 				}
@@ -87,15 +109,18 @@ func (connector *Okta) ListEvents(
 		}
 	}
 
-	after, annos, err := parseResp(resp)
+	nextCursor, annos, err := parseRespV5(resp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
-	streamState := &pagination.StreamState{Cursor: after, HasMore: false}
-	// (johnallers)The Okta API docs specify that the cursor should be empty if there are no more results, but I did not see this in testing.
-	// Instead, the response provided the same cursor value as was in the request.
-	if resp.HasNextPage() && after != pToken.Cursor {
+	l.Debug("okta-connectorv2: processed logs", zap.Any("log_count", len(logs)), zap.Any("next_cursor", nextCursor))
+
+	streamState := &pagination.StreamState{Cursor: nextCursor, HasMore: false}
+	// Okta event logs are a stream and will always have a next page. We are at the end of the
+	// stream if there are no more logs. Alternatively, we could check if the "after" parameter
+	// in the Link header of the response is the same as the "after" parameter in the current request.
+	if resp.HasNextPage() && len(logs) > 0 {
 		streamState.HasMore = true
 	}
 
