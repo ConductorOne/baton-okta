@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -19,37 +17,15 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 		return "", nil, nil
 	}
 
-	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
-		annos.WithRateLimiting(desc)
-	}
+	// (jallers) Do we need the annotations if rate limiting is handled by the Okta SDK?
+	// if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+	// 	annos.WithRateLimiting(desc)
+	// }
 
 	nextPage, err := serializeOktaResponseV5(resp)
 	if err != nil {
 		return "", nil, err
 	}
-
-	return nextPage, annos, nil
-}
-
-func parseRespV5WithAfter(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
-	var annos annotations.Annotations
-	var nextPage string
-
-	if resp == nil {
-		return "", nil, nil
-	}
-
-	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
-		annos.WithRateLimiting(desc)
-	}
-
-	u, err := url.Parse(resp.NextPage())
-	if err != nil {
-		return "", nil, err
-	}
-	after := u.Query().Get("after")
-
-	nextPage = after
 
 	return nextPage, annos, nil
 }

@@ -14,19 +14,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (connector *Okta) newListLogEventsRequest(ctx context.Context, earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *oktaV5.ApiListLogEventsRequest {
-	request := connector.clientV5.SystemLogAPI.ListLogEvents(ctx)
+func (c *Okta) newListLogEventsRequest(ctx context.Context, earliestEvent *timestamppb.Timestamp, pageSize int, filters ...string) *oktaV5.ApiListLogEventsRequest {
+	request := c.clientV5.SystemLogAPI.ListLogEvents(ctx)
 
-	size := pToken.Size
-	if size == 0 || size > defaultLimit {
+	if pageSize == 0 || pageSize > defaultLimit {
 		request = request.Limit(int32(defaultLimit))
 	} else {
-		request = request.Limit(int32(size))
-	}
-
-	after := pToken.Cursor
-	if after != "" {
-		request = request.After(after)
+		request = request.Limit(int32(pageSize))
 	}
 
 	if earliestEvent != nil {
@@ -40,7 +34,7 @@ func (connector *Okta) newListLogEventsRequest(ctx context.Context, earliestEven
 	return &request
 }
 
-func (connector *Okta) ListEvents(
+func (c *Okta) ListEvents(
 	ctx context.Context,
 	earliestEvent *timestamppb.Timestamp,
 	pToken *pagination.StreamToken,
@@ -70,10 +64,32 @@ func (connector *Okta) ListEvents(
 		filters = append(filters, filter.Filter())
 	}
 
-	apiRequest := connector.newListLogEventsRequest(ctx, earliestEvent, pToken, filters...)
-	logs, resp, err := apiRequest.Execute()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list events: %w", err)
+	var logs []oktaV5.LogEvent
+	var resp *oktaV5.APIResponse
+	var err error
+
+	if pToken.Cursor == "" {
+		apiRequest := c.newListLogEventsRequest(ctx, earliestEvent, pToken.Size, filters...)
+		logs, resp, err = apiRequest.Execute()
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list events: %w", err)
+		}
+	} else {
+		prevResp, err := deserializeOktaResponseV5(pToken.Cursor)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to deserialize cursor: %w", err)
+		}
+		prevAPIResponse := oktaV5.NewAPIResponse(prevResp.Response, c.clientV5, nil)
+		if prevAPIResponse.HasNextPage() {
+			l.Debug("okta-connectorv2: getting next page for ListLogEvents", zap.String("next_page", prevAPIResponse.NextPage()))
+			resp, err = prevAPIResponse.Next(&logs)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to get next page for ListLogEvents: %w", err)
+			}
+		} else {
+			// jallers: this should never happen
+			l.Warn("okta-connectorv2: no next page for ListLogEvents", zap.String("cursor", pToken.Cursor))
+		}
 	}
 
 	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
@@ -93,15 +109,18 @@ func (connector *Okta) ListEvents(
 		}
 	}
 
-	after, annos, err := parseRespV5WithAfter(resp)
+	nextCursor, annos, err := parseRespV5(resp)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
-	streamState := &pagination.StreamState{Cursor: after, HasMore: false}
-	// (johnallers)The Okta API docs specify that the cursor should be empty if there are no more results, but I did not see this in testing.
-	// Instead, the response provided the same cursor value as was in the request.
-	if resp.HasNextPage() && after != pToken.Cursor {
+	l.Debug("okta-connectorv2: processed logs", zap.Any("log_count", len(logs)), zap.Any("next_cursor", nextCursor))
+
+	streamState := &pagination.StreamState{Cursor: nextCursor, HasMore: false}
+	// Okta event logs are a stream and will always have a next page. We are at the end of the
+	// stream if there are no more logs. Alternatively, we could check if the "after" parameter
+	// in the Link header is the same as the "after" parameter in the current request.
+	if resp.HasNextPage() && len(logs) > 0 {
 		streamState.HasMore = true
 	}
 
