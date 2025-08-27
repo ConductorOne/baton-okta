@@ -87,7 +87,7 @@ func (c *Okta) ListEvents(
 				return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to get next page for ListLogEvents: %w", err)
 			}
 		} else {
-			// jallers: this should never happen
+			// (jallers) we don't expect this to happen
 			l.Warn("okta-connectorv2: no next page for ListLogEvents", zap.String("cursor", pToken.Cursor))
 		}
 	}
@@ -119,7 +119,7 @@ func (c *Okta) ListEvents(
 	streamState := &pagination.StreamState{Cursor: nextCursor, HasMore: false}
 	// Okta event logs are a stream and will always have a next page. We are at the end of the
 	// stream if there are no more logs. Alternatively, we could check if the "after" parameter
-	// in the Link header is the same as the "after" parameter in the current request.
+	// in the Link header of the response is the same as the "after" parameter in the current request.
 	if resp.HasNextPage() && len(logs) > 0 {
 		streamState.HasMore = true
 	}
