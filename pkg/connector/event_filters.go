@@ -57,11 +57,16 @@ var (
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
 
-			// MJP userResource in pkg/connector/user.go
 			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
 
 			rv.Event = &v2.Event_CreateGrantEvent{
 				CreateGrantEvent: &v2.CreateGrantEvent{
@@ -128,6 +133,12 @@ var (
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
 
 			rv.Event = &v2.Event_CreateGrantEvent{
 				CreateGrantEvent: &v2.CreateGrantEvent{
