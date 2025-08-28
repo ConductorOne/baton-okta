@@ -57,6 +57,7 @@ var (
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
 
+			// MJP userResource in pkg/connector/user.go
 			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
@@ -106,27 +107,41 @@ var (
 		},
 	}
 	ApplicationMembershipFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("application.user_membership.add", "application.user_membership.update"),
-		TargetTypes: mapset.NewSet[string]("AppInstance"),
+		EventTypes:  mapset.NewSet[string]("application.user_membership.add"),
+		TargetTypes: mapset.NewSet[string]("AppInstance", "User"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
 			}
-			appInstance := targetMap["AppInstance"][0]
-			resourceId := &v2.ResourceId{
-				ResourceType: resourceTypeApp.Id,
-				Resource:     appInstance.Id,
+			if len(targetMap["User"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
 			}
-			rv.Event = &v2.Event_ResourceChangeEvent{
-				ResourceChangeEvent: &v2.ResourceChangeEvent{
-					ResourceId: resourceId,
+			user := targetMap["User"][0]
+			appInstance := targetMap["AppInstance"][0]
+
+			resource, err := sdkResource.NewResource(appInstance.DisplayName, resourceTypeApp, appInstance.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			rv.Event = &v2.Event_CreateGrantEvent{
+				CreateGrantEvent: &v2.CreateGrantEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(resource, "access"),
+					Principal:   principal,
 				},
 			}
+
 			l.Debug("okta-event-feed: ApplicationMembershipFilter",
 				zap.String("event_type", event.EventType),
-				zap.String("resource_type", resourceId.ResourceType),
-				zap.String("resource_id", resourceId.Resource),
+				zap.String("resource_type", resourceTypeApp.Id),
+				zap.String("resource_id", appInstance.Id),
 				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("user_id", user.Id),
 			)
 			return nil
 		},
