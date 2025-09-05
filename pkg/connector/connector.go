@@ -211,7 +211,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	}
 
 	resourceSyncer := []connectorbuilder.ResourceSyncer{
-		roleBuilder(o.client, o),
+		roleBuilder(o.clientV5, o),
 		userBuilder(o),
 		groupBuilder(o),
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client),
