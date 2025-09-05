@@ -557,7 +557,7 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 	}
 
 	resp := respCtx.OktaResponse
-	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
 		annos.WithRateLimiting(desc)
 	}
 

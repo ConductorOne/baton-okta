@@ -111,7 +111,7 @@ func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceI
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to get api token: %w", err)
 	}
 
-	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
 		annos.WithRateLimiting(desc)
 	}
 
