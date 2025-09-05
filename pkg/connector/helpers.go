@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"io"
 	"net/url"
 
@@ -23,6 +24,10 @@ const (
 
 type responseContext struct {
 	OktaResponse *okta.Response
+}
+
+type responseContextV5 struct {
+	OktaResponse *oktav5.APIResponse
 }
 
 func V1MembershipEntitlementID(resourceID string) string {
@@ -80,6 +85,20 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	}, nil
 }
 
+func responseToContextV5(token *pagination.Token, resp *oktav5.APIResponse) (*responseContextV5, error) {
+	u, err := url.Parse(resp.NextPage())
+	if err != nil {
+		return nil, err
+	}
+
+	after := u.Query().Get("after")
+	token.Token = after
+
+	return &responseContextV5{
+		OktaResponse: resp,
+	}, nil
+}
+
 func getError(response *okta.Response) (okta.Error, error) {
 	var errOkta okta.Error
 	bytes, err := io.ReadAll(response.Body)
@@ -90,6 +109,21 @@ func getError(response *okta.Response) (okta.Error, error) {
 	err = json.Unmarshal(bytes, &errOkta)
 	if err != nil {
 		return okta.Error{}, err
+	}
+
+	return errOkta, nil
+}
+
+func getErrorV5(response *oktav5.APIResponse) (oktav5.Error, error) {
+	var errOkta oktav5.Error
+	bytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return oktav5.Error{}, err
+	}
+
+	err = json.Unmarshal(bytes, &errOkta)
+	if err != nil {
+		return oktav5.Error{}, err
 	}
 
 	return errOkta, nil
@@ -135,4 +169,11 @@ func convertNotFoundError(err error, message string) error {
 	grpcErr := status.Error(codes.NotFound, message)
 	allErrs := append([]error{grpcErr}, err)
 	return errors.Join(allErrs...)
+}
+
+func nullableStr(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
