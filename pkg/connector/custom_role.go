@@ -132,6 +132,8 @@ func (o *customRoleResourceType) Grants(
 	resource *v2.Resource,
 	token *pagination.Token,
 ) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
 	var rv []*v2.Grant
 
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
@@ -139,14 +141,12 @@ func (o *customRoleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	qp := queryParams(token.Size, page)
-
-	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.connector.client, token, qp)
+	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5, token, page)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseRespV5(respCtx.OktaResponse)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -157,7 +157,12 @@ func (o *customRoleResourceType) Grants(
 	}
 
 	for _, user := range usersWithRoleAssignments {
-		userId := user.Id
+		if user.Id == nil {
+			l.Warn("user has no ID, skipping", zap.Any("user", user))
+			continue
+		}
+
+		userId := *user.Id
 
 		userRoles, err := o.getUserRolesFromCache(ctx, userId)
 		if err != nil {
