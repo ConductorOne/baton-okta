@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
+
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	"github.com/okta/okta-sdk-golang/v2/okta"
+	"github.com/okta/okta-sdk-golang/v2/okta/query"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -156,8 +157,8 @@ func (o *roleResourceType) Entitlements(
 	}
 
 	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
-		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
-		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", nullableStr(role.Label))),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", nullableStr(role.Label))),
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 			Id: V1MembershipEntitlementID(nullableStr(role.Type)),
 		}),
@@ -288,7 +289,7 @@ func (o *roleResourceType) listSystemRoles(
 ) ([]*v2.Resource, error) {
 	rv := make([]*v2.Resource, 0, len(standardRoleTypes))
 	for _, role := range standardRoleTypes {
-		resource, err := roleResource(ctx, role, resourceTypeRole)
+		resource, err := roleResourceV5(ctx, role, resourceTypeRole)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 		}
@@ -450,7 +451,30 @@ func StandardRoleTypeFromLabel(label string) *oktav5.Role {
 	return nil
 }
 
-func roleResource(ctx context.Context, role *oktav5.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
+func roleResource(ctx context.Context, role *okta.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
+	var objectID = role.Type
+	if role.Type == "" && role.Id != "" {
+		objectID = role.Id
+	}
+
+	profile := map[string]interface{}{
+		"id":    role.Id,
+		"label": role.Label,
+		"type":  role.Type,
+	}
+
+	return sdkResource.NewRoleResource(
+		role.Label,
+		ctype,
+		objectID,
+		[]sdkResource.RoleTraitOption{sdkResource.WithRoleProfile(profile)},
+		sdkResource.WithAnnotation(&v2.V1Identifier{
+			Id: fmtResourceIdV1(objectID),
+		}),
+	)
+}
+
+func roleResourceV5(ctx context.Context, role *oktav5.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
 	var objectID = nullableStr(role.Type)
 	if objectID == "" && nullableStr(role.Id) != "" {
 		objectID = *role.Id
@@ -714,7 +738,7 @@ func (o *roleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 
 	for _, role := range standardRoleTypes {
 		if nullableStr(role.Type) == resourceId.Resource {
-			resource, err := roleResource(ctx, role, resourceTypeRole)
+			resource, err := roleResourceV5(ctx, role, resourceTypeRole)
 			if err != nil {
 				return nil, nil, err
 			}

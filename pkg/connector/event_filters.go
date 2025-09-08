@@ -177,7 +177,7 @@ var (
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
 					ResourceId: &v2.ResourceId{
 						ResourceType: resourceTypeRole.Id,
-						Resource:     roleType.Type,
+						Resource:     *roleType.Type,
 					},
 				},
 			}
