@@ -19,7 +19,7 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 		return "", nil, nil
 	}
 
-	if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
 		annos.WithRateLimiting(desc)
 	}
 
@@ -42,8 +42,8 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 	}
 
 	serializable := &SerializableOktaResponseV5{
-		Link: resp.Response.Header["Link"],
-		Url:  resp.Response.Request.URL.String(),
+		Link: resp.Header["Link"],
+		Url:  resp.Request.URL.String(),
 	}
 
 	jsonBytes, err := json.Marshal(serializable)

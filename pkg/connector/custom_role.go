@@ -250,7 +250,7 @@ func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.Resourc
 
 	resp := respCtx.OktaResponse
 	if resp != nil {
-		if desc, err := ratelimit.ExtractRateLimitData(resp.Response.StatusCode, &resp.Response.Header); err == nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
 			annos.WithRateLimiting(desc)
 		}
 	}
