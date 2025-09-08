@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -40,7 +42,7 @@ func TestSyncRoles(t *testing.T) {
 
 	r := &roleResourceType{
 		resourceType: resourceTypeRole,
-		client:       cliTest.client,
+		client:       cliTest.clientV5,
 	}
 
 	for token != empty {
@@ -95,7 +97,7 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 
 	resource := &roleResourceType{
 		resourceType: resourceTypeRole,
-		client:       cliTest.client,
+		client:       cliTest.clientV5,
 	}
 	rs, err := getRoleResourceForTesting(ctxTest, "READ_ONLY_ADMIN", "test", "")
 	require.Nil(t, err)
@@ -139,7 +141,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	entitlement := getEntitlementForTesting(resource, grantPrincipalType, roleEntitlement)
 	r := &roleResourceType{
 		resourceType: resourceTypeRole,
-		client:       cliTest.client,
+		client:       cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -399,10 +401,10 @@ func parseBindingEntitlementID(id string) (*v2.ResourceId, []string, error) {
 }
 
 func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
-	return roleResource(ctxTest, &okta.Role{
-		Id:    id,
-		Label: label,
-		Type:  ctype,
+	return roleResourceV5(ctxTest, &oktav5.Role{
+		Id:    &id,
+		Label: &label,
+		Type:  &ctype,
 	}, resourceTypeRole)
 }
 

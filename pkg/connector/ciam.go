@@ -94,7 +94,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 	case resourceTypeRole.Id:
 		l.Debug("Listing roles", zap.Any("bag", bag))
 		for _, role := range standardRoleTypes {
-			resource, err := roleResource(ctx, role, resourceTypeRole)
+			resource, err := roleResourceV5(ctx, role, resourceTypeRole)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 			}
@@ -116,11 +116,15 @@ func (o *ciamResourceBuilder) Entitlements(ctx context.Context, resource *v2.Res
 	var rv []*v2.Entitlement
 	role := standardRoleFromType(resource.Id.GetResource())
 
+	if role.Type == nil {
+		return nil, "", nil, nil
+	}
+
 	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
-		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
-		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
+		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", nullableStr(role.Label))),
+		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", nullableStr(role.Label))),
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
-			Id: V1MembershipEntitlementID(role.Type),
+			Id: V1MembershipEntitlementID(*role.Type),
 		}),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser),
 	)
@@ -349,8 +353,12 @@ func (o *ciamResourceBuilder) Get(ctx context.Context, resourceId *v2.ResourceId
 	l.Debug("getting role", zap.String("role_id", resourceId.Resource))
 
 	for _, role := range standardRoleTypes {
-		if role.Type == resourceId.Resource {
-			resource, err := roleResource(ctx, role, resourceTypeRole)
+		if role.Type == nil {
+			continue
+		}
+
+		if *role.Type == resourceId.Resource {
+			resource, err := roleResourceV5(ctx, role, resourceTypeRole)
 			if err != nil {
 				return nil, nil, err
 			}
