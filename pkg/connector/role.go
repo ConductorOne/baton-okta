@@ -481,9 +481,9 @@ func roleResourceV5(ctx context.Context, role *oktav5.Role, ctype *v2.ResourceTy
 	}
 
 	profile := map[string]interface{}{
-		"id":    role.Id,
-		"label": role.Label,
-		"type":  role.Type,
+		"id":    nullableStr(role.Id),
+		"label": nullableStr(role.Label),
+		"type":  nullableStr(role.Type),
 	}
 
 	return sdkResource.NewRoleResource(
