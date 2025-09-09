@@ -41,6 +41,15 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 		return "", nil
 	}
 
+	if !resp.HasNextPage() {
+		return "", nil
+	}
+
+	// looks like the Request is nil in some cases when doesn't have next page
+	if resp.Request == nil {
+		return "", nil
+	}
+
 	serializable := &SerializableOktaResponseV5{
 		Link: resp.Header["Link"],
 		Url:  resp.Request.URL.String(),
