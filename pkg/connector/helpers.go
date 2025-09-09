@@ -202,7 +202,7 @@ func paginateV5[T any](
 
 		previous := oktav5.NewAPIResponse(prevResp.Response, clientV5, nil)
 		if previous.HasNextPage() {
-			resp, err = previous.Next(&resp)
+			resp, err = previous.Next(&response)
 			if err != nil {
 				return nil, err
 			}
