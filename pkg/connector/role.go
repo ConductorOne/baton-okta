@@ -96,11 +96,10 @@ type RoleAssignments struct {
 }
 
 const (
-	apiPathListAdministrators              = "/api/internal/administrators"
-	apiPathListIamCustomRoles              = "/api/v1/iam/roles"
-	apiPathListAllUsersWithRoleAssignments = "/api/v1/iam/assignees/users"
-	ContentType                            = "application/json"
-	NF                                     = -1
+	apiPathListAdministrators = "/api/internal/administrators"
+	apiPathListIamCustomRoles = "/api/v1/iam/roles"
+	ContentType               = "application/json"
+	NF                        = -1
 )
 
 func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -183,22 +182,22 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5, token, page)
+	v5, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
+		return listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5)
+	})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
+		return nil, "", nil, err
 	}
 
-	nextPage, annos, err := parseRespV5(respCtx.OktaResponse)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-	}
+	usersWithRoleAssignments := v5.value
+	nextPage, annos := v5.nextPage, v5.annos
 
 	err = bag.Next(nextPage)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, user := range usersWithRoleAssignments {
+	for _, user := range usersWithRoleAssignments.Value {
 		if user.Id == nil {
 			l.Warn("okta-connectorv2: user has no ID, skipping")
 			continue
@@ -334,25 +333,15 @@ func listOktaIamCustomRoles(
 	return role.Roles, respCtx, nil
 }
 
-func listAllUsersWithRoleAssignmentsV5(
-	ctx context.Context,
-	client *oktav5.APIClient,
-	token *pagination.Token,
-	after string,
-) ([]oktav5.RoleAssignedUser, *responseContextV5, error) {
+func listAllUsersWithRoleAssignmentsV5(ctx context.Context, client *oktav5.APIClient) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
 	execute, resp, err := client.RoleAssignmentAPI.ListUsersWithRoleAssignments(ctx).
-		After(after).
+		Limit(defaultLimit).
 		Execute()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	respCtx, err := responseToContextV5(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return execute.Value, respCtx, nil
+	return execute, resp, nil
 }
 
 func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
