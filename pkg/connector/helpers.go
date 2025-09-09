@@ -8,6 +8,11 @@ import (
 	"io"
 	"net/url"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+
+	"github.com/conductorone/baton-sdk/pkg/annotations"
+
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -25,10 +30,6 @@ const (
 
 type responseContext struct {
 	OktaResponse *okta.Response
-}
-
-type responseContextV5 struct {
-	OktaResponse *oktav5.APIResponse
 }
 
 func V1MembershipEntitlementID(resourceID string) string {
@@ -82,20 +83,6 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	token.Token = after
 
 	return &responseContext{
-		OktaResponse: resp,
-	}, nil
-}
-
-func responseToContextV5(token *pagination.Token, resp *oktav5.APIResponse) (*responseContextV5, error) {
-	u, err := url.Parse(resp.NextPage())
-	if err != nil {
-		return nil, err
-	}
-
-	after := u.Query().Get("after")
-	token.Token = after
-
-	return &responseContextV5{
 		OktaResponse: resp,
 	}, nil
 }
@@ -181,4 +168,60 @@ func nullableStr(v *string) string {
 		return ""
 	}
 	return *v
+}
+
+type paginateV5Response[T any] struct {
+	value    T
+	resp     *oktav5.APIResponse
+	annos    annotations.Annotations
+	nextPage string
+}
+
+func paginateV5[T any](
+	ctx context.Context,
+	clientV5 *oktav5.APIClient,
+	page string,
+	act func(ctx2 context.Context) (T, *oktav5.APIResponse, error),
+) (*paginateV5Response[T], error) {
+	var response T
+	var resp *oktav5.APIResponse
+	var err error
+
+	l := ctxzap.Extract(ctx)
+
+	if page == "" {
+		l.Debug("paginationV5: first page")
+
+		response, resp, err = act(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		l.Debug("paginationV5: paginate", zap.String("page", page))
+
+		prevResp, err := deserializeOktaResponseV5(page)
+		if err != nil {
+			return nil, err
+		}
+
+		previous := oktav5.NewAPIResponse(prevResp.Response, clientV5, nil)
+		if previous.HasNextPage() {
+			resp, err = previous.Next(&resp)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	nextPage, annos, err := parseRespV5(resp)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+	}
+
+	return &paginateV5Response[T]{
+		value:    response,
+		resp:     resp,
+		annos:    annos,
+		nextPage: nextPage,
+	}, nil
 }

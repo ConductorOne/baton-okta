@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"path"
 
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -141,22 +143,23 @@ func (o *customRoleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5, token, page)
+	v5, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
+		return listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5)
+	})
+
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users with role assignments: %w", err)
 	}
 
-	nextPage, annos, err := parseRespV5(respCtx.OktaResponse)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-	}
+	usersWithRoleAssignments := v5.value
+	nextPage, annos := v5.nextPage, v5.annos
 
 	err = bag.Next(nextPage)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	for _, user := range usersWithRoleAssignments {
+	for _, user := range usersWithRoleAssignments.Value {
 		if user.Id == nil {
 			l.Warn("user has no ID, skipping", zap.Any("user", user))
 			continue

@@ -38,38 +38,20 @@ func (o *apiTokenResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	bag, prevSerializedResp, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeApiToken.Id})
+	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeApiToken.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to parse page token: %w", err)
 	}
 
-	var apiTokens []oktav5.ApiToken
-	var resp *oktav5.APIResponse
-
-	if prevSerializedResp == "" {
-		apiTokens, resp, err = o.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to list api tokens: %w", err)
-		}
-	} else {
-		prevResp, err := deserializeOktaResponseV5(prevSerializedResp)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to deserialize page token: %w", err)
-		}
-
-		localOktaAPIResponse := oktav5.NewAPIResponse(prevResp.Response, o.clientV5, nil)
-		if localOktaAPIResponse.HasNextPage() {
-			resp, err = localOktaAPIResponse.Next(&apiTokens)
-			if err != nil {
-				return nil, "", nil, err
-			}
-		}
-	}
-
-	nextPage, annos, err := parseRespV5(resp)
+	v5, err := paginateV5(ctx, o.clientV5, page, func(ctx2 context.Context) ([]oktav5.ApiToken, *oktav5.APIResponse, error) {
+		return o.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
+	})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to parse response: %w", err)
+		return nil, "", nil, err
 	}
+
+	apiTokens := v5.value
+	nextPage, annos := v5.nextPage, v5.annos
 
 	ret := make([]*v2.Resource, 0, len(apiTokens))
 	for _, apiToken := range apiTokens {
