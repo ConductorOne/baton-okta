@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
+
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -79,11 +79,6 @@ type roleResourceType struct {
 	connector    *Okta
 }
 
-type CustomRoles struct {
-	Roles []*okta.Role `json:"roles,omitempty"`
-	Links interface{}  `json:"_links,omitempty"`
-}
-
 type RoleAssignment struct {
 	Id    string      `json:"id,omitempty"`
 	Orn   string      `json:"orn,omitempty"`
@@ -97,7 +92,6 @@ type RoleAssignments struct {
 
 const (
 	apiPathListAdministrators = "/api/internal/administrators"
-	apiPathListIamCustomRoles = "/api/v1/iam/roles"
 	ContentType               = "application/json"
 	NF                        = -1
 )
@@ -225,27 +219,37 @@ func (o *roleResourceType) Grants(
 
 		if userRoles == nil {
 			userRoles = mapset.NewSet[string]()
-			roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
+			roles, _, err := listAssignedRolesForUserV5(ctx, o.connector.clientV5, userId)
 			if err != nil {
 				return nil, "", nil, err
 			}
 			for _, role := range roles {
-				if role.Status == roleStatusInactive {
+				if role.Status == nil || role.AssignmentType == nil || role.Type == nil {
 					continue
 				}
 
-				if role.AssignmentType != "USER" {
+				if *role.Status == roleStatusInactive {
 					continue
 				}
 
-				if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
+				if *role.AssignmentType != "USER" {
 					continue
 				}
 
-				if role.Type == roleTypeCustom {
-					userRoles.Add(role.Role)
+				if !o.connector.syncCustomRoles && *role.Type == roleTypeCustom {
+					continue
+				}
+
+				if *role.Type == roleTypeCustom {
+					roleId, ok := role.AdditionalProperties["role"].(string)
+					if !ok {
+						l.Warn("okta-connectorv2: custom role has no role in additional properties, skipping")
+						continue
+					}
+
+					userRoles.Add(roleId)
 				} else {
-					userRoles.Add(role.Type)
+					userRoles.Add(*role.Type)
 				}
 			}
 			o.connector.userRoleCache.Store(userId, userRoles)
@@ -288,7 +292,7 @@ func (o *roleResourceType) listSystemRoles(
 ) ([]*v2.Resource, error) {
 	rv := make([]*v2.Resource, 0, len(standardRoleTypes))
 	for _, role := range standardRoleTypes {
-		resource, err := roleResourceV5(ctx, role, resourceTypeRole)
+		resource, err := roleResourceV5(ctx, role)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 		}
@@ -297,40 +301,6 @@ func (o *roleResourceType) listSystemRoles(
 	}
 
 	return rv, nil
-}
-
-func listOktaIamCustomRoles(
-	ctx context.Context,
-	client *okta.Client,
-	token *pagination.Token,
-	qp *query.Params,
-) ([]*okta.Role, *responseContext, error) {
-	url := apiPathListIamCustomRoles
-	if qp != nil {
-		url += qp.String()
-	}
-
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var role *CustomRoles
-	resp, err := rq.Do(ctx, req, &role)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	respCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return role.Roles, respCtx, nil
 }
 
 func listAllUsersWithRoleAssignmentsV5(ctx context.Context, client *oktav5.APIClient) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
@@ -344,13 +314,13 @@ func listAllUsersWithRoleAssignmentsV5(ctx context.Context, client *oktav5.APICl
 	return execute, resp, nil
 }
 
-func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.Token) (*okta.OrgSetting, *responseContext, error) {
-	orgSettings, resp, err := client.OrgSetting.GetOrgSettings(ctx)
+func getOrgSettings(ctx context.Context, client *oktav5.APIClient, token *pagination.Token) (*oktav5.OrgSetting, *responseContextV5, error) {
+	orgSettings, resp, err := client.OrgSettingAPI.GetOrgSettings(ctx).Execute()
 	if err != nil {
-		return nil, nil, handleOktaResponseError(resp, err)
+		return nil, nil, handleOktaResponseErrorV5(resp, err)
 	}
 
-	respCtx, err := responseToContext(token, resp)
+	respCtx, err := responseToContextV5(token, resp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -384,6 +354,7 @@ func listAdministratorRoleFlags(
 	token *pagination.Token,
 	encodedQueryParams string,
 ) ([]*administratorRoleFlags, *responseContext, error) {
+	// TODO(golds): Needs oktav5 export do and request to change this
 	reqUrl, err := url.Parse(apiPathListAdministrators)
 	if err != nil {
 		return nil, nil, err
@@ -440,30 +411,7 @@ func StandardRoleTypeFromLabel(label string) *oktav5.Role {
 	return nil
 }
 
-func roleResource(ctx context.Context, role *okta.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
-	var objectID = role.Type
-	if role.Type == "" && role.Id != "" {
-		objectID = role.Id
-	}
-
-	profile := map[string]interface{}{
-		"id":    role.Id,
-		"label": role.Label,
-		"type":  role.Type,
-	}
-
-	return sdkResource.NewRoleResource(
-		role.Label,
-		ctype,
-		objectID,
-		[]sdkResource.RoleTraitOption{sdkResource.WithRoleProfile(profile)},
-		sdkResource.WithAnnotation(&v2.V1Identifier{
-			Id: fmtResourceIdV1(objectID),
-		}),
-	)
-}
-
-func roleResourceV5(ctx context.Context, role *oktav5.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
+func roleResourceV5(ctx context.Context, role *oktav5.Role) (*v2.Resource, error) {
 	var objectID = nullableStr(role.Type)
 	if objectID == "" && nullableStr(role.Id) != "" {
 		objectID = *role.Id
@@ -477,7 +425,7 @@ func roleResourceV5(ctx context.Context, role *oktav5.Role, ctype *v2.ResourceTy
 
 	return sdkResource.NewRoleResource(
 		nullableStr(role.Label),
-		ctype,
+		resourceTypeRole,
 		objectID,
 		[]sdkResource.RoleTraitOption{sdkResource.WithRoleProfile(profile)},
 		sdkResource.WithAnnotation(&v2.V1Identifier{
@@ -675,7 +623,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r oktav5.Role) bool {
-			if r.Id == nil || r.Type == nil || r.Status == nil {
+			if r.Type == nil || r.Status == nil {
 				return false
 			}
 
@@ -691,6 +639,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 		}
 
+		// TODO(golds): needs to validate system role
 		roleId = *roles[rolePos].Id
 		response, err = g.client.RoleAssignmentAPI.UnassignRoleFromGroup(ctx, groupId, roleId).Execute()
 		if err != nil {
@@ -727,7 +676,7 @@ func (o *roleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 
 	for _, role := range standardRoleTypes {
 		if nullableStr(role.Type) == resourceId.Resource {
-			resource, err := roleResourceV5(ctx, role, resourceTypeRole)
+			resource, err := roleResourceV5(ctx, role)
 			if err != nil {
 				return nil, nil, err
 			}

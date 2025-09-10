@@ -34,8 +34,11 @@ type Okta struct {
 	skipSecondaryEmails bool
 	awsConfig           *awsConfig
 	SyncSecrets         bool
-	userRoleCache       sync.Map
-	userFilters         *userFilterConfig
+	// userRoleCache userId -> []{roleId | type}
+	// roleId means custom role
+	// type means standard role
+	userRoleCache sync.Map
+	userFilters   *userFilterConfig
 }
 
 type ciamConfig struct {
@@ -335,12 +338,12 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 
 	token := newPaginationToken(defaultLimit, "")
 
-	_, respCtx, err := getOrgSettings(ctx, c.client, token)
+	_, respCtx, err := getOrgSettings(ctx, c.clientV5, token)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: verify failed to fetch org: %w", err)
 	}
 
-	_, _, err = parseResp(respCtx.OktaResponse)
+	_, _, err = parseRespV5(respCtx.OktaResponse)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: verify failed to parse response: %w", err)
 	}

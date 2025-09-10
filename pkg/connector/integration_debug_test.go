@@ -405,7 +405,7 @@ func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string)
 		Id:    &id,
 		Label: &label,
 		Type:  &ctype,
-	}, resourceTypeRole)
+	})
 }
 
 func getResourceSetBindingsResourceForTesting(ctxTest context.Context, id, label, description string) (*v2.Resource, error) {
