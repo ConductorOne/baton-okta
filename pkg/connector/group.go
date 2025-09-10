@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -216,18 +218,19 @@ func (o *groupResourceType) Grants(
 
 		return rv, pageToken, annos, nil
 	case resourceTypeRole.Id:
-		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
+		roles, resp, err := listGroupAssignedRolesV5(ctx, o.connector.clientV5, groupID)
 		if err != nil {
 			if resp == nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
 			}
 
 			defer resp.Body.Close()
-			errOkta, err := getError(resp)
+			errOkta, err := getErrorV5(resp)
 			if err != nil {
 				return nil, "", nil, err
 			}
-			if errOkta.ErrorCode == AccessDeniedErrorCode {
+
+			if errOkta.ErrorCode != nil && *errOkta.ErrorCode == AccessDeniedErrorCode {
 				err = bag.Next("")
 				if err != nil {
 					return nil, "", nil, err
@@ -238,32 +241,41 @@ func (o *groupResourceType) Grants(
 				}
 				return nil, pageToken, nil, nil
 			} else {
-				return nil, "", nil, convertNotFoundError(&errOkta, "okta-connectorv2: failed to list group roles")
+				return nil, "", nil, convertNotFoundError(toErrorV5(errOkta), "okta-connectorv2: failed to list group roles")
 			}
 		}
 
 		for _, role := range roles {
-			if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" {
+			if role.Status == nil || role.AssignmentType == nil || role.Type == nil {
 				continue
 			}
 
-			if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
+			if *role.Status == roleStatusInactive || *role.AssignmentType != "GROUP" {
+				continue
+			}
+
+			if !o.connector.syncCustomRoles && *role.Type == roleTypeCustom {
 				continue
 			}
 
 			// TODO(lauren) convert model helper
 			var roleResourceVal *v2.Resource
-			if role.Type == roleTypeCustom {
-				roleResourceVal, err = roleResource(ctx, &okta.Role{
-					Id:    role.Role,
-					Label: role.Label,
-				}, resourceTypeCustomRole)
+			if *role.Type == roleTypeCustom {
+				l.Debug("okta-connectorv2: custom role grant", zap.Any("role", role))
+
+				roleId, ok := role.AdditionalProperties["role"].(string)
+				if !ok {
+					l.Warn("okta-connectorv2: role missing role field, skipping", zap.Any("role", role))
+					continue
+				}
+
+				roleResourceVal, err = customRoleResourceV5(ctx, &oktav5.IamRole{
+					Id:    oktav5.PtrString(roleId),
+					Label: nullableStr(role.Label),
+				})
 			} else {
-				roleResourceVal, err = roleResource(ctx, &okta.Role{
-					Id:    role.Role,
-					Label: role.Label,
-					Type:  role.Type,
-				}, resourceTypeRole)
+				l.Debug("okta-connectorv2: system role grant", zap.Any("role", role))
+				roleResourceVal, err = roleResourceV5(ctx, &role)
 			}
 			if err != nil {
 				return nil, "", nil, err
@@ -282,12 +294,12 @@ func (o *groupResourceType) Grants(
 		}
 
 		// TODO(lauren) Move this to list method like other methods do
-		respCtx, err := responseToContext(token, resp)
+		respCtx, err := responseToContextV5(token, resp)
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		nextPage, annos, err := parseResp(respCtx.OktaResponse)
+		nextPage, annos, err := parseRespV5(respCtx.OktaResponse)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 		}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
@@ -30,6 +31,10 @@ const (
 
 type responseContext struct {
 	OktaResponse *okta.Response
+}
+
+type responseContextV5 struct {
+	OktaResponse *oktav5.APIResponse
 }
 
 func V1MembershipEntitlementID(resourceID string) string {
@@ -87,6 +92,20 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	}, nil
 }
 
+func responseToContextV5(token *pagination.Token, resp *oktav5.APIResponse) (*responseContextV5, error) {
+	u, err := url.Parse(resp.NextPage())
+	if err != nil {
+		return nil, err
+	}
+
+	after := u.Query().Get("after")
+	token.Token = after
+
+	return &responseContextV5{
+		OktaResponse: resp,
+	}, nil
+}
+
 func getError(response *okta.Response) (okta.Error, error) {
 	var errOkta okta.Error
 	bytes, err := io.ReadAll(response.Body)
@@ -117,7 +136,43 @@ func getErrorV5(response *oktav5.APIResponse) (oktav5.Error, error) {
 	return errOkta, nil
 }
 
+func toErrorV5(e oktav5.Error) error {
+	formattedErr := "the API returned an unknown error"
+	if e.ErrorSummary != nil {
+		formattedErr = fmt.Sprintf("the API returned an error: %s", *e.ErrorSummary)
+	}
+	if len(e.ErrorCauses) > 0 {
+		var causes []string
+		for _, cause := range e.ErrorCauses {
+			if cause.ErrorSummary == nil {
+				continue
+			}
+
+			causes = append(causes, fmt.Sprintf("Error cause: %v", *cause.ErrorSummary))
+		}
+		formattedErr = fmt.Sprintf("%s. Causes: %s", formattedErr, strings.Join(causes, ", "))
+	}
+
+	return errors.New(formattedErr)
+}
+
 func handleOktaResponseError(resp *okta.Response, err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Timeout() {
+			return status.Error(codes.DeadlineExceeded, fmt.Sprintf("request timeout: %v", urlErr.URL))
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, "request timeout")
+	}
+	if resp != nil && resp.StatusCode >= 500 {
+		return status.Error(codes.Unavailable, "server error")
+	}
+	return err
+}
+
+func handleOktaResponseErrorV5(resp *oktav5.APIResponse, err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
@@ -171,6 +226,10 @@ type paginateV5Response[T any] struct {
 	resp     *oktav5.APIResponse
 	annos    annotations.Annotations
 	nextPage string
+}
+
+func (p *paginateV5Response[T]) values() (T, string, annotations.Annotations) {
+	return p.value, p.nextPage, p.annos
 }
 
 func paginateV5[T any](
