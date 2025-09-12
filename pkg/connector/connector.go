@@ -92,6 +92,11 @@ type userFilterConfig struct {
 	resultsCacheMutex    sync.Mutex
 }
 
+type getUserProfiler interface {
+	GetId() string
+	GetProfile() oktav5.UserProfile
+}
+
 type Config struct {
 	Domain                                                string
 	ApiToken                                              string
@@ -700,6 +705,26 @@ func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User
 	o.userFilters.resultsCacheMutex.Lock()
 	defer o.userFilters.resultsCacheMutex.Unlock()
 	o.userFilters.resultsCache[user.Id] = userFilterResult{
+		matchedEmailDomains: shouldInclude,
+	}
+
+	return shouldInclude
+}
+
+// shouldIncludeUserAndSetCacheV5 evaluates and returns if the user meets the filtering criteria,
+// while also writing the result to the user filter cache.
+func (o *Okta) shouldIncludeUserAndSetCacheV5(ctx context.Context, user getUserProfiler) bool {
+	// don't bother writing to cache if no email filters are set
+	if len(o.userFilters.includedEmailDomains) == 0 {
+		return true
+	}
+
+	userEmails := extractEmailsFromUserProfileV5(user)
+	shouldInclude := shouldIncludeUserByEmails(userEmails, o.userFilters.includedEmailDomains)
+
+	o.userFilters.resultsCacheMutex.Lock()
+	defer o.userFilters.resultsCacheMutex.Unlock()
+	o.userFilters.resultsCache[user.GetId()] = userFilterResult{
 		matchedEmailDomains: shouldInclude,
 	}
 
