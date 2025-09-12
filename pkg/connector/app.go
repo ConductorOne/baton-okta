@@ -580,6 +580,7 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
 	app, resp, err := client.Application.GetApplication(ctx, appID, okta.NewApplication(), nil)
 	if err != nil {
+		err = convertNotFoundError(err, "app not found")
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseError(resp, err))
 	}
 
