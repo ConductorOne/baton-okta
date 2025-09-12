@@ -716,8 +716,7 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 
 	resp, err := rq.Do(ctx, req, &oktaUsers)
 	if err != nil {
-		err = convertNotFoundError(err, "user not found")
-		return nil, nil, err
+		return nil, nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "user not found")
 	}
 
 	return oktaUsers, &responseContext{OktaResponse: resp}, nil
