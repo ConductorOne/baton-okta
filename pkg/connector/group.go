@@ -177,25 +177,28 @@ func (o *groupResourceType) Grants(
 				l.Debug("okta-connectorv2: making list group users call because users_count profile attribute was not present")
 			}
 
-			qp := queryParams(token.Size, page)
-
-			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
+			users, respCtx, err := o.listGroupUsersV5(ctx, groupID, token, page)
 			if err != nil {
 				return nil, "", nil, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
 			}
 
-			nextPage, annos, err = parseResp(respCtx.OktaResponse)
+			nextPage, annos, err = parseRespV5(respCtx.OktaResponse)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
 
 			for _, user := range users {
-				shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+				shouldInclude := o.connector.shouldIncludeUserAndSetCacheV5(ctx, &user)
 				if !shouldInclude {
 					continue
 				}
 
-				rv = append(rv, groupGrant(resource, user))
+				if user.Id == nil {
+					l.Warn("okta-connectorv2: user ID is nil, skipping")
+					continue
+				}
+
+				rv = append(rv, groupGrant(resource, &user))
 			}
 		} else {
 			l.Debug("okta-connectorv2: skipping list group users")
@@ -490,13 +493,16 @@ func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, g
 	return accountId, role, true, nil
 }
 
-func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	users, resp, err := o.connector.client.Group.ListGroupUsers(ctx, groupID, qp)
+func (o *groupResourceType) listGroupUsersV5(ctx context.Context, groupID string, token *pagination.Token, after string) ([]oktav5.GroupMember, *responseContextV5, error) {
+	users, resp, err := o.connector.clientV5.GroupAPI.ListGroupUsers(ctx, groupID).
+		After(after).
+		Limit(defaultLimit).
+		Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", handleOktaResponseError(resp, err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", handleOktaResponseErrorV5(resp, err))
 	}
 
-	reqCtx, err := responseToContext(token, resp)
+	reqCtx, err := responseToContextV5(token, resp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -621,11 +627,11 @@ func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.R
 	)
 }
 
-func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
-	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: user.Id}}
+func groupGrant(resource *v2.Resource, user *oktav5.GroupMember) *v2.Grant {
+	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: *user.Id}}
 
 	return sdkGrant.NewGrant(resource, "member", ur, sdkGrant.WithAnnotation(&v2.V1Identifier{
-		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), user.Id),
+		Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), *user.Id),
 	}))
 }
 

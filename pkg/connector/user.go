@@ -219,6 +219,38 @@ func extractEmailsFromUserProfile(user *okta.User) []string {
 	return userEmails
 }
 
+// extractEmailsFromUserProfileV5 safely extracts email addresses from a regular user profile.
+// It checks for email, secondEmail, and login fields that contain email addresses.
+func extractEmailsFromUserProfileV5(user getUserProfiler) []string {
+	var userEmails []string
+
+	// Check if profile exists
+	if user == nil {
+		return userEmails
+	}
+
+	oktaProfile := user.GetProfile()
+
+	// Extract primary email
+	if nullableStr(oktaProfile.Email) != "" {
+		userEmails = append(userEmails, nullableStr(oktaProfile.Email))
+	}
+
+	// Extract secondary email
+	if nullableStr(oktaProfile.SecondEmail.Get()) != "" {
+		userEmails = append(userEmails, nullableStr(oktaProfile.SecondEmail.Get()))
+	}
+
+	// Check if login field contains an email address
+	if nullableStr(oktaProfile.Login) != "" {
+		if strings.Contains(nullableStr(oktaProfile.Login), "@") {
+			userEmails = append(userEmails, nullableStr(oktaProfile.Login))
+		}
+	}
+
+	return userEmails
+}
+
 // extractEmailsFromAppUserProfile safely extracts email addresses from an app user profile.
 // It checks for email, secondEmail, and login fields that contain email addresses.
 func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
