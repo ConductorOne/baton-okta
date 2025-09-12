@@ -667,7 +667,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 	}
 
 	if err != nil {
-		return nil, nil, handleOktaResponseError(resp, err)
+		return nil, nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "group not found")
 	}
 
 	if resp != nil {

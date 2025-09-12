@@ -96,6 +96,10 @@ func getError(response *okta.Response) (okta.Error, error) {
 }
 
 func handleOktaResponseError(resp *okta.Response, err error) error {
+	return handleOktaResponseErrorWithNotFoundMessage(resp, err, "not found")
+}
+
+func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, message string) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
@@ -108,7 +112,7 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 	if resp != nil && resp.StatusCode >= 500 {
 		return status.Error(codes.Unavailable, "server error")
 	}
-	return err
+	return convertNotFoundError(err, message)
 }
 
 // https://developer.okta.com/docs/reference/error-codes/?q=not%20found
