@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -270,6 +272,34 @@ func listApplicationGroupAssignments(ctx context.Context, client *okta.Client, a
 	}
 
 	reqCtx, err := responseToContext(token, resp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return applicationGroupAssignments, reqCtx, nil
+}
+
+type ApiListApplicationGroupAssignmentsRequestOpt func(r *oktav5.ApiListApplicationGroupAssignmentsRequest)
+
+func listApplicationGroupAssignmentsV5(
+	ctx context.Context,
+	client *oktav5.APIClient,
+	appID string,
+	token *pagination.Token,
+	opts ...ApiListApplicationGroupAssignmentsRequestOpt,
+) ([]oktav5.ApplicationGroupAssignment, *responseContextV5, error) {
+	request := client.ApplicationGroupsAPI.ListApplicationGroupAssignments(ctx, appID)
+
+	for _, opt := range opts {
+		opt(&request)
+	}
+
+	applicationGroupAssignments, resp, err := request.Execute()
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", handleOktaResponseErrorV5(resp, err))
+	}
+
+	reqCtx, err := responseToContextV5(token, resp)
 	if err != nil {
 		return nil, nil, err
 	}
