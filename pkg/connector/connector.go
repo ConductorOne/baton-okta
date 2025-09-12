@@ -664,6 +664,16 @@ func appGroupSAMLRolesWrapper(ctx context.Context, appGroup *okta.ApplicationGro
 	}, nil
 }
 
+func appGroupSAMLRolesWrapperV5(ctx context.Context, appGroup *oktav5.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
+	samlRoles, err := getSAMLRolesFromAppGroupProfileV5(ctx, appGroup)
+	if err != nil {
+		return nil, err
+	}
+	return &OktaAppGroupWrapper{
+		samlRoles: samlRoles,
+	}, nil
+}
+
 func accountIdFromARN(input string) (string, error) {
 	parsedArn, err := arn.Parse(input)
 	if err != nil {

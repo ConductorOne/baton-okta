@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/bid"
@@ -514,6 +516,15 @@ func getSAMLRolesFromAppGroupProfile(ctx context.Context, appGroup *okta.Applica
 		return nil, nil
 	}
 	return getSAMLRoles(appGroupProfile)
+}
+
+func getSAMLRolesFromAppGroupProfileV5(ctx context.Context, appGroup *oktav5.ApplicationGroupAssignment) ([]string, error) {
+	l := ctxzap.Extract(ctx)
+	if appGroup.Profile == nil {
+		l.Error("app group profile was nil", zap.Any("groupId", appGroup.Id))
+		return nil, nil
+	}
+	return getSAMLRoles(appGroup.Profile)
 }
 
 func getSAMLRoles(profile map[string]interface{}) ([]string, error) {
