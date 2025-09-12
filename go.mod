@@ -1,9 +1,9 @@
 module github.com/conductorone/baton-okta
 
-go 1.23.4
+go 1.25
 
 require (
-	github.com/conductorone/baton-sdk v0.3.39
+	github.com/conductorone/baton-sdk v0.3.55
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.6-conductorone
 	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
@@ -92,7 +92,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20240909124753-873cd0166683 // indirect
 	github.com/magiconair/properties v1.8.9 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
