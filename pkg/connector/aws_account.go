@@ -323,7 +323,7 @@ func (o *accountResourceType) collectRolesFromUserGroups(
 	ctx context.Context,
 	userID string,
 ) (mapset.Set[string], error) {
-	userGroups, _, err := listUsersGroupsClient(ctx, o.connector.client, userID)
+	userGroups, _, err := listUsersGroupsClient(ctx, o.connector.clientV5, userID)
 	if err != nil {
 		return nil, fmt.Errorf("okta-aws-connector: failed to get groups for user '%s': %w", userID, err)
 	}
@@ -331,7 +331,11 @@ func (o *accountResourceType) collectRolesFromUserGroups(
 	roles := mapset.NewSet[string]()
 
 	for _, group := range userGroups {
-		appGroup, err := o.getOktaAppGroupFromCacheOrFetch(ctx, group.Id)
+		if group.Id == nil {
+			continue
+		}
+
+		appGroup, err := o.getOktaAppGroupFromCacheOrFetch(ctx, *group.Id)
 		if err != nil {
 			return nil, err
 		}

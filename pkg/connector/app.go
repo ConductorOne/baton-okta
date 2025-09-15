@@ -296,7 +296,7 @@ func listApplicationGroupAssignmentsV5(
 
 	applicationGroupAssignments, resp, err := request.Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", handleOktaResponseErrorV5(resp, err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", wrapErrorV5(err))
 	}
 
 	reqCtx, err := responseToContextV5(token, resp)
