@@ -40,7 +40,7 @@ func (o *customRoleResourceType) List(
 		return o.connector.clientV5.RoleAPI.ListRoles(ctx).Execute()
 	})
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, wrapErrorV5(err)
 	}
 
 	response, nextPage, annon := v5.values()
@@ -124,7 +124,7 @@ func (o *customRoleResourceType) Grants(
 	})
 
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users with role assignments: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users with role assignments: %w", wrapErrorV5(err))
 	}
 
 	usersWithRoleAssignments := v5.value
@@ -152,7 +152,7 @@ func (o *customRoleResourceType) Grants(
 			userRoles = mapset.NewSet[string]()
 			roles, _, err := listAssignedRolesForUserV5(ctx, o.connector.clientV5, userId)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, "", nil, wrapErrorV5(err)
 			}
 
 			for _, role := range roles {
@@ -209,7 +209,7 @@ func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.Resourc
 
 	role, resp, err := o.connector.clientV5.RoleAPI.GetRole(ctx, roleId).Execute()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, wrapErrorV5(err)
 	}
 
 	if resp != nil {

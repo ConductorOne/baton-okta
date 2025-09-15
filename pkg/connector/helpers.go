@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/conductorone/baton-okta/pkg/connector/oktaerrors"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
@@ -121,22 +124,31 @@ func getError(response *okta.Response) (okta.Error, error) {
 	return errOkta, nil
 }
 
-func getErrorV5(response *oktav5.APIResponse) (oktav5.Error, error) {
-	var errOkta oktav5.Error
-	bytes, err := io.ReadAll(response.Body)
-	if err != nil {
-		return oktav5.Error{}, err
+func asErrorV5(err error) (*oktav5.Error, bool) {
+	oktaGenericErr := oktav5.GenericOpenAPIError{}
+
+	if errors.As(err, &oktaGenericErr) {
+		var oktaErr oktav5.Error
+		err := json.Unmarshal(oktaGenericErr.Body(), &oktaErr)
+		if err != nil {
+			return nil, false
+		}
+
+		return &oktaErr, true
 	}
 
-	err = json.Unmarshal(bytes, &errOkta)
-	if err != nil {
-		return oktav5.Error{}, err
-	}
-
-	return errOkta, nil
+	return nil, false
 }
 
-func toErrorV5(e oktav5.Error) error {
+func wrapErrorV5(originalErr error, additionalError ...error) error {
+	if v5Err, ok := asErrorV5(originalErr); ok {
+		return toErrorV5(*v5Err, additionalError...)
+	}
+
+	return originalErr
+}
+
+func toErrorV5(e oktav5.Error, additionalError ...error) error {
 	formattedErr := "the API returned an unknown error"
 	if e.ErrorSummary != nil {
 		formattedErr = fmt.Sprintf("the API returned an error: %s", *e.ErrorSummary)
@@ -153,7 +165,39 @@ func toErrorV5(e oktav5.Error) error {
 		formattedErr = fmt.Sprintf("%s. Causes: %s", formattedErr, strings.Join(causes, ", "))
 	}
 
-	return errors.New(formattedErr)
+	err := errors.New(formattedErr)
+	if len(additionalError) != 0 {
+		err = errors.Join(append([]error{err}, additionalError...)...)
+	}
+
+	findError := oktaerrors.FindError(nullableStr(e.ErrorCode))
+	if findError == nil {
+		return err
+	}
+
+	// Same as https://github.com/ConductorOne/baton-sdk/blob/main/pkg/uhttp/wrapper.go#L444
+	code := codes.Unknown
+	switch findError.StatusCode {
+	case http.StatusRequestTimeout:
+		code = codes.DeadlineExceeded
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		code = codes.Unavailable
+	case http.StatusNotFound:
+	case http.StatusUnauthorized:
+		code = codes.Unauthenticated
+	case http.StatusForbidden:
+		code = codes.PermissionDenied
+	case http.StatusConflict:
+		code = codes.AlreadyExists
+	case http.StatusNotImplemented:
+		code = codes.Unimplemented
+	}
+
+	if findError.StatusCode >= 500 && findError.StatusCode <= 599 {
+		code = codes.Unavailable
+	}
+
+	return status.Error(code, formattedErr)
 }
 
 func handleOktaResponseError(resp *okta.Response, err error) error {
@@ -174,22 +218,6 @@ func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, 
 		return status.Error(codes.Unavailable, "server error")
 	}
 	return convertNotFoundError(err, message)
-}
-
-func handleOktaResponseErrorV5(resp *oktav5.APIResponse, err error) error {
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		if urlErr.Timeout() {
-			return status.Error(codes.DeadlineExceeded, fmt.Sprintf("request timeout: %v", urlErr.URL))
-		}
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status.Error(codes.DeadlineExceeded, "request timeout")
-	}
-	if resp != nil && resp.StatusCode >= 500 {
-		return status.Error(codes.Unavailable, "server error")
-	}
-	return err
 }
 
 // https://developer.okta.com/docs/reference/error-codes/?q=not%20found
