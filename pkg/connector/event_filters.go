@@ -85,6 +85,52 @@ var (
 			return nil
 		},
 	}
+	CreateRevokeFilter = EventFilter{
+		EventTypes:  mapset.NewSet[string]("group.user_membership.remove"),
+		TargetTypes: mapset.NewSet[string]("UserGroup", "User"),
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["UserGroup"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
+			}
+			userGroup := targetMap["UserGroup"][0]
+			if len(targetMap["User"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			}
+			user := targetMap["User"][0]
+
+			resource, err := sdkResource.NewResource(userGroup.DisplayName, resourceTypeGroup, userGroup.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
+
+			rv.Event = &v2.Event_CreateRevokeEvent{
+				CreateRevokeEvent: &v2.CreateRevokeEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(resource, "member"),
+					Principal:   principal,
+				},
+			}
+
+			l.Debug("okta-event-feed: CreateRevokeFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeGroup.Id),
+				zap.String("resource_id", userGroup.Id),
+				zap.String("group_display_name", userGroup.DisplayName),
+				zap.String("user_id", user.Id),
+			)
+			return nil
+		},
+	}
 	ApplicationLifecycleFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	reader_v2 "github.com/conductorone/baton-sdk/pb/c1/reader/v2"
+	"github.com/conductorone/baton-sdk/pkg/connectorstore"
 	"github.com/conductorone/baton-sdk/pkg/dotc1z"
 	c1zmanager "github.com/conductorone/baton-sdk/pkg/dotc1z/manager"
 	"github.com/conductorone/baton-sdk/pkg/sdk"
@@ -181,13 +182,14 @@ func cpFile(sourcePath string, destPath string) error {
 	return nil
 }
 
-func getLatestObjects(ctx context.Context, info *CompactableSync) (*reader_v2.SyncRun, *dotc1z.C1File, c1zmanager.Manager, func(), error) {
-	baseC1Z, err := c1zmanager.New(ctx, info.FilePath)
+func (c *Compactor) getLatestObjects(ctx context.Context, info *CompactableSync) (*reader_v2.SyncRun, *dotc1z.C1File, c1zmanager.Manager, func(), error) {
+	cleanup := func() {}
+	baseC1Z, err := c1zmanager.New(ctx, info.FilePath, c1zmanager.WithTmpDir(c.tmpDir))
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, cleanup, err
 	}
 
-	cleanup := func() {
+	cleanup = func() {
 		_ = baseC1Z.Close(ctx)
 	}
 
@@ -210,6 +212,17 @@ func getLatestObjects(ctx context.Context, info *CompactableSync) (*reader_v2.Sy
 	}
 
 	return latestAppliedSync.Sync, baseFile, baseC1Z, cleanup, nil
+}
+
+func unionSyncTypes(a, b connectorstore.SyncType) connectorstore.SyncType {
+	switch {
+	case a == connectorstore.SyncTypeFull || b == connectorstore.SyncTypeFull:
+		return connectorstore.SyncTypeFull
+	case a == connectorstore.SyncTypeResourcesOnly || b == connectorstore.SyncTypeResourcesOnly:
+		return connectorstore.SyncTypeResourcesOnly
+	default:
+		return connectorstore.SyncTypePartial
+	}
 }
 
 func (c *Compactor) doOneCompaction(ctx context.Context, base *CompactableSync, applied *CompactableSync) (*CompactableSync, error) {
@@ -238,19 +251,39 @@ func (c *Compactor) doOneCompaction(ctx context.Context, base *CompactableSync, 
 	}
 	defer func() { _ = newFile.Close() }()
 
-	newSyncId, err := newFile.StartNewSyncV2(ctx, string(dotc1z.SyncTypeFull), "")
-	if err != nil {
-		return nil, err
-	}
-
-	_, baseFile, _, cleanupBase, err := getLatestObjects(ctx, base)
+	_, baseFile, _, cleanupBase, err := c.getLatestObjects(ctx, base)
 	defer cleanupBase()
 	if err != nil {
 		return nil, err
 	}
 
-	_, appliedFile, _, cleanupApplied, err := getLatestObjects(ctx, applied)
+	_, appliedFile, _, cleanupApplied, err := c.getLatestObjects(ctx, applied)
 	defer cleanupApplied()
+	if err != nil {
+		return nil, err
+	}
+
+	baseType, err := baseFile.LatestFinishedSyncType(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if baseType == connectorstore.SyncTypeAny {
+		return nil, fmt.Errorf("base file sync type is not valid") // TODO is this possible? is this secretly valid?
+	}
+
+	appliedType, err := appliedFile.LatestFinishedSyncType(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if appliedType == connectorstore.SyncTypeAny {
+		return nil, fmt.Errorf("applied file sync type is not valid")
+	}
+
+	combinedType := unionSyncTypes(baseType, appliedType)
+
+	newSyncId, err := newFile.StartNewSyncV2(ctx, combinedType, "")
 	if err != nil {
 		return nil, err
 	}

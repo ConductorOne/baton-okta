@@ -3,6 +3,7 @@ package dotc1z
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -102,8 +103,9 @@ func NewC1File(ctx context.Context, dbFilePath string, opts ...C1FOption) (*C1Fi
 }
 
 type c1zOptions struct {
-	tmpDir  string
-	pragmas []pragma
+	tmpDir         string
+	pragmas        []pragma
+	decoderOptions []DecoderOption
 }
 type C1ZOption func(*c1zOptions)
 
@@ -119,6 +121,12 @@ func WithPragma(name string, value string) C1ZOption {
 	}
 }
 
+func WithDecoderOptions(opts ...DecoderOption) C1ZOption {
+	return func(o *c1zOptions) {
+		o.decoderOptions = opts
+	}
+}
+
 // Returns a new C1File instance with its state stored at the provided filename.
 func NewC1ZFile(ctx context.Context, outputFilePath string, opts ...C1ZOption) (*C1File, error) {
 	ctx, span := tracer.Start(ctx, "NewC1ZFile")
@@ -129,7 +137,7 @@ func NewC1ZFile(ctx context.Context, outputFilePath string, opts ...C1ZOption) (
 		opt(options)
 	}
 
-	dbFilePath, err := loadC1z(outputFilePath, options.tmpDir)
+	dbFilePath, err := loadC1z(outputFilePath, options.tmpDir, options.decoderOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +157,14 @@ func NewC1ZFile(ctx context.Context, outputFilePath string, opts ...C1ZOption) (
 	return c1File, nil
 }
 
+func cleanupDbDir(dbFilePath string, err error) error {
+	cleanupErr := os.RemoveAll(filepath.Dir(dbFilePath))
+	if cleanupErr != nil {
+		err = errors.Join(err, cleanupErr)
+	}
+	return err
+}
+
 // Close ensures that the sqlite database is flushed to disk, and if any changes were made we update the original database
 // with our changes.
 func (c *C1File) Close() error {
@@ -157,7 +173,7 @@ func (c *C1File) Close() error {
 	if c.rawDb != nil {
 		err = c.rawDb.Close()
 		if err != nil {
-			return err
+			return cleanupDbDir(c.dbFilePath, err)
 		}
 	}
 	c.rawDb = nil
@@ -167,17 +183,11 @@ func (c *C1File) Close() error {
 	if c.dbUpdated {
 		err = saveC1z(c.dbFilePath, c.outputFilePath)
 		if err != nil {
-			return err
+			return cleanupDbDir(c.dbFilePath, err)
 		}
 	}
 
-	// Cleanup the database filepath. This should always be a file within a temp directory, so we remove the entire dir.
-	err = os.RemoveAll(filepath.Dir(c.dbFilePath))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return cleanupDbDir(c.dbFilePath, err)
 }
 
 // init ensures that the database has all of the required schema.
