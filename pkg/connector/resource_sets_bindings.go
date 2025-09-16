@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,7 +16,6 @@ import (
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
@@ -31,7 +31,6 @@ const (
 
 type resourceSetsBindingsResourceType struct {
 	resourceType *v2.ResourceType
-	client       *okta.Client
 	clientV5     *oktav5.APIClient
 	domain       string
 }
@@ -40,17 +39,17 @@ func (rsb *resourceSetsBindingsResourceType) ResourceType(ctx context.Context) *
 	return rsb.resourceType
 }
 
-func resourceSetsBindingsResource(ctx context.Context, rs *ResourceSets, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+func resourceSetsBindingsResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":          rs.ID,
-		"label":       rs.Label,
-		"description": rs.Description,
+		"id":          nullableStr(rs.Id),
+		"label":       nullableStr(rs.Label),
+		"description": nullableStr(rs.Description),
 	}
 
 	return sdkResource.NewResource(
-		rs.Label,
+		nullableStr(rs.Label),
 		resourceTypeResourceSetsBindings,
-		rs.ID,
+		nullableStr(rs.Id),
 		sdkResource.WithParentResourceID(parentResourceID),
 		sdkResource.WithAppTrait(sdkResource.WithAppProfile(profile)),
 	)
@@ -73,42 +72,108 @@ func resourceSetBindingsResource(ctx context.Context, rs *oktav5.ResourceSet, pa
 }
 func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	var rv []*v2.Resource
-	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id})
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+
+	type paginationType struct {
+		Value         string
+		Page          string
+		ResourceSetId string
 	}
 
-	qp := queryParams(pToken.Size, page)
-	resourceSets, respCtx, err := listResourceSets(ctx, rsb.client, pToken, qp)
+	bag, err := pagination.GenBagFromToken[paginationType](pToken)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
+		return nil, "", nil, err
 	}
 
-	nextPage, _, err := parseResp(respCtx.OktaResponse)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-	}
+	if bag.Current() == nil {
+		bag.Push(paginationType{
+			Value: "RESOURCE_SET",
+			Page:  "",
+		})
 
-	err = bag.Next(nextPage)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-	}
-
-	for _, resourceSet := range resourceSets {
-		resourceSetCpy := resourceSet
-		roles, _, err := listBindings(ctx, rsb.client, resourceSetCpy.ID, nil)
+		pageToken, err := bag.Marshal()
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		for _, role := range roles {
-			resourceSetCpy.ID = getResourceSetBindingID(resourceSet.ID, role.ID)
-			resource, err := resourceSetsBindingsResource(ctx, &resourceSetCpy, nil)
+		return rv, pageToken, nil, nil
+	}
+
+	state := bag.Pop()
+
+	if state == nil {
+		return nil, "", nil, nil
+	}
+
+	switch state.Value {
+	case "RESOURCE_SET":
+		resourceSets, respCtx, err := listResourceSetsV5(ctx, rsb.clientV5, state.Page)
+		if err != nil {
+			anno, err := wrapErrorV5(respCtx, err)
+			return nil, "", anno, err
+		}
+
+		nextPage, anno, err := parseRespV5(respCtx)
+		if err != nil {
+			return nil, "", anno, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		if nextPage != "" {
+			bag.Push(paginationType{
+				Value: "RESOURCE_SET",
+				Page:  nextPage,
+			})
+		}
+
+		for _, set := range resourceSets.ResourceSets {
+			if set.Id == nil {
+				continue
+			}
+
+			bag.Push(paginationType{
+				Value:         "RESOURCE_SET_BINDING",
+				ResourceSetId: *set.Id,
+				Page:          "",
+			})
+		}
+	case "RESOURCE_SET_BINDING":
+		resourceSet, resp, err := rsb.clientV5.ResourceSetAPI.GetResourceSet(ctx, state.ResourceSetId).Execute()
+		if err != nil {
+			anno, err := wrapErrorV5(resp, err)
+			return nil, "", anno, err
+		}
+
+		roles, resp, err := listBindingsV5(ctx, rsb.clientV5, state.ResourceSetId, state.Page)
+		if err != nil {
+			anno, err := wrapErrorV5(resp, err)
+			return nil, "", anno, err
+		}
+
+		nextPage, anno, err := parseRespV5(resp)
+		if err != nil {
+			return nil, "", anno, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		}
+
+		for _, role := range roles.Roles {
+			if role.Id == nil {
+				continue
+			}
+
+			tempId := getResourceSetBindingID(state.ResourceSetId, *role.Id)
+			resourceSet.Id = &tempId
+			resource, err := resourceSetsBindingsResource(ctx, resourceSet, nil)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-set-binding: %w", err)
 			}
 
 			rv = append(rv, resource)
+		}
+
+		if nextPage != "" {
+			bag.Push(paginationType{
+				Value:         "RESOURCE_SET_BINDING",
+				ResourceSetId: state.ResourceSetId,
+				Page:          nextPage,
+			})
 		}
 	}
 
@@ -139,89 +204,36 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 	}, "", nil, nil
 }
 
-// listMembersOfBinding. List all Role Resource Set Binding Members
+// listMembersOfBindingV5. List all Role Resource Set Binding Members
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/listMembersOfBinding
-func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(
+func (rsb *resourceSetsBindingsResourceType) listMembersOfBindingV5(
 	ctx context.Context,
-	client *okta.Client,
+	client *oktav5.APIClient,
 	resourceSetId, customRoleId string,
-	_ *query.Params,
-) ([]MembersDetails, *okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	reqUrl, err := url.Parse(apiPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var resourceSetBindings *resourceSetBindingsAPIData
-	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &resourceSetBindings, client)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return resourceSetBindings.Members, resp, nil
+) (*oktav5.ResourceSetBindingMembers, *oktav5.APIResponse, error) {
+	return client.ResourceSetAPI.ListMembersOfBinding(ctx, resourceSetId, customRoleId).Execute()
 }
 
-// createRoleResourceSetBinding. Create a Role Resource Set Binding.
+// createRoleResourceSetBindingV5. Create a Role Resource Set Binding.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/createResourceSetBinding
-func (rsb *resourceSetsBindingsResourceType) createRoleResourceSetBinding(ctx context.Context, resourceSetId, roleId string, memberId string) (*okta.Response, error) {
-	payload := struct {
-		Role    string   `json:"role"`
-		Members []string `json:"members"`
-	}{
-		Role:    roleId,
-		Members: []string{memberId},
-	}
-
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
-	if err != nil {
-		return nil, err
-	}
-
-	reqUrl, err := url.Parse(apiPath)
-	if err != nil {
-		return nil, err
-	}
-
-	rq := rsb.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodPost, reqUrl.String(), payload)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := rq.Do(ctx, req, nil)
-	if err != nil {
-		return resp, err
-	}
-
-	return resp, nil
+func (rsb *resourceSetsBindingsResourceType) createRoleResourceSetBindingV5(
+	ctx context.Context,
+	resourceSetId,
+	roleId string,
+	memberId string,
+) (*oktav5.ResourceSetBindingResponse, *oktav5.APIResponse, error) {
+	return rsb.clientV5.ResourceSetAPI.CreateResourceSetBinding(ctx, resourceSetId).
+		Instance(oktav5.ResourceSetBindingCreateRequest{
+			Role:    &roleId,
+			Members: []string{memberId},
+		}).
+		Execute()
 }
 
-// unassignMemberFromBinding. Unassign a Role Resource Set Bindiing Member
+// unassignMemberFromBindingV5. Unassign a Role Resource Set Bindiing Member
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/unassignMemberFromBinding
-func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx context.Context, resourceSetId, customRoleId, memberId string, qp *query.Params) (*okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members", memberId)
-	if err != nil {
-		return nil, err
-	}
-
-	reqUrl, err := url.Parse(apiPath)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := doRequest(ctx, reqUrl.String(), http.MethodDelete, nil, rsb.client)
-	if err != nil {
-		return resp, err
-	}
-
-	return resp, nil
+func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBindingV5(ctx context.Context, resourceSetId, customRoleId, memberId string, qp *query.Params) (*oktav5.APIResponse, error) {
+	return rsb.clientV5.ResourceSetAPI.UnassignMemberFromBinding(ctx, resourceSetId, customRoleId, memberId).Execute()
 }
 
 func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
@@ -231,18 +243,19 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	)
 	bag, _, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	resourceIDs := strings.Split(resource.Id.Resource, ":")
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
-	members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
+	members, resp, err := rsb.listMembersOfBindingV5(ctx, rsb.clientV5, resourceSetId, customRoleId)
 	if err != nil {
-		return nil, "", nil, err
+		anno, err := wrapErrorV5(resp, err)
+		return nil, "", anno, err
 	}
 
-	for _, member := range members {
+	for _, member := range members.Members {
 		memberHref := strings.Split(member.Links.Self.Href, "/")
 		resourceType := memberHref[len(memberHref)-resourceMaxLength]
 		resourceId := memberHref[len(memberHref)-lastItem]
@@ -308,13 +321,15 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 		return nil, err
 	}
 
-	response, err := rs.createRoleResourceSetBinding(ctx,
+	_, response, err := rs.createRoleResourceSetBindingV5(
+		ctx,
 		resourceSetId,
 		customRoleId,
 		memberUrl,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s %s", err.Error(), response.Body)
+		anno, err := wrapErrorV5(response, err, errors.New("okta-connector: failed to assign roles"))
+		return anno, err
 	}
 
 	if response.StatusCode == http.StatusOK {
@@ -348,29 +363,35 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
-	members, _, err := rsb.listMembersOfBinding(ctx,
-		rsb.client,
+	members, resp, err := rsb.listMembersOfBindingV5(
+		ctx,
+		rsb.clientV5,
 		resourceSetId,
 		customRoleId,
-		nil,
 	)
 	if err != nil {
-		return nil, err
+		anno, err := wrapErrorV5(resp, err, errors.New("okta-connector: failed to assign roles"))
+		return anno, err
 	}
 
-	for _, member := range members {
+	for _, member := range members.Members {
+		if member.Id == nil {
+			continue
+		}
+
 		memberHref := strings.Split(member.Links.Self.Href, "/")
 		resourceId := memberHref[len(memberHref)-1]
 		if principal.Id.Resource == resourceId {
-			memberId = member.ID
+			memberId = *member.Id
 			break
 		}
 	}
 
 	if memberId != "" {
-		response, err := rsb.unassignMemberFromBinding(ctx, resourceSetId, customRoleId, memberId, nil)
+		response, err := rsb.unassignMemberFromBindingV5(ctx, resourceSetId, customRoleId, memberId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
+			anno, err := wrapErrorV5(response, err, errors.New("okta-connector: failed to assign roles"))
+			return anno, err
 		}
 
 		if response.StatusCode == http.StatusNoContent {
@@ -416,11 +437,10 @@ func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId
 	return resource, nil, nil
 }
 
-func resourceSetsBindingsBuilder(domain string, client *okta.Client, clientV5 *oktav5.APIClient) *resourceSetsBindingsResourceType {
+func resourceSetsBindingsBuilder(domain string, clientV5 *oktav5.APIClient) *resourceSetsBindingsResourceType {
 	return &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       domain,
-		client:       client,
 		clientV5:     clientV5,
 	}
 }

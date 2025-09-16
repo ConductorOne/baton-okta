@@ -86,7 +86,7 @@ type RoleAssignment struct {
 }
 
 type RoleAssignments struct {
-	RoleAssignments []*RoleAssignment `json:"value,omitempty"`
+	RoleAssignments []*RoleAssignment `json:"Value,omitempty"`
 	Links           interface{}       `json:"_links,omitempty"`
 }
 
@@ -111,7 +111,7 @@ func (o *roleResourceType) List(
 	)
 	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	rv, err = o.listSystemRoles(ctx, resourceID, token)
@@ -173,7 +173,7 @@ func (o *roleResourceType) Grants(
 
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	usersWithRoleAssignments, nextPage, annos, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {

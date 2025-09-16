@@ -46,7 +46,7 @@ func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 }
 
 // parseRespV5 parses the response from an Okta API call using the Okta v5 SDK.
-// It extracts the next page token and rate limit annotations from the response.
+// It extracts the next Page token and rate limit annotations from the response.
 func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 
@@ -76,7 +76,7 @@ func parseAdminListResp(resp *okta.Response) (string, annotations.Annotations, e
 			return "", nil, err
 		}
 
-		// Grab entire query param for next page token, drop limit so we can still set it how we want.
+		// Grab entire query param for next Page token, drop limit so we can still set it how we want.
 		nextQp := u.Query()
 		nextQp.Del("limit")
 		nextPage = nextQp.Encode()

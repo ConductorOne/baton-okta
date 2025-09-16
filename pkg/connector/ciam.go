@@ -157,7 +157,7 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	var rv []*v2.Grant
 	bag, page, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	// TODO(Golds): uses internal api, need to switch to v5

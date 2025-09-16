@@ -94,7 +94,7 @@ func (connector *Okta) ListEvents(
 
 	streamState := &pagination.StreamState{Cursor: after, HasMore: false}
 	// (johnallers)The Okta API docs specify that the cursor should be empty if there are no more results, but I did not see this in testing.
-	// Instead, the response provided the same cursor value as was in the request.
+	// Instead, the response provided the same cursor Value as was in the request.
 	if resp.HasNextPage() && after != pToken.Cursor {
 		streamState.HasMore = true
 	}

@@ -67,7 +67,7 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 		return "", nil
 	}
 
-	// looks like the Request is nil in some cases when doesn't have next page
+	// looks like the Request is nil in some cases when doesn't have next Page
 	if resp.Request == nil {
 		return "", nil
 	}
@@ -121,7 +121,7 @@ func paginateV5[T any](
 	l := ctxzap.Extract(ctx)
 
 	if page == "" {
-		l.Debug("paginationV5: first page")
+		l.Debug("paginationV5: first Page")
 
 		response, resp, err = act(ctx)
 		if err != nil {
@@ -129,7 +129,7 @@ func paginateV5[T any](
 			return empty, "", annon, err
 		}
 	} else {
-		l.Debug("paginationV5: paginate", zap.String("page", page))
+		l.Debug("paginationV5: paginate", zap.String("Page", page))
 
 		prevResp, err := deserializeOktaResponseV5(page) //nolint:bodyclose // just a dummy response
 		if err != nil {

@@ -67,7 +67,7 @@ func (o *appResourceType) List(
 
 	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	var rv []*v2.Resource
@@ -135,7 +135,7 @@ func (o *appResourceType) Grants(
 
 	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	switch bag.ResourceID() {
