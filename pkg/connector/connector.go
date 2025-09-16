@@ -207,7 +207,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	if o.ciamConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
 			ciamUserBuilder(o),
-			ciamBuilder(o.client, o.skipSecondaryEmails),
+			ciamBuilder(o.client, o.clientV5, o.skipSecondaryEmails),
 		}
 	}
 
@@ -694,7 +694,7 @@ type userFilterResult struct {
 
 // shouldIncludeUserAndSetCache evaluates and returns if the user meets the filtering criteria,
 // while also writing the result to the user filter cache.
-func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User) bool {
+func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *oktav5.User) bool {
 	// don't bother writing to cache if no email filters are set
 	if len(o.userFilters.includedEmailDomains) == 0 {
 		return true
@@ -705,7 +705,7 @@ func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User
 
 	o.userFilters.resultsCacheMutex.Lock()
 	defer o.userFilters.resultsCacheMutex.Unlock()
-	o.userFilters.resultsCache[user.Id] = userFilterResult{
+	o.userFilters.resultsCache[nullableStr(user.Id)] = userFilterResult{
 		matchedEmailDomains: shouldInclude,
 	}
 

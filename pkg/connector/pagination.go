@@ -13,7 +13,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
-const defaultLimit = 1000
+const defaultLimit = 50
 
 func parseGetResp(resp *okta.Response) (annotations.Annotations, error) {
 	var annos annotations.Annotations

@@ -63,17 +63,6 @@ func queryParams(size int, after string) *query.Params {
 	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after))
 }
 
-func queryParamsExpand(size int, after string, expand string) *query.Params {
-	if size == 0 || size > defaultLimit {
-		size = defaultLimit
-	}
-	if after == "" {
-		return query.NewQueryParams(query.WithLimit(int64(size)), query.WithExpand(expand))
-	}
-
-	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after), query.WithExpand(expand))
-}
-
 func responseToContext(token *pagination.Token, resp *okta.Response) (*responseContext, error) {
 	u, err := url.Parse(resp.NextPage)
 	if err != nil {

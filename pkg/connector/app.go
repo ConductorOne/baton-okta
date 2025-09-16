@@ -19,7 +19,6 @@ import (
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
 
@@ -308,20 +307,6 @@ func listApplicationGroupAssignmentsV5(
 	}
 
 	return applicationGroupAssignments, resp, nil
-}
-
-func listApplicationUsers(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *query.Params) ([]*okta.AppUser, *responseContext, error) {
-	applicationUsers, resp, err := client.Application.ListApplicationUsers(ctx, appID, qp)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app users from okta: %w", handleOktaResponseError(resp, err))
-	}
-
-	reqCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return applicationUsers, reqCtx, nil
 }
 
 func listApplicationUsersV5(ctx context.Context, client *oktav5.APIClient, appID string, after string) ([]oktav5.AppUser, *oktav5.APIResponse, error) {
