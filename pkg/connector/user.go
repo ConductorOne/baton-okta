@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
@@ -253,7 +255,7 @@ func extractEmailsFromUserProfileV5(user getUserProfiler) []string {
 
 // extractEmailsFromAppUserProfile safely extracts email addresses from an app user profile.
 // It checks for email, secondEmail, and login fields that contain email addresses.
-func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
+func extractEmailsFromAppUserProfile(appUser *oktav5.AppUser) []string {
 	var userEmails []string
 
 	// Check if profile exists
@@ -261,11 +263,7 @@ func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
 		return userEmails
 	}
 
-	// Type assert the profile to map[string]interface{}
-	oktaProfile, ok := appUser.Profile.(map[string]interface{})
-	if !ok {
-		return userEmails
-	}
+	oktaProfile := appUser.Profile
 
 	// Extract primary email
 	if email, ok := oktaProfile["email"].(string); ok && email != "" {
@@ -292,7 +290,7 @@ func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
 	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
 }
 
-func shouldIncludeOktaAppUser(u *okta.AppUser, emailDomainFilters []string) bool {
+func shouldIncludeOktaAppUser(u *oktav5.AppUser, emailDomainFilters []string) bool {
 	userEmails := extractEmailsFromAppUserProfile(u)
 	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
 }
