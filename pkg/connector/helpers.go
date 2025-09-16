@@ -12,9 +12,6 @@ import (
 
 	"github.com/conductorone/baton-okta/pkg/connector/oktaerrors"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
-
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
@@ -34,10 +31,6 @@ const (
 
 type responseContext struct {
 	OktaResponse *okta.Response
-}
-
-type responseContextV5 struct {
-	OktaResponse *oktav5.APIResponse
 }
 
 func V1MembershipEntitlementID(resourceID string) string {
@@ -95,20 +88,6 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	}, nil
 }
 
-func responseToContextV5(token *pagination.Token, resp *oktav5.APIResponse) (*responseContextV5, error) {
-	u, err := url.Parse(resp.NextPage())
-	if err != nil {
-		return nil, err
-	}
-
-	after := u.Query().Get("after")
-	token.Token = after
-
-	return &responseContextV5{
-		OktaResponse: resp,
-	}, nil
-}
-
 func getError(response *okta.Response) (okta.Error, error) {
 	var errOkta okta.Error
 	bytes, err := io.ReadAll(response.Body)
@@ -140,12 +119,18 @@ func asErrorV5(err error) (*oktav5.Error, bool) {
 	return nil, false
 }
 
-func wrapErrorV5(originalErr error, additionalError ...error) error {
-	if v5Err, ok := asErrorV5(originalErr); ok {
-		return toErrorV5(*v5Err, additionalError...)
+// wrapErrorV5 wraps an error into GRPC error if it is an oktav5.Error.
+func wrapErrorV5(resp *oktav5.APIResponse, originalErr error, additionalError ...error) (annotations.Annotations, error) {
+	_, annon, err := parseRespV5(resp)
+	if err != nil {
+		return nil, errors.Join(append([]error{originalErr, err}, additionalError...)...)
 	}
 
-	return originalErr
+	if v5Err, ok := asErrorV5(originalErr); ok {
+		return annon, toErrorV5(*v5Err, additionalError...)
+	}
+
+	return annon, errors.Join(append([]error{originalErr}, additionalError...)...)
 }
 
 func toErrorV5(e oktav5.Error, additionalError ...error) error {
@@ -220,95 +205,9 @@ func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, 
 	return convertNotFoundError(err, message)
 }
 
-// https://developer.okta.com/docs/reference/error-codes/?q=not%20found
-var oktaNotFoundErrors = map[string]struct{}{
-	"E0000007": {},
-	"E0000008": {},
-}
-
-func convertNotFoundError(err error, message string) error {
-	if err == nil {
-		return nil
-	}
-
-	var oktaApiError *okta.Error
-	if !errors.As(err, &oktaApiError) {
-		return err
-	}
-
-	_, ok := oktaNotFoundErrors[oktaApiError.ErrorCode]
-	if !ok {
-		return err
-	}
-
-	grpcErr := status.Error(codes.NotFound, message)
-	allErrs := append([]error{grpcErr}, err)
-	return errors.Join(allErrs...)
-}
-
 func nullableStr(v *string) string {
 	if v == nil {
 		return ""
 	}
 	return *v
-}
-
-type paginateV5Response[T any] struct {
-	value    T
-	resp     *oktav5.APIResponse
-	annos    annotations.Annotations
-	nextPage string
-}
-
-func (p *paginateV5Response[T]) values() (T, string, annotations.Annotations) {
-	return p.value, p.nextPage, p.annos
-}
-
-func paginateV5[T any](
-	ctx context.Context,
-	clientV5 *oktav5.APIClient,
-	page string,
-	act func(ctx2 context.Context) (T, *oktav5.APIResponse, error),
-) (*paginateV5Response[T], error) {
-	var response T
-	var resp *oktav5.APIResponse
-	var err error
-
-	l := ctxzap.Extract(ctx)
-
-	if page == "" {
-		l.Debug("paginationV5: first page")
-
-		response, resp, err = act(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		l.Debug("paginationV5: paginate", zap.String("page", page))
-
-		prevResp, err := deserializeOktaResponseV5(page)
-		if err != nil {
-			return nil, err
-		}
-
-		previous := oktav5.NewAPIResponse(prevResp.Response, clientV5, nil)
-		if previous.HasNextPage() {
-			resp, err = previous.Next(&response)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	nextPage, annos, err := parseRespV5(resp)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
-	}
-
-	return &paginateV5Response[T]{
-		value:    response,
-		resp:     resp,
-		annos:    annos,
-		nextPage: nextPage,
-	}, nil
 }

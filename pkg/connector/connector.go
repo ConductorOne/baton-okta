@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -222,7 +223,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.clientV5, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client, o.clientV5),
 	}
 
 	if o.syncCustomRoles {
@@ -343,18 +344,18 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 
 	token := newPaginationToken(defaultLimit, "")
 
-	_, respCtx, err := getOrgSettings(ctx, c.clientV5, token)
+	_, resp, err := getOrgSettings(ctx, c.clientV5, token)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: verify failed to fetch org: %w", err)
+		return wrapErrorV5(resp, err, errors.New("okta-connector: verify failed to fetch org"))
 	}
 
-	_, _, err = parseRespV5(respCtx.OktaResponse)
+	_, _, err = parseRespV5(resp)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: verify failed to parse response: %w", err)
 	}
 
-	if respCtx.OktaResponse.StatusCode != http.StatusOK {
-		err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", respCtx.OktaResponse.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", resp.StatusCode)
 		return nil, err
 	}
 

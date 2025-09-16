@@ -21,8 +21,6 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 )
 
 const membershipUpdatedField = "lastMembershipUpdated"
@@ -43,33 +41,35 @@ func (o *groupResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeGroup.Id})
+	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeGroup.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
 	var groups []oktav5.Group
-	var respCtx *responseContextV5
+	var respCtx *oktav5.APIResponse
+
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
 		if o.connector.awsConfig.AWSSourceIdentityMode {
 			return rv, "", nil, nil
 		}
-		groups, respCtx, err = o.listAWSGroupsV5(ctx, token, page)
+		groups, respCtx, err = o.listAWSGroupsV5(ctx, page)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", wrapErrorV5(err))
+			annon, err := wrapErrorV5(respCtx, err, errors.New("okta-connectorv2: failed to list app groups"))
+			return nil, "", annon, err
 		}
 	} else {
-		groups, respCtx, err = listGroupsHelperV5(ctx, o.connector.clientV5, token, func(r *oktav5.ApiListGroupsRequest) {
-			r.Expand("stats")
-			r.After(page)
+		groups, respCtx, err = listGroupsHelperV5(ctx, o.connector.clientV5, func(r oktav5.ApiListGroupsRequest) oktav5.ApiListGroupsRequest {
+			return r.After(page).Expand("stats")
 		})
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", wrapErrorV5(err))
+			annon, err := wrapErrorV5(respCtx, err, errors.New("okta-connectorv2: failed to list app groups"))
+			return nil, "", annon, err
 		}
 	}
 
-	nextPage, annos, err := parseRespV5(respCtx.OktaResponse)
+	nextPage, annos, err := parseRespV5(respCtx)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -157,6 +157,10 @@ func (o *groupResourceType) Grants(
 	}
 
 	page := bag.PageToken()
+	page, err = deserializeOktaResponseAfterV5(page)
+	if err != nil {
+		return nil, "", nil, err
+	}
 
 	groupID := resource.Id.GetResource()
 
@@ -175,12 +179,13 @@ func (o *groupResourceType) Grants(
 				l.Debug("okta-connectorv2: making list group users call because users_count profile attribute was not present", zap.Any("profile", groupTrait.Profile))
 			}
 
-			users, respCtx, err := o.listGroupUsersV5(ctx, groupID, token, page)
+			users, resp, err := o.listGroupUsersV5(ctx, groupID, token, page)
 			if err != nil {
-				return nil, "", nil, wrapErrorV5(err, errors.New("okta-connectorv2: failed to list group users"))
+				anno, err := wrapErrorV5(resp, err, errors.New("okta-connectorv2: failed to list group users"))
+				return nil, "", anno, err
 			}
 
-			nextPage, annos, err = parseRespV5(respCtx.OktaResponse)
+			nextPage, annos, err = parseRespV5(resp)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
@@ -223,7 +228,8 @@ func (o *groupResourceType) Grants(
 	case resourceTypeRole.Id:
 		roles, resp, err := listGroupAssignedRolesV5(ctx, o.connector.clientV5, groupID)
 		if err != nil {
-			return nil, "", nil, wrapErrorV5(err)
+			annon, err := wrapErrorV5(resp, err)
+			return nil, "", annon, err
 		}
 
 		for _, role := range roles {
@@ -274,13 +280,7 @@ func (o *groupResourceType) Grants(
 			rv = append(rv, roleGroupGrant(groupID, roleResourceVal, shouldExpand))
 		}
 
-		// TODO(lauren) Move this to list method like other methods do
-		respCtx, err := responseToContextV5(token, resp)
-		if err != nil {
-			return nil, "", nil, err
-		}
-
-		nextPage, annos, err := parseRespV5(respCtx.OktaResponse)
+		nextPage, annos, err := parseRespV5(resp)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 		}
@@ -301,39 +301,31 @@ func (o *groupResourceType) Grants(
 	}
 }
 
-func listGroupsHelper(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := client.Group.ListGroups(ctx, qp)
+func listGroupsHelper(ctx context.Context, client *oktav5.APIClient, token *pagination.Token, after string) ([]oktav5.Group, *oktav5.APIResponse, error) {
+	groups, resp, err := client.GroupAPI.ListGroups(ctx).After(after).Limit(defaultLimit).Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", handleOktaResponseError(resp, err))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
 	}
-	reqCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-	return groups, reqCtx, nil
+	return groups, resp, nil
 }
 
-type listGroupHelperOption func(r *oktav5.ApiListGroupsRequest)
+type listGroupHelperOption func(r oktav5.ApiListGroupsRequest) oktav5.ApiListGroupsRequest
 
-func listGroupsHelperV5(ctx context.Context, client *oktav5.APIClient, token *pagination.Token, opts ...listGroupHelperOption) ([]oktav5.Group, *responseContextV5, error) {
-	request := client.GroupAPI.ListGroups(ctx)
+func listGroupsHelperV5(ctx context.Context, client *oktav5.APIClient, opts ...listGroupHelperOption) ([]oktav5.Group, *oktav5.APIResponse, error) {
+	request := client.GroupAPI.ListGroups(ctx).Limit(defaultLimit)
 
 	for _, opt := range opts {
-		opt(&request)
+		request = opt(request)
 	}
 
 	groups, resp, err := request.Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", wrapErrorV5(err))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", err)
 	}
-	reqCtx, err := responseToContextV5(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-	return groups, reqCtx, nil
+	return groups, resp, nil
 }
 
-func (o *groupResourceType) listAWSGroupsV5(ctx context.Context, token *pagination.Token, page string) ([]oktav5.Group, *responseContextV5, error) {
+func (o *groupResourceType) listAWSGroupsV5(ctx context.Context, page string) ([]oktav5.Group, *oktav5.APIResponse, error) {
 	l := ctxzap.Extract(ctx)
 
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
@@ -342,8 +334,8 @@ func (o *groupResourceType) listAWSGroupsV5(ctx context.Context, token *paginati
 	}
 	groups := make([]oktav5.Group, 0)
 	if awsConfig.UseGroupMapping {
-		groups, respCtx, err := listGroupsHelperV5(ctx, o.connector.clientV5, token, func(r *oktav5.ApiListGroupsRequest) {
-			r.After(page)
+		groups, respCtx, err := listGroupsHelperV5(ctx, o.connector.clientV5, func(r oktav5.ApiListGroupsRequest) oktav5.ApiListGroupsRequest {
+			return r.After(page)
 		})
 		if err != nil {
 			return nil, nil, err
@@ -370,14 +362,12 @@ func (o *groupResourceType) listAWSGroupsV5(ctx context.Context, token *paginati
 		ctx,
 		o.connector.clientV5,
 		o.connector.awsConfig.OktaAppId,
-		token,
-		func(r *oktav5.ApiListApplicationGroupAssignmentsRequest) {
-			r.Expand("group")
-			r.After(page)
+		func(r oktav5.ApiListApplicationGroupAssignmentsRequest) oktav5.ApiListApplicationGroupAssignmentsRequest {
+			return r.Expand("group").After(page)
 		},
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, respCtx, err
 	}
 
 	for _, appGroup := range appGroups {
@@ -439,35 +429,25 @@ func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, g
 	return accountId, role, true, nil
 }
 
-func (o *groupResourceType) listGroupUsersV5(ctx context.Context, groupID string, token *pagination.Token, after string) ([]oktav5.GroupMember, *responseContextV5, error) {
+func (o *groupResourceType) listGroupUsersV5(ctx context.Context, groupID string, token *pagination.Token, after string) ([]oktav5.GroupMember, *oktav5.APIResponse, error) {
 	users, resp, err := o.connector.clientV5.GroupAPI.ListGroupUsers(ctx, groupID).
 		After(after).
 		Limit(defaultLimit).
 		Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", wrapErrorV5(err))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
 	}
 
-	reqCtx, err := responseToContextV5(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return users, reqCtx, nil
+	return users, resp, nil
 }
 
-func listUsersGroupsClient(ctx context.Context, client *oktav5.APIClient, userId string) ([]oktav5.Group, *responseContextV5, error) {
-	users, resp, err := client.UserAPI.ListUserGroups(ctx, userId).Execute()
+func listUsersGroupsClient(ctx context.Context, client *oktav5.APIClient, userId string) ([]oktav5.Group, *oktav5.APIResponse, error) {
+	users, resp, err := client.UserAPI.ListUserGroups(ctx, userId).Limit(defaultLimit).Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", wrapErrorV5(err))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", err)
 	}
 
-	reqCtx, err := responseToContextV5(&pagination.Token{}, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return users, reqCtx, nil
+	return users, resp, nil
 }
 
 func (o *groupResourceType) groupResource(ctx context.Context, group *oktav5.Group) (*v2.Resource, error) {
@@ -597,7 +577,8 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 
 	response, err := g.connector.clientV5.GroupAPI.AssignUserToGroup(ctx, groupId, userId).Execute()
 	if err != nil {
-		return nil, wrapErrorV5(err)
+		annon, err := wrapErrorV5(response, err)
+		return annon, err
 	}
 
 	l.Debug("Membership has been created",
@@ -625,7 +606,8 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 
 	response, err := g.connector.clientV5.GroupAPI.UnassignUserFromGroup(ctx, groupId, userId).Execute()
 	if err != nil {
-		return nil, wrapErrorV5(err)
+		annon, err := wrapErrorV5(response, err)
+		return annon, err
 	}
 
 	l.Warn("Membership has been revoked",
@@ -675,7 +657,8 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 	}
 
 	if err != nil {
-		return nil, nil, wrapErrorV5(err)
+		annos, err := wrapErrorV5(resp, err, fmt.Errorf("okta-connectorv2: failed to get group with id %s", resourceId.Resource))
+		return nil, annos, err
 	}
 
 	if resp != nil {
@@ -713,7 +696,7 @@ func (o *groupResourceType) getAWSGroupV5(ctx context.Context, groupId string) (
 	if awsConfig.UseGroupMapping {
 		group, resp, err := o.connector.clientV5.GroupAPI.GetGroup(ctx, groupId).Execute()
 		if err != nil {
-			return nil, nil, wrapErrorV5(err)
+			return nil, resp, err
 		}
 
 		if group.Profile == nil && group.Profile.Name == nil {
@@ -736,7 +719,7 @@ func (o *groupResourceType) getAWSGroupV5(ctx context.Context, groupId string) (
 		Expand("group").
 		Execute()
 	if err != nil {
-		return nil, nil, wrapErrorV5(err)
+		return nil, resp, err
 	}
 	appGroupSAMLRoles, err := appGroupSAMLRolesWrapperV5(ctx, appGroup)
 	if err != nil {

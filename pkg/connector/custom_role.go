@@ -36,14 +36,12 @@ func (o *customRoleResourceType) List(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	v5, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.IamRoles, *oktav5.APIResponse, error) {
+	response, nextPage, annon, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.IamRoles, *oktav5.APIResponse, error) {
 		return o.connector.clientV5.RoleAPI.ListRoles(ctx).Execute()
 	})
 	if err != nil {
-		return nil, "", nil, wrapErrorV5(err)
+		return nil, "", annon, err
 	}
-
-	response, nextPage, annon := v5.values()
 
 	err = bag.Next(nextPage)
 	if err != nil {
@@ -119,16 +117,13 @@ func (o *customRoleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	v5, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
+	usersWithRoleAssignments, nextPage, annos, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
 		return listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5)
 	})
 
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users with role assignments: %w", wrapErrorV5(err))
+		return nil, "", annos, err
 	}
-
-	usersWithRoleAssignments := v5.value
-	nextPage, annos := v5.nextPage, v5.annos
 
 	err = bag.Next(nextPage)
 	if err != nil {
@@ -150,9 +145,10 @@ func (o *customRoleResourceType) Grants(
 
 		if userRoles == nil {
 			userRoles = mapset.NewSet[string]()
-			roles, _, err := listAssignedRolesForUserV5(ctx, o.connector.clientV5, userId)
+			roles, resp, err := listAssignedRolesForUserV5(ctx, o.connector.clientV5, userId)
 			if err != nil {
-				return nil, "", nil, wrapErrorV5(err)
+				anno, err := wrapErrorV5(resp, err)
+				return nil, "", anno, err
 			}
 
 			for _, role := range roles {
@@ -209,7 +205,8 @@ func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.Resourc
 
 	role, resp, err := o.connector.clientV5.RoleAPI.GetRole(ctx, roleId).Execute()
 	if err != nil {
-		return nil, nil, wrapErrorV5(err)
+		anno, err := wrapErrorV5(resp, err)
+		return nil, anno, err
 	}
 
 	if resp != nil {

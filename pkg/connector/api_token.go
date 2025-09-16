@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -43,15 +45,12 @@ func (o *apiTokenResourceType) List(
 		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to parse page token: %w", err)
 	}
 
-	v5, err := paginateV5(ctx, o.clientV5, page, func(ctx2 context.Context) ([]oktav5.ApiToken, *oktav5.APIResponse, error) {
+	apiTokens, nextPage, annos, err := paginateV5(ctx, o.clientV5, page, func(ctx2 context.Context) ([]oktav5.ApiToken, *oktav5.APIResponse, error) {
 		return o.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
 	})
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", annos, err
 	}
-
-	apiTokens := v5.value
-	nextPage, annos := v5.nextPage, v5.annos
 
 	ret := make([]*v2.Resource, 0, len(apiTokens))
 	for _, apiToken := range apiTokens {
@@ -90,7 +89,8 @@ func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceI
 
 	apiToken, resp, err := o.clientV5.ApiTokenAPI.GetApiToken(ctx, resourceId.Resource).Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connector-v5: failed to get api token: %w", err)
+		anno, err := wrapErrorV5(resp, err, errors.New("okta-connector-v5: failed to get api token"))
+		return nil, anno, err
 	}
 
 	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
@@ -101,12 +101,12 @@ func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceI
 		return nil, annos, nil
 	}
 
-	resource, err := apiTokenResource(apiToken)
+	rs, err := apiTokenResource(apiToken)
 	if err != nil {
 		return nil, annos, err
 	}
 
-	return resource, annos, nil
+	return rs, annos, nil
 }
 
 func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {

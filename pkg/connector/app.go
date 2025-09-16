@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -29,6 +30,7 @@ type appResourceType struct {
 	syncInactiveApps bool
 	userEmailFilters []string
 	client           *okta.Client
+	clientV5         *oktav5.APIClient
 }
 
 const (
@@ -45,7 +47,7 @@ func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client, clientv5 *oktav5.APIClient) *appResourceType {
 	return &appResourceType{
 		resourceType:     resourceTypeApp,
 		domain:           domain,
@@ -53,6 +55,7 @@ func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEma
 		client:           client,
 		syncInactiveApps: syncInactiveApps,
 		userEmailFilters: filterEmailDomains,
+		clientV5:         clientv5,
 	}
 }
 
@@ -61,19 +64,21 @@ func (o *appResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	l := ctxzap.Extract(ctx)
+
+	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
-	qp := queryParams(token.Size, page)
-	apps, respCtx, err := listApps(ctx, o.client, o.syncInactiveApps, token, qp)
+	apps, respCtx, err := listAppsV5(ctx, o.clientV5, o.syncInactiveApps, page)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		anno, err := wrapErrorV5(respCtx, err, errors.New("okta-connector: verify failed to fetch apps list"))
+		return nil, "", anno, err
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseRespV5(respCtx)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -84,6 +89,11 @@ func (o *appResourceType) List(
 	}
 
 	for _, app := range apps {
+		if app.Id == nil {
+			l.Warn("okta-connectorv2: app.Id is nil, skipping")
+			continue
+		}
+
 		resource, err := appResource(ctx, app)
 		if err != nil {
 			return nil, "", nil, err
@@ -123,7 +133,8 @@ func (o *appResourceType) Grants(
 		rv    []*v2.Grant
 		annos annotations.Annotations
 	)
-	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+
+	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
@@ -138,17 +149,15 @@ func (o *appResourceType) Grants(
 			})
 		}
 	case appGrantGroup:
-		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, token, bag, page)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app group grants: %w", err)
-		}
+		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, bag, page)
 	case appGrantUser:
-		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, token, bag, page)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app users grants: %w", err)
-		}
+		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, bag, page)
 	default:
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource for app: %w", err)
+	}
+
+	if err != nil {
+		return nil, "", annos, err
 	}
 
 	pageToken, err := bag.Marshal()
@@ -162,18 +171,26 @@ func (o *appResourceType) Grants(
 func (o *appResourceType) listAppGroupGrants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
 	bag *pagination.Bag,
 	page string,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
+	l := ctxzap.Extract(ctx)
+
 	var rv []*v2.Grant
-	qp := queryParams(token.Size, page)
-	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, resource.Id.GetResource(), token, qp)
+	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignmentsV5(
+		ctx,
+		o.clientV5,
+		resource.Id.GetResource(),
+		func(r oktav5.ApiListApplicationGroupAssignmentsRequest) oktav5.ApiListApplicationGroupAssignmentsRequest {
+			return r.After(page)
+		},
+	)
 	if err != nil {
-		return nil, nil, bag, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+		annon, err := wrapErrorV5(respCtx, err, errors.New("okta-connectorv2: verify failed to fetch application group assignments list"))
+		return nil, annon, bag, err
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseRespV5(respCtx)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -184,7 +201,12 @@ func (o *appResourceType) listAppGroupGrants(
 	}
 
 	for _, applicationGroupAssignment := range applicationGroupAssignments {
-		groupID := applicationGroupAssignment.Id
+		if applicationGroupAssignment.Id == nil {
+			l.Warn("okta-connectorv2: applicationGroupAssignment.Id is nil, skipping")
+			continue
+		}
+
+		groupID := *applicationGroupAssignment.Id
 		principalID := &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}
 		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
 			sdkGrant.WithAnnotation(
@@ -201,18 +223,17 @@ func (o *appResourceType) listAppGroupGrants(
 func (o *appResourceType) listAppUsersGrants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
 	bag *pagination.Bag,
 	page string,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
 	var rv []*v2.Grant
-	qp := queryParams(token.Size, page)
-	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
+	applicationUsers, respCtx, err := listApplicationUsersV5(ctx, o.clientV5, resource.Id.GetResource(), page)
 	if err != nil {
-		return nil, nil, bag, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+		anno, err := wrapErrorV5(respCtx, err, errors.New("okta-connectorv2: failed to list group users"))
+		return nil, anno, bag, err
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseRespV5(respCtx)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -224,11 +245,16 @@ func (o *appResourceType) listAppUsersGrants(
 
 	for _, applicationUser := range applicationUsers {
 		// for okta v2, we only attempt to filter app users by email domains when a list is provided
-		if len(o.userEmailFilters) > 0 && !shouldIncludeOktaAppUser(applicationUser, o.userEmailFilters) {
+		if len(o.userEmailFilters) > 0 && !shouldIncludeOktaAppUser(&applicationUser, o.userEmailFilters) {
 			continue
 		}
 
-		userID := applicationUser.Id
+		if applicationUser.Id == nil {
+			continue
+		}
+
+		userID := *applicationUser.Id
+
 		principalID := &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}
 		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
 			sdkGrant.WithAnnotation(
@@ -242,69 +268,46 @@ func (o *appResourceType) listAppUsersGrants(
 	return rv, annos, bag, nil
 }
 
-func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, token *pagination.Token, qp *query.Params) ([]*okta.Application, *responseContext, error) {
+func listAppsV5(ctx context.Context, client *oktav5.APIClient, syncInactiveApps bool, page string) ([]oktav5.Application, *oktav5.APIResponse, error) {
+	request := client.ApplicationAPI.ListApplications(ctx).After(page).Limit(defaultLimit)
+
 	if !syncInactiveApps {
-		qp.Filter = "status eq \"ACTIVE\""
+		request = request.Filter("status eq \"ACTIVE\"")
 	}
 
-	apps, resp, err := client.Application.ListApplications(ctx, qp)
+	apps, resp, err := request.Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch apps from okta: %w", handleOktaResponseError(resp, err))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch apps from okta: %w", err)
 	}
 
-	reqCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	applications, err := oktaAppsToOktaApplications(ctx, apps)
+	applications, err := oktaAppsToOktaApplicationsv5(ctx, apps)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta apps to applications: %w", err)
 	}
 
-	return applications, reqCtx, nil
+	return applications, resp, nil
 }
 
-func listApplicationGroupAssignments(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *query.Params) ([]*okta.ApplicationGroupAssignment, *responseContext, error) {
-	applicationGroupAssignments, resp, err := client.Application.ListApplicationGroupAssignments(ctx, appID, qp)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", handleOktaResponseError(resp, err))
-	}
-
-	reqCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return applicationGroupAssignments, reqCtx, nil
-}
-
-type ApiListApplicationGroupAssignmentsRequestOpt func(r *oktav5.ApiListApplicationGroupAssignmentsRequest)
+type ApiListApplicationGroupAssignmentsRequestOpt func(r oktav5.ApiListApplicationGroupAssignmentsRequest) oktav5.ApiListApplicationGroupAssignmentsRequest
 
 func listApplicationGroupAssignmentsV5(
 	ctx context.Context,
 	client *oktav5.APIClient,
 	appID string,
-	token *pagination.Token,
 	opts ...ApiListApplicationGroupAssignmentsRequestOpt,
-) ([]oktav5.ApplicationGroupAssignment, *responseContextV5, error) {
-	request := client.ApplicationGroupsAPI.ListApplicationGroupAssignments(ctx, appID)
+) ([]oktav5.ApplicationGroupAssignment, *oktav5.APIResponse, error) {
+	request := client.ApplicationGroupsAPI.ListApplicationGroupAssignments(ctx, appID).Limit(defaultLimit)
 
 	for _, opt := range opts {
-		opt(&request)
+		request = opt(request)
 	}
 
 	applicationGroupAssignments, resp, err := request.Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", wrapErrorV5(err))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", err)
 	}
 
-	reqCtx, err := responseToContextV5(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return applicationGroupAssignments, reqCtx, nil
+	return applicationGroupAssignments, resp, nil
 }
 
 func listApplicationUsers(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *query.Params) ([]*okta.AppUser, *responseContext, error) {
@@ -321,21 +324,48 @@ func listApplicationUsers(ctx context.Context, client *okta.Client, appID string
 	return applicationUsers, reqCtx, nil
 }
 
-func oktaAppsToOktaApplications(ctx context.Context, apps []okta.App) ([]*okta.Application, error) {
-	var applications []*okta.Application
+func listApplicationUsersV5(ctx context.Context, client *oktav5.APIClient, appID string, after string) ([]oktav5.AppUser, *oktav5.APIResponse, error) {
+	applicationUsers, resp, err := client.ApplicationUsersAPI.ListApplicationUsers(ctx, appID).After(after).Limit(defaultLimit).Execute()
+	if err != nil {
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch app users from oktav5: %w", err)
+	}
+
+	return applicationUsers, resp, nil
+}
+
+func oktaAppsToOktaApplicationsv5(ctx context.Context, apps []oktav5.ListApplications200ResponseInner) ([]oktav5.Application, error) {
+	var applications []oktav5.Application
 	for _, iapp := range apps {
-		var oktaApp okta.Application
+		var app *oktav5.Application
 
-		b, err := json.Marshal(iapp)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: error marshalling okta app: %w", err)
-		}
-		err = json.Unmarshal(b, &oktaApp)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: error unmarshalling okta app: %w", err)
+		switch {
+		case iapp.AutoLoginApplication != nil:
+			app = &iapp.AutoLoginApplication.Application
+		case iapp.BasicAuthApplication != nil:
+			app = &iapp.BasicAuthApplication.Application
+		case iapp.BookmarkApplication != nil:
+			app = &iapp.BookmarkApplication.Application
+		case iapp.BrowserPluginApplication != nil:
+			app = &iapp.BrowserPluginApplication.Application
+		case iapp.OpenIdConnectApplication != nil:
+			app = &iapp.OpenIdConnectApplication.Application
+		case iapp.Saml11Application != nil:
+			app = &iapp.Saml11Application.Application
+		case iapp.SamlApplication != nil:
+			app = &iapp.SamlApplication.Application
+		case iapp.SecurePasswordStoreApplication != nil:
+			app = &iapp.SecurePasswordStoreApplication.Application
+		case iapp.WsFederationApplication != nil:
+			app = &iapp.WsFederationApplication.Application
+		default:
+			return nil, fmt.Errorf("okta-connectorv2: unknown application type: %T", iapp.GetActualInstance())
 		}
 
-		applications = append(applications, &oktaApp)
+		if app == nil {
+			return nil, fmt.Errorf("okta-connectorv2: application is nil")
+		}
+
+		applications = append(applications, *app)
 	}
 
 	return applications, nil
@@ -354,16 +384,29 @@ func oktaAppToOktaApplication(ctx context.Context, app okta.App) (*okta.Applicat
 	return &oktaApp, nil
 }
 
-func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, error) {
+func oktaAppToOktaApplicationV5(ctx context.Context, app oktav5.ListApplications200ResponseInner) (*oktav5.Application, error) {
+	var oktaApp oktav5.Application
+	b, err := json.Marshal(app.GetActualInstance())
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: error marshalling okta app: %w", err)
+	}
+	err = json.Unmarshal(b, &oktaApp)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: error unmarshalling okta app: %w", err)
+	}
+	return &oktaApp, nil
+}
+
+func appResource(ctx context.Context, app oktav5.Application) (*v2.Resource, error) {
 	appProfile := map[string]interface{}{
-		"status": app.Status,
+		"status": nullableStr(app.Status),
 	}
 	var appTraitOpts []sdkResource.AppTraitOption
 	appTraitOpts = append(appTraitOpts, sdkResource.WithAppProfile(appProfile))
 
-	return sdkResource.NewAppResource(app.Label, resourceTypeApp, app.Id, appTraitOpts,
-		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(app.Id)}),
-		sdkResource.WithAnnotation(&v2.RawId{Id: app.Id}),
+	return sdkResource.NewAppResource(app.Label, resourceTypeApp, *app.Id, appTraitOpts,
+		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(*app.Id)}),
+		sdkResource.WithAnnotation(&v2.RawId{Id: *app.Id}),
 	)
 }
 
@@ -581,12 +624,12 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 
 	var annos annotations.Annotations
 
-	app, respCtx, err := getApp(ctx, o.client, resourceId.Resource)
+	app, resp, err := getApp(ctx, o.clientV5, resourceId.Resource)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get application: %w", err)
+		anno, err := wrapErrorV5(resp, err, fmt.Errorf("okta-connectorv2: verify failed to fetch application"))
+		return nil, anno, err
 	}
 
-	resp := respCtx.OktaResponse
 	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
 		annos.WithRateLimiting(desc)
 	}
@@ -595,11 +638,11 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 		return nil, annos, nil
 	}
 
-	if !o.syncInactiveApps && app.Status != "ACTIVE" {
+	if !o.syncInactiveApps && nullableStr(app.Status) != "ACTIVE" {
 		return nil, annos, nil
 	}
 
-	resource, err := appResource(ctx, app)
+	resource, err := appResource(ctx, *app)
 	if err != nil {
 		return nil, annos, err
 	}
@@ -607,18 +650,16 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 	return resource, annos, nil
 }
 
-func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
-	app, resp, err := client.Application.GetApplication(ctx, appID, okta.NewApplication(), nil)
+func getApp(ctx context.Context, client *oktav5.APIClient, appID string) (*oktav5.Application, *oktav5.APIResponse, error) {
+	app, resp, err := client.ApplicationAPI.GetApplication(ctx, appID).Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseErrorWithNotFoundMessage(resp, err, "app not found"))
+		return nil, resp, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", err)
 	}
 
-	reqCtx := &responseContext{OktaResponse: resp}
-
-	oktaApp, err := oktaAppToOktaApplication(ctx, app)
+	oktaApp, err := oktaAppToOktaApplicationV5(ctx, *app)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta app to application: %w", err)
 	}
 
-	return oktaApp, reqCtx, nil
+	return oktaApp, resp, nil
 }

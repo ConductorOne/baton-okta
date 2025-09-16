@@ -176,15 +176,12 @@ func (o *roleResourceType) Grants(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	v5, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
+	usersWithRoleAssignments, nextPage, annos, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {
 		return listAllUsersWithRoleAssignmentsV5(ctx, o.connector.clientV5)
 	})
 	if err != nil {
-		return nil, "", nil, wrapErrorV5(err)
+		return nil, "", annos, err
 	}
-
-	usersWithRoleAssignments := v5.value
-	nextPage, annos := v5.nextPage, v5.annos
 
 	err = bag.Next(nextPage)
 	if err != nil {
@@ -202,9 +199,10 @@ func (o *roleResourceType) Grants(
 		// check if the user should be included after filtering by email domains
 		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, userId)
 		if !ok {
-			user, _, err := o.connector.clientV5.UserAPI.GetUser(ctx, userId).Execute()
+			user, resp, err := o.connector.clientV5.UserAPI.GetUser(ctx, userId).Execute()
 			if err != nil {
-				return nil, "", nil, wrapErrorV5(err)
+				anno, err := wrapErrorV5(resp, err)
+				return nil, "", anno, err
 			}
 			shouldInclude = o.connector.shouldIncludeUserAndSetCacheV5(ctx, user)
 		}
@@ -219,9 +217,10 @@ func (o *roleResourceType) Grants(
 
 		if userRoles == nil {
 			userRoles = mapset.NewSet[string]()
-			roles, _, err := listAssignedRolesForUserV5(ctx, o.connector.clientV5, userId)
+			roles, resp, err := listAssignedRolesForUserV5(ctx, o.connector.clientV5, userId)
 			if err != nil {
-				return nil, "", nil, wrapErrorV5(err)
+				annon, err := wrapErrorV5(resp, err)
+				return nil, "", annon, err
 			}
 			for _, role := range roles {
 				if role.Status == nil || role.AssignmentType == nil || role.Type == nil {
@@ -308,24 +307,19 @@ func listAllUsersWithRoleAssignmentsV5(ctx context.Context, client *oktav5.APICl
 		Limit(defaultLimit).
 		Execute()
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 
 	return execute, resp, nil
 }
 
-func getOrgSettings(ctx context.Context, client *oktav5.APIClient, token *pagination.Token) (*oktav5.OrgSetting, *responseContextV5, error) {
+func getOrgSettings(ctx context.Context, client *oktav5.APIClient, token *pagination.Token) (*oktav5.OrgSetting, *oktav5.APIResponse, error) {
 	orgSettings, resp, err := client.OrgSettingAPI.GetOrgSettings(ctx).Execute()
 	if err != nil {
-		return nil, nil, wrapErrorV5(err)
+		return nil, resp, err
 	}
 
-	respCtx, err := responseToContextV5(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return orgSettings, respCtx, nil
+	return orgSettings, resp, nil
 }
 
 type administratorRoleFlags struct {
@@ -479,7 +473,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 	case resourceTypeUser.Id:
 		userId := principal.Id.Resource
 
-		createdRole, _, err := g.client.RoleAssignmentAPI.AssignRoleToUser(ctx, userId).
+		createdRole, response, err := g.client.RoleAssignmentAPI.AssignRoleToUser(ctx, userId).
 			AssignRoleRequest(oktav5.AssignRoleRequest{
 				Type: oktav5.PtrString(roleId),
 			}).
@@ -497,7 +491,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				}
 			}
 
-			return nil, wrapErrorV5(err, errors.New("okta-connector: failed to assign role to user"))
+			return wrapErrorV5(response, err, errors.New("okta-connector: failed to assign role to user"))
 		}
 
 		l.Warn("Role Membership has been created.",
@@ -510,7 +504,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 		)
 	case resourceTypeGroup.Id:
 		groupId := principal.Id.Resource
-		createdRole, _, err := g.client.RoleAssignmentAPI.AssignRoleToGroup(ctx, groupId).
+		createdRole, response, err := g.client.RoleAssignmentAPI.AssignRoleToGroup(ctx, groupId).
 			AssignRoleRequest(oktav5.AssignRoleRequest{
 				Type: oktav5.PtrString(roleId),
 			}).
@@ -533,7 +527,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				}
 			}
 
-			return nil, wrapErrorV5(err, errors.New("okta-connector: failed to assign role to group"))
+			return wrapErrorV5(response, err, errors.New("okta-connector: failed to assign role to group"))
 		}
 
 		l.Warn("Role Membership has been created.",
@@ -571,7 +565,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		userId := principal.Id.Resource
 		roles, response, err := g.client.RoleAssignmentAPI.ListAssignedRolesForUser(ctx, userId).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %w %s", wrapErrorV5(err), response.Body)
+			return wrapErrorV5(response, err, errors.New("okta-connector: failed to get roles"))
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r oktav5.Role) bool {
@@ -594,7 +588,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		roleId = *roles[rolePos].Id
 		response, err = g.client.RoleAssignmentAPI.UnassignRoleFromUser(ctx, userId, roleId).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %w %s", wrapErrorV5(err), response.Body)
+			return wrapErrorV5(response, err, errors.New("okta-connector: failed to remove role"))
 		}
 
 		if response.StatusCode == http.StatusNoContent {
@@ -606,7 +600,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		groupId := principal.Id.Resource
 		roles, response, err := g.client.RoleAssignmentAPI.ListGroupAssignedRoles(ctx, groupId).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %w %s", wrapErrorV5(err), response.Body)
+			return wrapErrorV5(response, err, errors.New("okta-connector: failed to get roles"))
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r oktav5.Role) bool {
@@ -630,7 +624,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		roleId = *roles[rolePos].Id
 		response, err = g.client.RoleAssignmentAPI.UnassignRoleFromGroup(ctx, groupId, roleId).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %w %s", wrapErrorV5(err), response.Body)
+			return wrapErrorV5(response, err, fmt.Errorf("okta-connector: failed to remove role"))
 		}
 
 		if response.StatusCode == http.StatusNoContent {

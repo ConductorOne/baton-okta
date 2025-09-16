@@ -45,10 +45,12 @@ func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 	return nextPage, annos, nil
 }
 
+// parseRespV5 parses the response from an Okta API call using the Okta v5 SDK.
+// It extracts the next page token and rate limit annotations from the response.
 func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 
-	if resp == nil {
+	if resp == nil || resp.Header == nil {
 		return "", nil, nil
 	}
 
@@ -104,6 +106,19 @@ func parsePageToken(token string, resourceID *v2.ResourceId) (*pagination.Bag, s
 	page := b.PageToken()
 
 	return b, page, nil
+}
+
+func parsePageTokenV5(token string, resourceID *v2.ResourceId) (*pagination.Bag, string, error) {
+	bag, page, err := parsePageToken(token, resourceID)
+	if err != nil {
+		return nil, "", err
+	}
+	page, err = deserializeOktaResponseAfterV5(page)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return bag, page, nil
 }
 
 func newPaginationToken(limit int, nextPageToken string) *pagination.Token {
