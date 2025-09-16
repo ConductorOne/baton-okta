@@ -78,7 +78,7 @@ func (o *accountResourceType) List(
 	} else {
 		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeAccount.Id})
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse Page token: %w", err)
 		}
 
 		accountSet := mapset.NewSet[string]()
@@ -160,7 +160,7 @@ func (o *accountResourceType) Entitlements(
 	} else {
 		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeAccount.Id})
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse Page token: %w", err)
 		}
 
 		groups, respCtx, err := listGroupsHelper(ctx, o.connector.clientV5, token, page)
@@ -242,7 +242,7 @@ func (o *accountResourceType) Grants(
 	bag := &pagination.Bag{}
 	err = bag.Unmarshal(token.Token)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse Page token: %w", err)
 	}
 	if bag.Current() == nil {
 		if !awsConfig.UseGroupMapping {
@@ -257,7 +257,7 @@ func (o *accountResourceType) Grants(
 	page := bag.PageToken()
 	page, err = deserializeOktaResponseAfterV5(page)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to deserialize page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to deserialize Page token: %w", err)
 	}
 
 	var rv []*v2.Grant
@@ -664,8 +664,8 @@ type JSONPatchOperation struct {
 	Op string `json:"op,omitempty"`
 	// The resource path of the attribute to update
 	Path string `json:"path,omitempty"`
-	// The update operation value
-	Value interface{} `json:"value,omitempty"`
+	// The update operation Value
+	Value interface{} `json:"Value,omitempty"`
 }
 
 func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

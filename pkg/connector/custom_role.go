@@ -33,7 +33,7 @@ func (o *customRoleResourceType) List(
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	response, nextPage, annon, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.IamRoles, *oktav5.APIResponse, error) {
@@ -114,7 +114,7 @@ func (o *customRoleResourceType) Grants(
 
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
 	usersWithRoleAssignments, nextPage, annos, err := paginateV5(ctx, o.connector.clientV5, page, func(ctx2 context.Context) (*oktav5.RoleAssignedUsers, *oktav5.APIResponse, error) {

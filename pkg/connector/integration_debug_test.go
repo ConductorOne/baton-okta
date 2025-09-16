@@ -175,7 +175,7 @@ func TestResourcSetRevoke(t *testing.T) {
 
 	r := &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	// it removes everything associated to custom-role-id
 	_, err = r.Revoke(ctxTest, gr)
@@ -195,7 +195,7 @@ func TestResourceSetsList(t *testing.T) {
 
 	o := &resourceSetsResourceType{
 		resourceType: resourceTypeUser,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
 	require.Nil(t, err)
@@ -215,7 +215,7 @@ func TestResourceSetsBindingsList(t *testing.T) {
 
 	o := &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeUser,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
 	require.Nil(t, err)
@@ -235,7 +235,7 @@ func TestResourceSetGrants(t *testing.T) {
 
 	o := &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 
 	rs, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
@@ -260,7 +260,7 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 	o := &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 
 	rs, err := getResourceSetBindingsResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
@@ -318,7 +318,7 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 	r := &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -359,7 +359,7 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 	r := &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
-		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -409,18 +409,18 @@ func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string)
 }
 
 func getResourceSetBindingsResourceForTesting(ctxTest context.Context, id, label, description string) (*v2.Resource, error) {
-	return resourceSetsBindingsResource(ctxTest, &ResourceSets{
-		ID:          id,
-		Label:       label,
-		Description: description,
+	return resourceSetsBindingsResource(ctxTest, &oktav5.ResourceSet{
+		Id:          &id,
+		Label:       &label,
+		Description: &description,
 	}, nil)
 }
 
 func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
-	return resourceSetsResource(ctxTest, &ResourceSets{
-		ID:          id,
-		Label:       label,
-		Description: ctype,
+	return resourceSetsResource(ctxTest, &oktav5.ResourceSet{
+		Id:          &id,
+		Label:       &label,
+		Description: &ctype,
 	}, nil)
 }
 

@@ -42,7 +42,7 @@ func (o *apiTokenResourceType) List(
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeApiToken.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connector-v5: failed to parse Page token: %w", err)
 	}
 
 	apiTokens, nextPage, annos, err := paginateV5(ctx, o.clientV5, page, func(ctx2 context.Context) ([]oktav5.ApiToken, *oktav5.APIResponse, error) {
