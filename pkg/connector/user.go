@@ -23,7 +23,6 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
 
@@ -54,6 +53,8 @@ func (o *userResourceType) List(
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
 		awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 		if err != nil {
@@ -69,20 +70,20 @@ func (o *userResourceType) List(
 	if o.connector.ciamConfig.Enabled && len(o.ciamEmailFilters) == 0 {
 		return nil, "", nil, nil
 	}
-	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
-	qp := queryParams(token.Size, page)
 
-	users, respCtx, err := listUsers(ctx, o.connector.client, token, qp)
+	users, respCtx, err := listUsersV5(ctx, o.connector.clientV5, page)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		anno, err := wrapErrorV5(respCtx, err, errors.New("okta-connectorv2: failed to list users"))
+		return nil, "", anno, err
 	}
 
-	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseRespV5(respCtx)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -93,15 +94,20 @@ func (o *userResourceType) List(
 	}
 
 	for _, user := range users {
-		if o.connector.ciamConfig.Enabled && !shouldIncludeOktaUser(user, o.ciamEmailFilters) {
+		if o.connector.ciamConfig.Enabled && !shouldIncludeOktaUser(&user, o.ciamEmailFilters) {
 			continue
 		}
+		if user.Id == nil {
+			l.Warn("okta-connectorv2: user is nil", zap.Any("user", user))
+			continue
+		}
+
 		// for okta v2, we only attempt to filter users by email domains when a list is provided
-		shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+		shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, &user)
 		if !shouldInclude {
 			continue
 		}
-		resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+		resource, err := userResource(ctx, &user, o.connector.skipSecondaryEmails)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -119,22 +125,23 @@ func (o *userResourceType) List(
 
 func (o *userResourceType) listAWSAccountUsers(
 	ctx context.Context,
+	// TODO(golds): should we use this parentResourceID?
 	resourceID *v2.ResourceId,
 	token *pagination.Token,
 ) ([]*v2.Resource, string, annotations.Annotations, error) {
-	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+	bag, page, err := parsePageTokenV5(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
-	qp := queryParamsExpand(token.Size, page, "user")
-	appUsers, respContext, err := listApplicationUsers(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
+	appUsers, respContext, err := listApplicationUsersV5(ctx, o.connector.clientV5, o.connector.awsConfig.OktaAppId, page)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-aws-connector: list application users %w", err)
+		anno, err := wrapErrorV5(respContext, err, errors.New("okta-aws-connector: failed to list application users"))
+		return nil, "", anno, err
 	}
 
-	nextPage, annos, err := parseResp(respContext.OktaResponse)
+	nextPage, annos, err := parseRespV5(respContext)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
 	}
@@ -145,7 +152,7 @@ func (o *userResourceType) listAWSAccountUsers(
 	}
 
 	for _, appUser := range appUsers {
-		user, err := embeddedOktaUserFromAppUser(appUser)
+		user, err := embeddedOktaUserFromAppUser(&appUser)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to get user from app user response: %w", err)
 		}
@@ -164,34 +171,30 @@ func (o *userResourceType) listAWSAccountUsers(
 	return rv, pageToken, annos, nil
 }
 
-func embeddedOktaUserFromAppUser(appUser *okta.AppUser) (*okta.User, error) {
-	embedded := appUser.Embedded
-	if embedded == nil {
-		return nil, fmt.Errorf("app user '%s' embedded data was nil", appUser.Id)
-	}
-	embeddedMap, ok := embedded.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("app user '%s' embedded data was not a map", appUser.Id)
+func embeddedOktaUserFromAppUser(appUser *oktav5.AppUser) (*oktav5.User, error) {
+	embeddedMap := appUser.Embedded
+	if embeddedMap == nil {
+		return nil, fmt.Errorf("app user '%s' embedded data was nil", nullableStr(appUser.Id))
 	}
 	embeddedUser, ok := embeddedMap["user"]
 	if !ok {
-		return nil, fmt.Errorf("embedded user data was nil for app user '%s'", appUser.Id)
+		return nil, fmt.Errorf("embedded user data was nil for app user '%s'", nullableStr(appUser.Id))
 	}
 	userJSON, err := json.Marshal(embeddedUser)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling embedded user data for app user '%s': %w", appUser.Id, err)
+		return nil, fmt.Errorf("error marshalling embedded user data for app user '%s': %w", nullableStr(appUser.Id), err)
 	}
-	oktaUser := &okta.User{}
+	oktaUser := &oktav5.User{}
 	err = json.Unmarshal(userJSON, &oktaUser)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling embedded user data for app user '%s': %w", appUser.Id, err)
+		return nil, fmt.Errorf("error unmarshalling embedded user data for app user '%s': %w", nullableStr(appUser.Id), err)
 	}
 	return oktaUser, nil
 }
 
 // extractEmailsFromUserProfile safely extracts email addresses from a regular user profile.
 // It checks for email, secondEmail, and login fields that contain email addresses.
-func extractEmailsFromUserProfile(user *okta.User) []string {
+func extractEmailsFromUserProfile(user *oktav5.User) []string {
 	var userEmails []string
 
 	// Check if profile exists
@@ -202,19 +205,19 @@ func extractEmailsFromUserProfile(user *okta.User) []string {
 	oktaProfile := *user.Profile
 
 	// Extract primary email
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
-		userEmails = append(userEmails, email)
+	if email, ok := oktaProfile.GetEmailOk(); ok && nullableStr(email) != "" {
+		userEmails = append(userEmails, *email)
 	}
 
 	// Extract secondary email
-	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" {
-		userEmails = append(userEmails, secondEmail)
+	if secondEmail, ok := oktaProfile.GetSecondEmailOk(); ok && nullableStr(secondEmail) != "" {
+		userEmails = append(userEmails, nullableStr(secondEmail))
 	}
 
 	// Check if login field contains an email address
-	if login, ok := oktaProfile["login"].(string); ok && login != "" {
-		if strings.Contains(login, "@") {
-			userEmails = append(userEmails, login)
+	if login, ok := oktaProfile.GetLoginOk(); ok && nullableStr(login) != "" {
+		if strings.Contains(*login, "@") {
+			userEmails = append(userEmails, *login)
 		}
 	}
 
@@ -285,7 +288,7 @@ func extractEmailsFromAppUserProfile(appUser *oktav5.AppUser) []string {
 	return userEmails
 }
 
-func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
+func shouldIncludeOktaUser(u *oktav5.User, emailDomainFilters []string) bool {
 	userEmails := extractEmailsFromUserProfile(u)
 	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
 }
@@ -322,62 +325,24 @@ func (o *userResourceType) Grants(
 	return nil, "", nil, nil
 }
 
-func userName(user *okta.User) (string, string) {
+func userName(user *oktav5.User) (string, string) {
 	profile := *user.Profile
 
-	firstName, ok := profile["firstName"].(string)
-	if !ok {
+	firstName := nullableStr(profile.FirstName.Get())
+	if firstName == "" {
 		firstName = unknownProfileValue
 	}
-	lastName, ok := profile["lastName"].(string)
-	if !ok {
+	lastName := nullableStr(profile.LastName.Get())
+	if lastName == "" {
 		lastName = unknownProfileValue
 	}
 
 	return firstName, lastName
 }
 
-func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	if qp.Search == "" {
-		qp.Search = "status pr" // ListUsers doesn't get deactivated users by default. this should fetch them all
-	}
-
-	uri := usersUrl
-	if qp != nil {
-		uri += qp.String()
-	}
-
-	reqUrl, err := url.Parse(uri)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
-	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
-	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
-	oktaUsers := make([]*okta.User, 0)
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
-	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
-
-	resp, err := rq.Do(ctx, req, &oktaUsers)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	respCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-	return oktaUsers, respCtx, nil
+func listUsersV5(ctx context.Context, client *oktav5.APIClient, after string) ([]oktav5.User, *oktav5.APIResponse, error) {
+	// ListUsers doesn't get deactivated users by default. this should fetch them all
+	return client.UserAPI.ListUsers(ctx).Limit(defaultLimit).Search("status pr").After(after).Execute()
 }
 
 func ciamUserBuilder(connector *Okta) *userResourceType {
@@ -400,44 +365,71 @@ func userBuilder(connector *Okta) *userResourceType {
 }
 
 // Create a new connector resource for a okta user.
-func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
+func userResource(ctx context.Context, user *oktav5.User, skipSecondaryEmails bool) (*v2.Resource, error) {
 	firstName, lastName := userName(user)
 
 	oktaProfile := *user.Profile
-	oktaProfile["c1_okta_raw_user_status"] = user.Status
+
+	// TODO(golds): check the same fields as v2
+	profile := map[string]interface{}{
+		"email":                   nullableStr(oktaProfile.Email),
+		"firstName":               nullableStr(oktaProfile.FirstName.Get()),
+		"lastName":                nullableStr(oktaProfile.LastName.Get()),
+		"login":                   nullableStr(oktaProfile.Login),
+		"mobilePhone":             nullableStr(oktaProfile.MobilePhone.Get()),
+		"secondEmail":             nullableStr(oktaProfile.SecondEmail.Get()),
+		"c1_okta_raw_user_status": nullableStr(user.Status),
+	}
+	if skipSecondaryEmails {
+		profile["secondEmail"] = nil
+	}
 
 	options := []resource.UserTraitOption{
-		resource.WithUserProfile(oktaProfile),
+		resource.WithUserProfile(profile),
 		// TODO?: use the user types API to figure out the account type
 		// https://developer.okta.com/docs/reference/api/user-types/
 		// resource.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_UNSPECIFIED),
 	}
 
-	displayName, ok := oktaProfile["displayName"].(string)
-	if !ok {
+	displayName := nullableStr(oktaProfile.DisplayName.Get())
+	if displayName == "" {
 		displayName = fmt.Sprintf("%s %s", firstName, lastName)
 	}
 
 	if user.Created != nil {
 		options = append(options, resource.WithCreatedAt(*user.Created))
 	}
-	if user.LastLogin != nil {
-		options = append(options, resource.WithLastLogin(*user.LastLogin))
+	if user.LastLogin.Get() != nil {
+		options = append(options, resource.WithLastLogin(*user.LastLogin.Get()))
 	}
 
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	email := nullableStr(oktaProfile.Email)
+	if email != "" {
 		options = append(options, resource.WithEmail(email, true))
 	}
-	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" && !skipSecondaryEmails {
+
+	secondEmail := nullableStr(oktaProfile.SecondEmail.Get())
+
+	if secondEmail != "" && !skipSecondaryEmails {
 		options = append(options, resource.WithEmail(secondEmail, false))
 	}
 
-	if skipSecondaryEmails {
-		oktaProfile["secondEmail"] = nil
+	employeeIDs := mapset.NewSet[string]()
+
+	if employeenumber, ok := oktaProfile.GetEmployeeNumberOk(); ok {
+		employeeIDs.Add(*employeenumber)
 	}
 
-	employeeIDs := mapset.NewSet[string]()
-	for profileKey, profileValue := range oktaProfile {
+	if login, ok := oktaProfile.GetLoginOk(); ok {
+		splitLogin := strings.Split(*login, "@")
+		if len(splitLogin) == 2 {
+			options = append(options, resource.WithUserLogin(*login, splitLogin[0]))
+		} else {
+			options = append(options, resource.WithUserLogin(*login))
+		}
+	}
+
+	for profileKey, profileValue := range oktaProfile.AdditionalProperties {
 		switch strings.ToLower(profileKey) {
 		case "employeenumber", "employeeid", "employeeidnumber", "employee_number", "employee_id", "employee_idnumber":
 			if id, ok := profileValue.(string); ok {
@@ -460,24 +452,24 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		options = append(options, resource.WithEmployeeID(employeeIDs.ToSlice()...))
 	}
 
-	switch user.Status {
+	switch *user.Status {
 	// TODO: change userStatusDeprovisioned to STATUS_DELETED once we show deleted stuff in baton & the UI
 	// case userStatusDeprovisioned:
 	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
 	case userStatusSuspended, userStatusDeprovisioned:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DISABLED, user.Status))
+		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DISABLED, *user.Status))
 	case userStatusActive, userStatusProvisioned, userStatusStaged, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_ENABLED, user.Status))
+		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_ENABLED, *user.Status))
 	default:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_UNSPECIFIED, user.Status))
+		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_UNSPECIFIED, *user.Status))
 	}
 
 	ret, err := resource.NewUserResource(
 		displayName,
 		resourceTypeUser,
-		user.Id,
+		nullableStr(user.Id),
 		options,
-		resource.WithAnnotation(&v2.RawId{Id: user.Id}),
+		resource.WithAnnotation(&v2.RawId{Id: *user.Id}),
 	)
 	return ret, err
 }
@@ -516,21 +508,32 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	params, err := getAccountCreationQueryParams(accountInfo, credentialOptions)
+	activate, nextLogin, err := getAccountCreationQueryParamsV5(accountInfo, credentialOptions)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	user, response, err := r.connector.client.User.CreateUser(ctx, okta.CreateUserRequest{
-		Profile: userProfile,
-		Type: &okta.UserType{
-			Created:   ToPtr(time.Now()),
-			CreatedBy: "ConductorOne",
-		},
-		Credentials: creds,
-	}, params)
+	request := r.connector.clientV5.UserAPI.CreateUser(ctx).
+		Body(oktav5.CreateUserRequest{
+			Profile: *userProfile,
+			Type: &oktav5.CreateUserRequestType{
+				AdditionalProperties: map[string]interface{}{
+					"created":   ToPtr(time.Now()),
+					"createdBy": "ConductorOne",
+				},
+			},
+			Credentials: creds,
+		}).
+		Activate(activate)
+
+	if nextLogin != "" {
+		request = request.NextLogin(nextLogin)
+	}
+
+	user, response, err := request.Execute()
 	if err != nil {
-		return nil, nil, nil, err
+		anno, err := wrapErrorV5(response, err, errors.New("okta-connectorv2: failed to create user"))
+		return nil, nil, anno, err
 	}
 	if response.StatusCode != http.StatusOK {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
@@ -547,7 +550,7 @@ func (r *userResourceType) CreateAccount(
 	return car, nil, nil, nil
 }
 
-func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.UserCredentials, error) {
+func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*oktav5.UserCredentials, error) {
 	if credentialOptions.GetNoPassword() != nil {
 		return nil, nil
 	}
@@ -564,14 +567,14 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 		return nil, err
 	}
 
-	return &okta.UserCredentials{
-		Password: &okta.PasswordCredential{
-			Value: plaintextPassword,
+	return &oktav5.UserCredentials{
+		Password: &oktav5.PasswordCredential{
+			Value: &plaintextPassword,
 		},
 	}, nil
 }
 
-func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
+func getUserProfile(accountInfo *v2.AccountInfo) (*oktav5.UserProfile, error) {
 	pMap := accountInfo.Profile.AsMap()
 	firstName, ok := pMap["first_name"]
 	if !ok {
@@ -593,41 +596,68 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 		login = email
 	}
 
-	return &okta.UserProfile{
-		"firstName": firstName,
-		"lastName":  lastName,
-		"email":     email,
-		"login":     login,
+	firstNameString, ok := firstName.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: first name is not a string")
+	}
+
+	lastNameString, ok := lastName.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: last name is not a string")
+	}
+
+	emailString, ok := email.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: email is not a string")
+	}
+
+	loginString, ok := login.(string)
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: login is not a string")
+	}
+
+	return &oktav5.UserProfile{
+		FirstName: *oktav5.NewNullableString(&firstNameString),
+		LastName:  *oktav5.NewNullableString(&lastNameString),
+		Email:     &emailString,
+		Login:     &loginString,
 	}, nil
 }
 
-func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
+func getAccountCreationQueryParamsV5(
+	accountInfo *v2.AccountInfo,
+	credentialOptions *v2.CredentialOptions,
+) (bool, string, error) {
 	if credentialOptions.GetNoPassword() != nil {
-		return nil, nil
+		return false, "", nil
 	}
 
 	pMap := accountInfo.Profile.AsMap()
 	requirePass := pMap["password_change_on_login_required"]
 	requirePasswordChanged := false
+
 	switch v := requirePass.(type) {
 	case bool:
 		requirePasswordChanged = v
 	case string:
+
 		parsed, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, err
+			return false, "", err
 		}
 		requirePasswordChanged = parsed
 	case nil:
 		// Do nothing
 	}
 
-	params := &query.Params{}
 	if requirePasswordChanged {
-		params.NextLogin = "changePassword"
-		params.Activate = ToPtr(true) // This defaults to true anyways, but lets be explicit
+		nextLogin := "changePassword"
+
+		// This defaults to true anyways, but lets be explicit
+		return true, nextLogin, nil
 	}
-	return params, nil
+
+	return false, "", nil
 }
 
 func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
@@ -690,37 +720,42 @@ func (o *userResourceType) findAWSAccountUser(
 	ctx context.Context,
 	oktaUserID string,
 ) (*v2.Resource, annotations.Annotations, error) {
-	qp := query.NewQueryParams(query.WithExpand("user"))
-	appUser, _, err := getApplicationUser(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, oktaUserID, qp)
+	appUser, resp, err := getApplicationUser(ctx, o.connector.clientV5, o.connector.awsConfig.OktaAppId, oktaUserID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-aws-connector: find application user %w", err)
+		anno, err := wrapErrorV5(resp, err, errors.New("okta-aws-connector: failed to find application user"))
+		return nil, anno, err
+	}
+
+	_, annos, err := parseRespV5(resp)
+	if err != nil {
+		return nil, annos, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
 	}
 
 	if appUser == nil {
-		return nil, nil, nil
+		return nil, annos, nil
 	}
 
 	user, err := embeddedOktaUserFromAppUser(appUser)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-aws-connector: failed to get user from find app user response: %w", err)
+		return nil, annos, fmt.Errorf("okta-aws-connector: failed to get user from find app user response: %w", err)
 	}
 	resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
 	if err != nil {
-		return nil, nil, err
+		return nil, annos, err
 	}
-	return resource, nil, nil
+	return resource, annos, nil
 }
 
-func getApplicationUser(ctx context.Context, client *okta.Client, appID string, oktaUserID string, qp *query.Params) (*okta.AppUser, *responseContext, error) {
-	applicationUser, resp, err := client.Application.GetApplicationUser(ctx, appID, oktaUserID, qp)
+func getApplicationUser(ctx context.Context, client *oktav5.APIClient, appID string, oktaUserID string) (*oktav5.AppUser, *oktav5.APIResponse, error) {
+	applicationUser, resp, err := client.ApplicationUsersAPI.GetApplicationUser(ctx, appID, oktaUserID).Expand("user").Execute()
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app user from okta: %w", handleOktaResponseError(resp, err))
+		return nil, resp, err
 	}
 
-	return applicationUser, &responseContext{OktaResponse: resp}, nil
+	return applicationUser, resp, nil
 }
 
-func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
+func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*oktav5.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
 		return nil, nil, err
@@ -731,7 +766,7 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
 	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
 	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
-	oktaUsers := &okta.User{}
+	oktaUsers := &oktav5.User{}
 	rq := client.CloneRequestExecutor()
 	req, err := rq.
 		WithAccept(ContentType).
