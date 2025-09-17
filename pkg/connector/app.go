@@ -424,7 +424,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 					)
 				}
 
-				anno, err := wrapErrorV5(response, err)
+				anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationUser"))
 				return anno, err
 			}
 		}
@@ -494,7 +494,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				}
 			}
 
-			anno, err := wrapErrorV5(response, err)
+			anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationGroupAssignment error"))
 			return anno, err
 		}
 
@@ -512,7 +512,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			ApplicationGroupAssignment(oktav5.ApplicationGroupAssignment{}).
 			Execute()
 		if err != nil {
-			anno, err := wrapErrorV5(resp, err)
+			anno, err := wrapErrorV5(resp, err, errors.New("okta-connector: AssignGroupToApplication error"))
 			return anno, err
 		}
 
