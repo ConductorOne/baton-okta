@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -174,29 +175,34 @@ func toErrorV5(e oktav5.Error, additionalError ...error) error {
 	return status.Error(code, formattedErr)
 }
 
-func handleOktaResponseError(resp *okta.Response, err error) error {
-	return handleOktaResponseErrorWithNotFoundMessage(resp, err, "not found")
-}
-
-func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, message string) error {
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		if urlErr.Timeout() {
-			return status.Error(codes.DeadlineExceeded, fmt.Sprintf("request timeout: %v", urlErr.URL))
-		}
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status.Error(codes.DeadlineExceeded, "request timeout")
-	}
-	if resp != nil && resp.StatusCode >= 500 {
-		return status.Error(codes.Unavailable, "server error")
-	}
-	return convertNotFoundError(err, message)
-}
-
 func nullableStr(v *string) string {
 	if v == nil {
 		return ""
 	}
 	return *v
+}
+
+func doV5Request(ctx context.Context, client *oktav5.APIClient, request *http.Request, in any) (*oktav5.APIResponse, error) {
+	resp, err := client.Do(ctx, request)
+	if err != nil {
+		localAPIResponse := oktav5.NewAPIResponse(resp, client, nil)
+		return localAPIResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		localAPIResponse := oktav5.NewAPIResponse(resp, client, nil)
+		return localAPIResponse, err
+	}
+	resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+
+	localAPIResponse := oktav5.NewAPIResponse(resp, client, nil)
+
+	err = json.Unmarshal(localVarBody, in)
+	if err != nil {
+		return localAPIResponse, err
+	}
+
+	return localAPIResponse, nil
 }

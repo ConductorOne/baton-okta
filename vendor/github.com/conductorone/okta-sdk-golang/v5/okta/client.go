@@ -1042,6 +1042,17 @@ type formFile struct {
 	formFileName string
 }
 
+// PrepareRequest build the request
+func (c *APIClient) PrepareRequest(
+	ctx context.Context,
+	path string, method string,
+	postBody interface{},
+	headerParams map[string]string,
+	queryParams url.Values,
+	formParams url.Values) (localVarRequest *http.Request, err error) {
+	return c.prepareRequest(ctx, path, method, postBody, headerParams, queryParams, formParams, nil)
+}
+
 // prepareRequest build the request
 func (c *APIClient) prepareRequest(
 	ctx context.Context,
@@ -1310,6 +1321,10 @@ func (c *APIClient) decode(v interface{}, b []byte, contentType string) (err err
 func (c *APIClient) RefreshNext() *APIClient {
 	c.freshcache = true
 	return c
+}
+
+func (c *APIClient) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	return c.do(ctx, req)
 }
 
 func (c *APIClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {

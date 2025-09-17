@@ -22,7 +22,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 )
 
@@ -682,12 +681,13 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 		return nil, nil, nil
 	}
 
-	user, respCtx, err := getUser(ctx, o.connector.client, resourceId.Resource)
+	user, respCtx, err := getUser(ctx, o.connector.clientV5, resourceId.Resource)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to find user: %w", err)
+		anno, err := wrapErrorV5(respCtx, err, errors.New("okta-connectorv2: failed to find user"))
+		return nil, anno, err
 	}
 
-	resp := respCtx.OktaResponse
+	resp := respCtx
 	if resp != nil {
 		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
 			annos.WithRateLimiting(desc)
@@ -755,7 +755,7 @@ func getApplicationUser(ctx context.Context, client *oktav5.APIClient, appID str
 	return applicationUser, resp, nil
 }
 
-func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*oktav5.User, *responseContext, error) {
+func getUser(ctx context.Context, client *oktav5.APIClient, oktaUserID string) (*oktav5.User, *oktav5.APIResponse, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
 		return nil, nil, err
@@ -766,23 +766,27 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
 	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
 	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
-	oktaUsers := &oktav5.User{}
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
+	request, err := client.PrepareRequest(
+		ctx,
+		reqUrl.String(),
+		http.MethodGet,
+		nil,
+		map[string]string{
+			"Accept":       ContentType,
+			"Content-Type": `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`,
+		},
+		nil,
+		nil,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
-	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
-
-	resp, err := rq.Do(ctx, req, &oktaUsers)
+	oktaUsers := &oktav5.User{}
+	v5Request, err := doV5Request(ctx, client, request, oktaUsers)
 	if err != nil {
-		return nil, nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "user not found")
+		return nil, nil, err
 	}
 
-	return oktaUsers, &responseContext{OktaResponse: resp}, nil
+	return oktaUsers, v5Request, nil
 }

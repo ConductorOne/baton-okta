@@ -152,7 +152,7 @@ func (o *accountResourceType) Entitlements(
 		for _, role := range awsRoles.SamlIamRole {
 			rv = append(rv, samlRoleEntitlement(resource, role))
 		}
-		annos, err := parseGetResp(respCtx.OktaResponse)
+		annos, err := parseGetResp(respCtx)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -500,27 +500,32 @@ Join all roles OFF: Role1 and Role2 are available upon login to AWS
 Join all roles ON: Role1, Role2, RoleA, and RoleB are available upon login to AWS
 */
 
-func (o *accountResourceType) listAWSSamlRoles(ctx context.Context) (*AWSRoles, *responseContext, error) {
+func (o *accountResourceType) listAWSSamlRoles(ctx context.Context) (*AWSRoles, *oktav5.APIResponse, error) {
 	apiUrl := fmt.Sprintf("/api/v1/internal/apps/%s/types", o.connector.awsConfig.OktaAppId)
 
-	rq := o.connector.client.CloneRequestExecutor()
-
-	req, err := rq.WithAccept("application/json").WithContentType("application/json").NewRequest(http.MethodGet, apiUrl, nil)
+	rq, err := o.connector.clientV5.PrepareRequest(
+		ctx,
+		apiUrl,
+		http.MethodGet,
+		nil,
+		map[string]string{
+			"Content-Type": "application/json",
+			"Accept":       "application/json",
+		},
+		nil,
+		nil,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var awsRoles *AWSRoles
-	resp, err := rq.Do(ctx, req, &awsRoles)
-	if err != nil {
-		return nil, nil, err
-	}
-	respCtx, err := responseToContext(&pagination.Token{}, resp)
+	var awsRoles AWSRoles
+	response, err := doV5Request(ctx, o.connector.clientV5, rq, &awsRoles)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return awsRoles, respCtx, nil
+	return &awsRoles, response, nil
 }
 
 func getSAMLRolesFromAppUserProfile(ctx context.Context, appUser *okta.AppUser) ([]string, error) {

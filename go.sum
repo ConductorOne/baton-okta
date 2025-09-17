@@ -68,8 +68,8 @@ github.com/conductorone/dpop/integrations/dpop_grpc v0.2.3 h1:kLMCNIh0Mo2vbvvkCm
 github.com/conductorone/dpop/integrations/dpop_grpc v0.2.3/go.mod h1:LYNoUc1lkvozk9HBio+xI2w8YyfYy0v2cAJtIgrkj8o=
 github.com/conductorone/dpop/integrations/dpop_oauth2 v0.2.3 h1:KhFaxiTzj9FteI9IE2tIGdSjJKyFW5ZcUF2SrgLnA28=
 github.com/conductorone/dpop/integrations/dpop_oauth2 v0.2.3/go.mod h1:2eI0qv+XaEhoCw0GKFF1yH4X8Mp4KLVEVnQKRFEy4zs=
-github.com/conductorone/okta-sdk-golang/v5 v5.0.6-conductorone h1:Drapc++JKkxu90ltI2S/H8FU2996F91Z3k+tzmso6+Y=
-github.com/conductorone/okta-sdk-golang/v5 v5.0.6-conductorone/go.mod h1:5q3j1+Fd2BuvMmivkz62iQiaVQW/ztR8Oa+QEy03zlk=
+github.com/conductorone/okta-sdk-golang/v5 v5.0.7-conductorone h1:rKzjTYVKzw9PSg4nBFgk37VUJOb0KkM/O9i5xI3X2PY=
+github.com/conductorone/okta-sdk-golang/v5 v5.0.7-conductorone/go.mod h1:5q3j1+Fd2BuvMmivkz62iQiaVQW/ztR8Oa+QEy03zlk=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -80,7 +81,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 			rv = append(rv, resource)
 			bag.Pop()
 		} else {
-			adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, current.Token)
+			adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.clientV5, current.Token)
 			if err != nil {
 				// We don't have permissions to fetch role assignments, so return an empty list
 				if errors.Is(err, errMissingRolePermissions) {
@@ -90,7 +91,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 			}
 
-			nextPage, respAnnos, err := parseAdminListResp(respCtx.OktaResponse)
+			nextPage, respAnnos, err := parseAdminListResp(respCtx)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
@@ -161,7 +162,7 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	}
 
 	// TODO(Golds): uses internal api, need to switch to v5
-	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, page)
+	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.clientV5, page)
 	if err != nil {
 		// We don't have permissions to fetch role assignments, so return an empty list
 		if errors.Is(err, errMissingRolePermissions) {
@@ -170,7 +171,7 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
-	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseAdminListResp(respCtx)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
@@ -419,4 +420,40 @@ func ciamBuilder(client *okta.Client, clientV5 *oktav5.APIClient, skipSecondaryE
 		skipSecondaryEmails: skipSecondaryEmails,
 		clientV5:            clientV5,
 	}
+}
+
+func listAdministratorRoleFlags(ctx context.Context, client *oktav5.APIClient, encodedQueryParams string) ([]*administratorRoleFlags, *oktav5.APIResponse, error) {
+	// TODO(golds): Needs oktav5 export do and request to change this
+	reqUrl, err := url.Parse(apiPathListAdministrators)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if encodedQueryParams != "" {
+		reqUrl.RawQuery = encodedQueryParams
+	}
+
+	request, err := client.PrepareRequest(
+		ctx,
+		reqUrl.String(),
+		http.MethodGet,
+		nil,
+		map[string]string{
+			"Accept":       ContentType,
+			"Content-Type": ContentType,
+		},
+		nil,
+		nil,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var adminFlags []*administratorRoleFlags
+	v5Request, err := doV5Request(ctx, client, request, &adminFlags)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return adminFlags, v5Request, nil
 }
