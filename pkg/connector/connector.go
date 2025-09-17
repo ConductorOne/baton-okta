@@ -207,7 +207,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	if o.ciamConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
 			ciamUserBuilder(o),
-			ciamBuilder(o.client, o.clientV5, o.skipSecondaryEmails),
+			ciamBuilder(o.clientV5, o.skipSecondaryEmails),
 		}
 	}
 
@@ -223,7 +223,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.clientV5, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client, o.clientV5),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.clientV5),
 	}
 
 	if o.syncCustomRoles {
