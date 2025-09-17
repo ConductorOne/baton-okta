@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	oktaSDK "github.com/conductorone/okta-sdk-golang/v5/okta"
 	mapset "github.com/deckarep/golang-set/v2"
-	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -68,12 +68,12 @@ func (filter *EventFilter) Filter() string {
 
 func (filter *EventFilter) Matches(event *oktaSDK.LogEvent) bool {
 	// is the event type in our set?
-	if !filter.EventTypes.Contains(event.EventType) {
+	if !filter.EventTypes.Contains(*event.EventType) {
 		return false
 	}
 
 	// if we have actor types, is the actor type in our set?
-	if filter.ActorType != "" && filter.ActorType != event.Actor.Type {
+	if filter.ActorType != "" && filter.ActorType != *event.Actor.Type {
 		return false
 	}
 
@@ -81,7 +81,7 @@ func (filter *EventFilter) Matches(event *oktaSDK.LogEvent) bool {
 	if filter.TargetTypes.Cardinality() > 0 {
 		targetSet := mapset.NewSet[string]()
 		for _, target := range event.Target {
-			targetSet.Add(target.Type)
+			targetSet.Add(*target.Type)
 		}
 
 		if filter.TargetTypes.Intersect(targetSet).Cardinality() == 0 {
@@ -95,11 +95,11 @@ func (filter *EventFilter) Matches(event *oktaSDK.LogEvent) bool {
 func (filter *EventFilter) Handle(l *zap.Logger, event *oktaSDK.LogEvent) (*v2.Event, error) {
 	targetMap := make(map[string][]*oktaSDK.LogTarget)
 	for _, target := range event.Target {
-		targetMap[target.Type] = append(targetMap[target.Type], target)
+		targetMap[*target.Type] = append(targetMap[*target.Type], &target)
 	}
 
 	rv := &v2.Event{
-		Id:         event.Uuid,
+		Id:         *event.Uuid,
 		OccurredAt: timestamppb.New(*event.Published),
 	}
 
