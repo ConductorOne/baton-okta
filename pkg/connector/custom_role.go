@@ -52,7 +52,7 @@ func (o *customRoleResourceType) List(
 	for _, role := range response.Roles {
 		resource, err := customRoleResourceV5(ctx, &role)
 		if err != nil {
-			return nil, "", annon, fmt.Errorf("okta-connectorv2: failed to create ustom role resource: %w", err)
+			return nil, "", annon, fmt.Errorf("okta-connectorv2: failed to create custom role resource: %w", err)
 		}
 
 		rv = append(rv, resource)
