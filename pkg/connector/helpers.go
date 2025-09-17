@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/conductorone/baton-okta/pkg/connector/oktaerrors"
+	"google.golang.org/grpc/status"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 
@@ -22,7 +23,6 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -94,7 +94,7 @@ func getError(response *okta.Response) (okta.Error, error) {
 }
 
 func asErrorV5(err error) (*oktav5.Error, bool) {
-	oktaGenericErr := oktav5.GenericOpenAPIError{}
+	var oktaGenericErr *oktav5.GenericOpenAPIError
 
 	if errors.As(err, &oktaGenericErr) {
 		var oktaErr oktav5.Error
@@ -141,9 +141,6 @@ func toErrorV5(e oktav5.Error, additionalError ...error) error {
 	}
 
 	err := errors.New(formattedErr)
-	if len(additionalError) != 0 {
-		err = errors.Join(append([]error{err}, additionalError...)...)
-	}
 
 	findError := oktaerrors.FindError(nullableStr(e.ErrorCode))
 	if findError == nil {
@@ -158,6 +155,7 @@ func toErrorV5(e oktav5.Error, additionalError ...error) error {
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		code = codes.Unavailable
 	case http.StatusNotFound:
+		code = codes.NotFound
 	case http.StatusUnauthorized:
 		code = codes.Unauthenticated
 	case http.StatusForbidden:
@@ -170,6 +168,17 @@ func toErrorV5(e oktav5.Error, additionalError ...error) error {
 
 	if findError.StatusCode >= 500 && findError.StatusCode <= 599 {
 		code = codes.Unavailable
+	}
+
+	if len(additionalError) > 0 {
+		return errors.Join(
+			append(
+				[]error{
+					status.Error(code, formattedErr),
+				},
+				additionalError...,
+			)...,
+		)
 	}
 
 	return status.Error(code, formattedErr)

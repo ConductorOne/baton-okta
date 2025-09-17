@@ -2,12 +2,15 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -436,6 +439,7 @@ func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitl
 
 func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
 	var oktaClient *okta.Client
+	var oktav5Client *oktav5.APIClient
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
 		return nil, err
@@ -453,10 +457,25 @@ func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		config, err := oktav5.NewConfiguration(
+			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
+			oktav5.WithToken(cfg.ApiToken),
+			oktav5.WithHttpClientPtr(client),
+			oktav5.WithCache(cfg.Cache),
+			oktav5.WithCacheTti(cfg.CacheTTI),
+			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithRateLimitPrevent(true),
+		)
+		if err != nil {
+			return nil, err
+		}
+		oktav5Client = oktav5.NewAPIClient(config)
 	}
 
 	return &Okta{
 		client:           oktaClient,
+		clientV5:         oktav5Client,
 		domain:           cfg.Domain,
 		apiToken:         cfg.ApiToken,
 		syncInactiveApps: cfg.SyncInactiveApps,
@@ -465,4 +484,32 @@ func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
 			EmailDomains: cfg.CiamEmailDomains,
 		},
 	}, nil
+}
+
+func TestWrapErrorV5(t *testing.T) {
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   "any-domain-test-baton.okta.com",
+		ApiToken: "any-api-token",
+	})
+	require.NoError(t, err)
+
+	_, resp, err := cliTest.clientV5.UserAPI.ListUsers(ctxTest).Execute()
+	anno, err := wrapErrorV5(resp, err, errors.New("more err"))
+
+	require.Equal(t, codes.Unauthenticated.String(), status.Code(err).String())
+	require.NotNil(t, anno)
+}
+
+func TestWrapErrorNotFoundV5(t *testing.T) {
+	cliTest, err := getClietForTesting(ctxTest, &Config{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.NoError(t, err)
+
+	_, resp, err := cliTest.clientV5.UserAPI.GetUser(ctxTest, "1").Execute()
+	anno, err := wrapErrorV5(resp, err, errors.New("more err"))
+
+	require.Equal(t, codes.NotFound.String(), status.Code(err).String())
+	require.NotNil(t, anno)
 }
