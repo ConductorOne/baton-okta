@@ -279,7 +279,7 @@ func listAppsV5(ctx context.Context, client *oktav5.APIClient, syncInactiveApps 
 
 	applications, err := oktaAppsToOktaApplicationsv5(ctx, apps)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta apps to applications: %w", err)
+		return nil, resp, fmt.Errorf("okta-connectorv2: error converting okta apps to applications: %w", err)
 	}
 
 	return applications, resp, nil
