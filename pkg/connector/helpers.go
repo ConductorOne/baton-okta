@@ -21,7 +21,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
 )
 
@@ -51,17 +50,6 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 		ResourceType: resourceTypeID,
 		Resource:     id,
 	}
-}
-
-func queryParams(size int, after string) *query.Params {
-	if size == 0 || size > defaultLimit {
-		size = defaultLimit
-	}
-	if after == "" {
-		return query.NewQueryParams(query.WithLimit(int64(size)))
-	}
-
-	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after))
 }
 
 func responseToContext(token *pagination.Token, resp *okta.Response) (*responseContext, error) {
