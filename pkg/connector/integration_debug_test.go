@@ -507,6 +507,10 @@ func TestWrapErrorV5(t *testing.T) {
 }
 
 func TestWrapErrorNotFoundV5(t *testing.T) {
+	if batonApiToken == "" && batonDomain == "" {
+		t.Skip()
+	}
+
 	cliTest, err := getClietForTesting(ctxTest, &Config{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
