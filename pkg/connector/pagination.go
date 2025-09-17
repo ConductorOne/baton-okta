@@ -15,7 +15,7 @@ import (
 
 const defaultLimit = 50
 
-func parseGetResp(resp *okta.Response) (annotations.Annotations, error) {
+func parseGetResp(resp *oktav5.APIResponse) (annotations.Annotations, error) {
 	var annos annotations.Annotations
 	if resp != nil {
 		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
@@ -66,12 +66,12 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 	return nextPage, annos, nil
 }
 
-func parseAdminListResp(resp *okta.Response) (string, annotations.Annotations, error) {
+func parseAdminListResp(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 	var nextPage string
 
 	if resp != nil {
-		u, err := url.Parse(resp.NextPage)
+		u, err := url.Parse(resp.NextPage())
 		if err != nil {
 			return "", nil, err
 		}

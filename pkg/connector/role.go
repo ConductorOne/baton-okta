@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
-
-	"github.com/okta/okta-sdk-golang/v2/okta"
 
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
@@ -340,50 +337,6 @@ type administratorRoleFlags struct {
 	ForAllGroupMembershipAdminGroups bool     `json:"forAllGroupMembershipAdminGroups"`
 	RolesFromIndividualAssignments   []string `json:"rolesFromIndividualAssignments"`
 	RolesFromGroup                   []string `json:"rolesFromGroup"`
-}
-
-func listAdministratorRoleFlags(
-	ctx context.Context,
-	client *okta.Client,
-	token *pagination.Token,
-	encodedQueryParams string,
-) ([]*administratorRoleFlags, *responseContext, error) {
-	// TODO(golds): Needs oktav5 export do and request to change this
-	reqUrl, err := url.Parse(apiPathListAdministrators)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if encodedQueryParams != "" {
-		reqUrl.RawQuery = encodedQueryParams
-	}
-
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var adminFlags []*administratorRoleFlags
-	resp, err := rq.Do(ctx, req, &adminFlags)
-	if err != nil {
-		// If we don't have access to the role endpoint, we should just return nil
-		if resp.StatusCode == http.StatusForbidden {
-			return nil, nil, errMissingRolePermissions
-		}
-
-		return nil, nil, handleOktaResponseError(resp, err)
-	}
-
-	respCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return adminFlags, respCtx, nil
 }
 
 func standardRoleFromType(roleType string) *oktav5.Role {
