@@ -411,6 +411,9 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
+
+		l.Info("GetApplicationUser", zap.String("user_id", userID), zap.String("app_id", appID))
+
 		appUser, response, err := g.clientV5.ApplicationUsersAPI.GetApplicationUser(ctx, appID, userID).Execute()
 		if err != nil {
 			if errOkta, ok := asErrorV5(err); ok {
