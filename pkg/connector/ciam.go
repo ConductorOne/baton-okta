@@ -161,7 +161,6 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse Page token: %w", err)
 	}
 
-	// TODO(Golds): uses internal api, need to switch to v5
 	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.clientV5, page)
 	if err != nil {
 		// We don't have permissions to fetch role assignments, so return an empty list
