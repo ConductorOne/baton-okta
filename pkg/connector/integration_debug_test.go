@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
@@ -78,7 +79,7 @@ func TestUserResourceTypeList(t *testing.T) {
 	require.NotNil(t, res)
 
 	oktaUsers, resp, err := o.connector.client.User.ListAssignedRolesForUser(ctxTest, "00ujp5a9z0rMTsPRW697", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.NotNil(t, oktaUsers)
 }
@@ -482,6 +483,11 @@ func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,
+		},
+		userFilters: &userFilterConfig{
+			includedEmailDomains: lowerEmailDomains(cfg.FilterEmailDomains),
+			resultsCache:         make(map[string]userFilterResult),
+			resultsCacheMutex:    sync.Mutex{},
 		},
 	}, nil
 }
