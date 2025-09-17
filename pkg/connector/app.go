@@ -412,8 +412,6 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
 
-		l.Info("GetApplicationUser", zap.String("user_id", userID), zap.String("app_id", appID))
-
 		appUser, response, err := g.clientV5.ApplicationUsersAPI.GetApplicationUser(ctx, appID, userID).Execute()
 		if err != nil {
 			if errOkta, ok := asErrorV5(err); ok {
@@ -425,9 +423,12 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 						zap.String("ErrorCode", nullableStr(errOkta.ErrorCode)),
 						zap.String("ErrorSummary", nullableStr(errOkta.ErrorSummary)),
 					)
-				}
 
-				anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationUser"))
+					anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationUser"))
+					return anno, err
+				}
+			} else {
+				anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationUser error"))
 				return anno, err
 			}
 		}
@@ -495,10 +496,13 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 						zap.String("ErrorSummary", nullableStr(errOkta.ErrorSummary)),
 					)
 				}
-			}
 
-			anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationGroupAssignment error"))
-			return anno, err
+				anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationGroupAssignment error"))
+				return anno, err
+			} else {
+				anno, err := wrapErrorV5(response, err, errors.New("okta-connector: GetApplicationGroupAssignment error"))
+				return anno, err
+			}
 		}
 
 		if appGroup != nil && groupID == nullableStr(appGroup.Id) {
@@ -564,7 +568,6 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 			)
 
 			anno, err := wrapErrorV5(resp, err, errors.New("okta-connector: user does not have app membership"))
-
 			return anno, err
 		}
 
@@ -583,6 +586,15 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		groupID := principal.Id.Resource
 		_, resp, err := g.clientV5.ApplicationGroupsAPI.GetApplicationGroupAssignment(ctx, appID, groupID).Execute()
 		if err != nil {
+			if resp != nil && resp.StatusCode == http.StatusNotFound {
+				l.Debug(
+					"okta-connector: revoke: user does not have app membership",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("principal_type", principal.Id.ResourceType),
+				)
+				return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+			}
+
 			l.Warn(
 				"okta-connector: group does not have app membership",
 				zap.String("principal_id", principal.Id.String()),

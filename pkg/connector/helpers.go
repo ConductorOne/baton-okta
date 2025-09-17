@@ -138,6 +138,8 @@ func toErrorV5(e oktav5.Error, additionalError ...error) error {
 	// Same as https://github.com/ConductorOne/baton-sdk/blob/main/pkg/uhttp/wrapper.go#L444
 	code := codes.Unknown
 	switch findError.StatusCode {
+	case http.StatusBadRequest:
+		code = codes.InvalidArgument
 	case http.StatusRequestTimeout:
 		code = codes.DeadlineExceeded
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
