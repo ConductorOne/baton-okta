@@ -32,6 +32,7 @@ var (
 		"filter-email-domains",
 		field.WithDescription("Only sync users with primary email addresses that match at least one of the provided domains. When unset or empty, all users will be synced."),
 	)
+	useAppLinksForUserGrants = field.BoolField("use-app-links-for-user-grants", field.WithDescription("Whether to use app links for user grants or not"), field.WithDefaultValue(false))
 )
 
 var relationships = []field.SchemaFieldRelationship{
@@ -65,4 +66,5 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	awsSourceIdentityMode,
 	awsAllowGroupToDirectAssignmentConversionForProvisioning,
 	filterEmailDomains,
+	useAppLinksForUserGrants,
 }, field.WithConstraints(relationships...))
