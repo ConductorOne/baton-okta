@@ -14,12 +14,10 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 )
 
 type ciamResourceBuilder struct {
-	client              *okta.Client
 	clientV5            *oktav5.APIClient
 	skipSecondaryEmails bool
 }
@@ -413,9 +411,8 @@ func (o *ciamResourceBuilder) ResourceType(ctx context.Context) *v2.ResourceType
 	return resourceTypeRole
 }
 
-func ciamBuilder(client *okta.Client, clientV5 *oktav5.APIClient, skipSecondaryEmails bool) *ciamResourceBuilder {
+func ciamBuilder(clientV5 *oktav5.APIClient, skipSecondaryEmails bool) *ciamResourceBuilder {
 	return &ciamResourceBuilder{
-		client:              client,
 		skipSecondaryEmails: skipSecondaryEmails,
 		clientV5:            clientV5,
 	}

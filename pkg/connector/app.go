@@ -28,7 +28,6 @@ type appResourceType struct {
 	apiToken         string
 	syncInactiveApps bool
 	userEmailFilters []string
-	client           *okta.Client
 	clientV5         *oktav5.APIClient
 }
 
@@ -46,12 +45,11 @@ func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client, clientv5 *oktav5.APIClient) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, clientv5 *oktav5.APIClient) *appResourceType {
 	return &appResourceType{
 		resourceType:     resourceTypeApp,
 		domain:           domain,
 		apiToken:         apiToken,
-		client:           client,
 		syncInactiveApps: syncInactiveApps,
 		userEmailFilters: filterEmailDomains,
 		clientV5:         clientv5,
@@ -397,7 +395,6 @@ func appResource(ctx context.Context, app oktav5.Application) (*v2.Resource, err
 
 func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	var (
-		ok    bool
 		email string
 	)
 	l := ctxzap.Extract(ctx)
@@ -414,28 +411,25 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
-		appUser, response, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		appUser, response, err := g.clientV5.ApplicationUsersAPI.GetApplicationUser(ctx, appID, userID).Execute()
 		if err != nil {
-			defer response.Body.Close()
-			errOkta, err := getError(response)
-			if err != nil {
-				return nil, err
-			}
+			if errOkta, ok := asErrorV5(err); ok {
+				if nullableStr(errOkta.ErrorCode) != ResourceNotFoundExceptionErrorCode {
+					l.Warn(
+						"okta-connector: ",
+						zap.String("principal_id", principal.Id.String()),
+						zap.String("principal_type", principal.Id.ResourceType),
+						zap.String("ErrorCode", nullableStr(errOkta.ErrorCode)),
+						zap.String("ErrorSummary", nullableStr(errOkta.ErrorSummary)),
+					)
+				}
 
-			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
-				l.Warn(
-					"okta-connector: ",
-					zap.String("principal_id", principal.Id.String()),
-					zap.String("principal_type", principal.Id.ResourceType),
-					zap.String("ErrorCode", errOkta.ErrorCode),
-					zap.String("ErrorSummary", errOkta.ErrorSummary),
-				)
-
-				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+				anno, err := wrapErrorV5(response, err)
+				return anno, err
 			}
 		}
 
-		if appUser != nil && userID == appUser.Id {
+		if appUser != nil && userID == nullableStr(appUser.Id) {
 			l.Warn(
 				"okta-connector: The app specified is already assigned to the user",
 				zap.String("principal_id", principal.Id.String()),
@@ -445,64 +439,66 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			return annotations.New(&v2.GrantAlreadyExists{}), nil
 		}
 
-		user, _, err := g.client.User.GetUser(ctx, userID)
+		user, resp, err := g.clientV5.UserAPI.GetUser(ctx, userID).Execute()
 		if err != nil {
-			return nil, err
+			anno, err := wrapErrorV5(resp, err)
+			return anno, err
 		}
 
 		profile := *user.Profile
-		if email, ok = profile["email"].(string); !ok {
+
+		if email = nullableStr(profile.Email); email == "" {
 			email = unknownProfileValue
 		}
 
-		payload := okta.AppUser{
-			Credentials: &okta.AppUserCredentials{
-				UserName: email,
-			},
-			Id:    userID,
-			Scope: strings.ToUpper(principal.Id.ResourceType),
-		}
-		assignedUser, response, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
+		assignedUser, resp, err := g.clientV5.ApplicationUsersAPI.AssignUserToApplication(ctx, appID).
+			AppUser(oktav5.AppUserAssignRequest{
+				Id:    userID,
+				Scope: oktav5.PtrString(strings.ToUpper(principal.Id.ResourceType)),
+				Credentials: &oktav5.AppUserCredentials{
+					UserName: oktav5.PtrString(email),
+				},
+			}).
+			Execute()
 		if err != nil {
 			l.Warn(
 				"okta-connector: The app specified cannot be assigned to the user",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: The app specified cannot be assigned to the user %s %s",
-				err.Error(), response.Body)
+
+			anno, err := wrapErrorV5(resp, err, errors.New("okta-connector: The app specified cannot be assigned to the user"))
+
+			return anno, err
 		}
 
 		l.Warn("App Membership has been created.",
-			zap.String("userID", assignedUser.Id),
-			zap.String("Status", assignedUser.Status),
+			zap.String("userID", nullableStr(assignedUser.Id)),
+			zap.String("Status", nullableStr(assignedUser.Status)),
 			zap.Time("LastUpdated", *assignedUser.LastUpdated),
-			zap.String("Scope", assignedUser.Scope),
+			zap.String("Scope", nullableStr(assignedUser.Scope)),
 		)
 	case resourceTypeGroup.Id:
 		groupID := principal.Id.Resource
-		appGroup, response, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		appGroup, response, err := g.clientV5.ApplicationGroupsAPI.GetApplicationGroupAssignment(ctx, appID, groupID).Execute()
 		if err != nil {
-			defer response.Body.Close()
-			errOkta, err := getError(response)
-			if err != nil {
-				return nil, err
+			if errOkta, ok := asErrorV5(err); ok {
+				if nullableStr(errOkta.ErrorCode) != ResourceNotFoundExceptionErrorCode {
+					l.Warn(
+						"okta-connector: ",
+						zap.String("principal_id", principal.Id.String()),
+						zap.String("principal_type", principal.Id.ResourceType),
+						zap.String("ErrorCode", nullableStr(errOkta.ErrorCode)),
+						zap.String("ErrorSummary", nullableStr(errOkta.ErrorSummary)),
+					)
+				}
 			}
 
-			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
-				l.Warn(
-					"okta-connector: ",
-					zap.String("principal_id", principal.Id.String()),
-					zap.String("principal_type", principal.Id.ResourceType),
-					zap.String("ErrorCode", errOkta.ErrorCode),
-					zap.String("ErrorSummary", errOkta.ErrorSummary),
-				)
-
-				return nil, fmt.Errorf("okta-connector: %v", errOkta)
-			}
+			anno, err := wrapErrorV5(response, err)
+			return anno, err
 		}
 
-		if appGroup != nil && groupID == appGroup.Id {
+		if appGroup != nil && groupID == nullableStr(appGroup.Id) {
 			l.Warn(
 				"okta-connector: The app specified is already assigned to the group",
 				zap.String("principal_id", principal.Id.String()),
@@ -512,14 +508,16 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			return annotations.New(&v2.GrantAlreadyExists{}), nil
 		}
 
-		payload := okta.ApplicationGroupAssignment{}
-		assignedGroup, _, err := g.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
+		assignedGroup, resp, err := g.clientV5.ApplicationGroupsAPI.AssignGroupToApplication(ctx, appID, groupID).
+			ApplicationGroupAssignment(oktav5.ApplicationGroupAssignment{}).
+			Execute()
 		if err != nil {
-			return nil, err
+			anno, err := wrapErrorV5(resp, err)
+			return anno, err
 		}
 
 		l.Warn("App Membership has been created.",
-			zap.String("userID", assignedGroup.Id),
+			zap.String("userID", nullableStr(assignedGroup.Id)),
 			zap.Time("LastUpdated", *assignedGroup.LastUpdated),
 		)
 	default:
@@ -546,7 +544,7 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
-		_, resp, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		_, resp, err := g.clientV5.ApplicationUsersAPI.GetApplicationUser(ctx, appID, userID).Execute()
 		if err != nil {
 			if resp != nil && resp.StatusCode == http.StatusNotFound {
 				l.Debug(
@@ -561,12 +559,16 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: user does not have app membership: %s", err.Error())
+
+			anno, err := wrapErrorV5(resp, err, errors.New("okta-connector: user does not have app membership"))
+
+			return anno, err
 		}
 
-		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
+		response, err := g.clientV5.ApplicationUsersAPI.UnassignUserFromApplication(ctx, appID, userID).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %s %s", err.Error(), response.Body)
+			anno, err := wrapErrorV5(response, err, errors.New("okta-connector: failed to remove user from application"))
+			return anno, err
 		}
 
 		if response.StatusCode == http.StatusNoContent {
@@ -576,19 +578,22 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		}
 	case resourceTypeGroup.Id:
 		groupID := principal.Id.Resource
-		_, _, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		_, resp, err := g.clientV5.ApplicationGroupsAPI.GetApplicationGroupAssignment(ctx, appID, groupID).Execute()
 		if err != nil {
 			l.Warn(
 				"okta-connector: group does not have app membership",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: group does not have app membership: %s", err.Error())
+
+			anno, err := wrapErrorV5(resp, err, errors.New("okta-connector: group does not have app membership"))
+			return anno, err
 		}
 
-		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
+		response, err := g.clientV5.ApplicationGroupsAPI.UnassignApplicationFromGroup(ctx, appID, groupID).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %s %s", err.Error(), response.Body)
+			anno, err := wrapErrorV5(response, err, errors.New("okta-connector: failed to remove group from application"))
+			return anno, err
 		}
 
 		if response.StatusCode == http.StatusNoContent {
