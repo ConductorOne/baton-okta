@@ -1042,6 +1042,17 @@ type formFile struct {
 	formFileName string
 }
 
+// PrepareRequest build the request
+func (c *APIClient) PrepareRequest(
+	ctx context.Context,
+	path string, method string,
+	postBody interface{},
+	headerParams map[string]string,
+	queryParams url.Values,
+	formParams url.Values) (localVarRequest *http.Request, err error) {
+	return c.prepareRequest(ctx, path, method, postBody, headerParams, queryParams, formParams, nil)
+}
+
 // prepareRequest build the request
 func (c *APIClient) prepareRequest(
 	ctx context.Context,
@@ -1312,6 +1323,10 @@ func (c *APIClient) RefreshNext() *APIClient {
 	return c
 }
 
+func (c *APIClient) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	return c.do(ctx, req)
+}
+
 func (c *APIClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {
 	cacheKey := CreateCacheKey(req)
 	if req.Method != http.MethodGet {
@@ -1342,7 +1357,7 @@ func (c *APIClient) do(ctx context.Context, req *http.Request) (*http.Response, 
 		}
 		resp, err := c.doWithRetries(ctx, req)
 		if err != nil {
-			return nil, err
+			return resp, err
 		}
 		if resp.StatusCode >= 200 && resp.StatusCode <= 299 && req.Method == http.MethodGet {
 			if c.cfg.Okta.Client.RateLimit.Enable {

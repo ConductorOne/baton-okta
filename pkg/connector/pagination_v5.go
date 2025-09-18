@@ -1,43 +1,74 @@
 package connector
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
-
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	"strings"
 
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 )
-
-func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
-	var annos annotations.Annotations
-
-	if resp == nil {
-		return "", nil, nil
-	}
-
-	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-		annos.WithRateLimiting(desc)
-	}
-
-	nextPage, err := serializeOktaResponseV5(resp)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return nextPage, annos, nil
-}
 
 type SerializableOktaResponseV5 struct {
 	Link []string
 	Url  string
 }
 
+func deserializeOktaResponseAfterV5(serialized string) (string, error) {
+	if serialized == "" {
+		return "", nil
+	}
+
+	r, err := deserializeOktaResponseV5(serialized) //nolint:bodyclose // just a dummy response
+	if err != nil {
+		return "", err
+	}
+
+	next := ""
+
+	links := r.Header["Link"]
+	if len(links) > 0 {
+		for _, link := range links {
+			splitLinkHeader := strings.Split(link, ";")
+			if len(splitLinkHeader) < 2 {
+				continue
+			}
+			rawLink := strings.TrimRight(strings.TrimLeft(splitLinkHeader[0], "<"), ">")
+			rawURL, _ := url.Parse(rawLink)
+			rawURL.Scheme = ""
+			rawURL.Host = ""
+			if r.Request != nil {
+				q := r.Request.URL.Query()
+				for k, v := range rawURL.Query() {
+					q.Set(k, v[0])
+				}
+				rawURL.RawQuery = q.Encode()
+			}
+			if strings.Contains(link, `rel="next"`) {
+				next = rawURL.Query().Get("after")
+			}
+		}
+	}
+
+	return next, nil
+}
+
 func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 	if resp == nil {
+		return "", nil
+	}
+
+	if !resp.HasNextPage() {
+		return "", nil
+	}
+
+	// looks like the Request is nil in some cases when doesn't have next Page
+	if resp.Request == nil {
 		return "", nil
 	}
 
@@ -54,7 +85,7 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 	return string(jsonBytes), nil
 }
 
-func deserializeOktaResponseV5(serialized string) (*oktav5.APIResponse, error) {
+func deserializeOktaResponseV5(serialized string) (*http.Response, error) {
 	var serializable SerializableOktaResponseV5
 	err := json.Unmarshal([]byte(serialized), &serializable)
 	if err != nil {
@@ -66,14 +97,59 @@ func deserializeOktaResponseV5(serialized string) (*oktav5.APIResponse, error) {
 		return nil, err
 	}
 
-	return &oktav5.APIResponse{
-		Response: &http.Response{
-			Request: &http.Request{
-				URL: parsedUrl,
-			},
-			Header: http.Header{
-				"Link": serializable.Link,
-			},
+	return &http.Response{
+		Request: &http.Request{
+			URL: parsedUrl,
+		},
+		Header: http.Header{
+			"Link": serializable.Link,
 		},
 	}, nil
+}
+
+func paginateV5[T any](
+	ctx context.Context,
+	clientV5 *oktav5.APIClient,
+	page string,
+	act func(ctx2 context.Context) (T, *oktav5.APIResponse, error),
+) (T, string, annotations.Annotations, error) {
+	var response T
+	var empty T
+	var resp *oktav5.APIResponse
+	var err error
+
+	l := ctxzap.Extract(ctx)
+
+	if page == "" {
+		l.Debug("paginationV5: first Page")
+
+		response, resp, err = act(ctx)
+		if err != nil {
+			annon, err := wrapErrorV5(resp, err)
+			return empty, "", annon, err
+		}
+	} else {
+		l.Debug("paginationV5: paginate", zap.String("Page", page))
+
+		prevResp, err := deserializeOktaResponseV5(page) //nolint:bodyclose // just a dummy response
+		if err != nil {
+			return empty, "", nil, err
+		}
+
+		previous := oktav5.NewAPIResponse(prevResp, clientV5, nil)
+		if previous.HasNextPage() {
+			resp, err = previous.Next(&response)
+			if err != nil {
+				annon, err := wrapErrorV5(resp, err)
+				return empty, "", annon, err
+			}
+		}
+	}
+
+	nextPage, annos, err := parseRespV5(resp)
+	if err != nil {
+		return empty, "", nil, err
+	}
+
+	return response, nextPage, annos, nil
 }

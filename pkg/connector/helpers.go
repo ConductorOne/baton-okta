@@ -1,19 +1,27 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
+	"strings"
+
+	"github.com/conductorone/baton-okta/pkg/connector/oktaerrors"
+	"google.golang.org/grpc/status"
+
+	"github.com/conductorone/baton-sdk/pkg/annotations"
+
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -42,28 +50,6 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 		ResourceType: resourceTypeID,
 		Resource:     id,
 	}
-}
-
-func queryParams(size int, after string) *query.Params {
-	if size == 0 || size > defaultLimit {
-		size = defaultLimit
-	}
-	if after == "" {
-		return query.NewQueryParams(query.WithLimit(int64(size)))
-	}
-
-	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after))
-}
-
-func queryParamsExpand(size int, after string, expand string) *query.Params {
-	if size == 0 || size > defaultLimit {
-		size = defaultLimit
-	}
-	if after == "" {
-		return query.NewQueryParams(query.WithLimit(int64(size)), query.WithExpand(expand))
-	}
-
-	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after), query.WithExpand(expand))
 }
 
 func responseToContext(token *pagination.Token, resp *okta.Response) (*responseContext, error) {
@@ -95,48 +81,133 @@ func getError(response *okta.Response) (okta.Error, error) {
 	return errOkta, nil
 }
 
-func handleOktaResponseError(resp *okta.Response, err error) error {
-	return handleOktaResponseErrorWithNotFoundMessage(resp, err, "not found")
-}
+func asErrorV5(err error) (*oktav5.Error, bool) {
+	var oktaGenericErr *oktav5.GenericOpenAPIError
 
-func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, message string) error {
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		if urlErr.Timeout() {
-			return status.Error(codes.DeadlineExceeded, fmt.Sprintf("request timeout: %v", urlErr.URL))
+	if errors.As(err, &oktaGenericErr) {
+		var oktaErr oktav5.Error
+		err := json.Unmarshal(oktaGenericErr.Body(), &oktaErr)
+		if err != nil {
+			findErr := oktaerrors.FindError("E0000205")
+			return &oktav5.Error{
+				ErrorCauses:  []oktav5.ErrorCause{},
+				ErrorCode:    oktav5.PtrString(findErr.ErrorCode),
+				ErrorId:      nil,
+				ErrorSummary: oktav5.PtrString(findErr.ErrorSummary),
+			}, true
 		}
+
+		return &oktaErr, true
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status.Error(codes.DeadlineExceeded, "request timeout")
-	}
-	if resp != nil && resp.StatusCode >= 500 {
-		return status.Error(codes.Unavailable, "server error")
-	}
-	return convertNotFoundError(err, message)
+
+	return nil, false
 }
 
-// https://developer.okta.com/docs/reference/error-codes/?q=not%20found
-var oktaNotFoundErrors = map[string]struct{}{
-	"E0000007": {},
-	"E0000008": {},
-}
-
-func convertNotFoundError(err error, message string) error {
-	if err == nil {
-		return nil
+// wrapErrorV5 wraps an error into GRPC error if it is an oktav5.Error.
+func wrapErrorV5(resp *oktav5.APIResponse, originalErr error, additionalError ...error) (annotations.Annotations, error) {
+	_, annon, err := parseRespV5(resp)
+	if err != nil {
+		return nil, errors.Join(append([]error{originalErr, err}, additionalError...)...)
 	}
 
-	var oktaApiError *okta.Error
-	if !errors.As(err, &oktaApiError) {
+	if v5Err, ok := asErrorV5(originalErr); ok {
+		return annon, toErrorV5(*v5Err, additionalError...)
+	}
+
+	return annon, errors.Join(append([]error{originalErr}, additionalError...)...)
+}
+
+func toErrorV5(e oktav5.Error, additionalError ...error) error {
+	formattedErr := "the API returned an unknown error"
+	if e.ErrorSummary != nil {
+		formattedErr = fmt.Sprintf("the API returned an error: %s", *e.ErrorSummary)
+	}
+	if len(e.ErrorCauses) > 0 {
+		var causes []string
+		for _, cause := range e.ErrorCauses {
+			if cause.ErrorSummary == nil {
+				continue
+			}
+
+			causes = append(causes, fmt.Sprintf("Error cause: %v", *cause.ErrorSummary))
+		}
+		formattedErr = fmt.Sprintf("%s. Causes: %s", formattedErr, strings.Join(causes, ", "))
+	}
+
+	err := errors.New(formattedErr)
+
+	findError := oktaerrors.FindError(nullableStr(e.ErrorCode))
+	if findError == nil {
 		return err
 	}
 
-	_, ok := oktaNotFoundErrors[oktaApiError.ErrorCode]
-	if !ok {
-		return err
+	// Same as https://github.com/ConductorOne/baton-sdk/blob/main/pkg/uhttp/wrapper.go#L444
+	code := codes.Unknown
+	switch findError.StatusCode {
+	case http.StatusBadRequest:
+		code = codes.InvalidArgument
+	case http.StatusRequestTimeout:
+		code = codes.DeadlineExceeded
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		code = codes.Unavailable
+	case http.StatusNotFound:
+		code = codes.NotFound
+	case http.StatusUnauthorized:
+		code = codes.Unauthenticated
+	case http.StatusForbidden:
+		code = codes.PermissionDenied
+	case http.StatusConflict:
+		code = codes.AlreadyExists
+	case http.StatusNotImplemented:
+		code = codes.Unimplemented
 	}
 
-	grpcErr := status.Error(codes.NotFound, message)
-	allErrs := append([]error{grpcErr}, err)
-	return errors.Join(allErrs...)
+	if findError.StatusCode >= 500 && findError.StatusCode <= 599 {
+		code = codes.Unavailable
+	}
+
+	if len(additionalError) > 0 {
+		return errors.Join(
+			append(
+				[]error{
+					status.Error(code, formattedErr),
+				},
+				additionalError...,
+			)...,
+		)
+	}
+
+	return status.Error(code, formattedErr)
+}
+
+func nullableStr(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func doV5Request(ctx context.Context, client *oktav5.APIClient, request *http.Request, in any) (*oktav5.APIResponse, error) {
+	resp, err := client.Do(ctx, request)
+	if err != nil {
+		localAPIResponse := oktav5.NewAPIResponse(resp, client, nil)
+		return localAPIResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		localAPIResponse := oktav5.NewAPIResponse(resp, client, nil)
+		return localAPIResponse, err
+	}
+	resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+
+	localAPIResponse := oktav5.NewAPIResponse(resp, client, nil)
+
+	err = json.Unmarshal(localVarBody, in)
+	if err != nil {
+		return localAPIResponse, err
+	}
+
+	return localAPIResponse, nil
 }

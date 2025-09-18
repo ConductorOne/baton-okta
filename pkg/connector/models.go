@@ -72,11 +72,6 @@ type _Links struct {
 	Self        Self        `json:"self,omitempty"`
 }
 
-type resourceSetBindingsAPIData struct {
-	Members []MembersDetails `json:"members,omitempty"`
-	Links   LinksSelfBinding `json:"_links,omitempty"`
-}
-
 type MembersDetails struct {
 	ID          string    `json:"id,omitempty"`
 	Created     time.Time `json:"created,omitempty"`
