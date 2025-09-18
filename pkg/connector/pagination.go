@@ -29,7 +29,7 @@ func parseGetResp(resp *oktav5.APIResponse) (annotations.Annotations, error) {
 func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 
-	if resp == nil {
+	if resp == nil || resp.Response == nil {
 		return "", nil, nil
 	}
 

@@ -88,7 +88,13 @@ func asErrorV5(err error) (*oktav5.Error, bool) {
 		var oktaErr oktav5.Error
 		err := json.Unmarshal(oktaGenericErr.Body(), &oktaErr)
 		if err != nil {
-			return nil, false
+			findErr := oktaerrors.FindError("E0000205")
+			return &oktav5.Error{
+				ErrorCauses:  []oktav5.ErrorCause{},
+				ErrorCode:    oktav5.PtrString(findErr.ErrorCode),
+				ErrorId:      nil,
+				ErrorSummary: oktav5.PtrString(findErr.ErrorSummary),
+			}, true
 		}
 
 		return &oktaErr, true
