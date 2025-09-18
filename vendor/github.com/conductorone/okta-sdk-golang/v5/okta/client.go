@@ -1357,7 +1357,7 @@ func (c *APIClient) do(ctx context.Context, req *http.Request) (*http.Response, 
 		}
 		resp, err := c.doWithRetries(ctx, req)
 		if err != nil {
-			return nil, err
+			return resp, err
 		}
 		if resp.StatusCode >= 200 && resp.StatusCode <= 299 && req.Method == http.MethodGet {
 			if c.cfg.Okta.Client.RateLimit.Enable {
