@@ -29,12 +29,14 @@ func parseGetResp(resp *oktav5.APIResponse) (annotations.Annotations, error) {
 func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 
-	if resp == nil || resp.Header == nil {
+	if resp == nil {
 		return "", nil, nil
 	}
 
-	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-		annos.WithRateLimiting(desc)
+	if resp.Header != nil {
+		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
+			annos.WithRateLimiting(desc)
+		}
 	}
 
 	nextPage, err := serializeOktaResponseV5(resp)
