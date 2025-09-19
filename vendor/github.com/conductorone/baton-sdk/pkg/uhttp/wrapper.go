@@ -369,6 +369,13 @@ func (c *BaseHttpClient) Do(req *http.Request, options ...DoOption) (*http.Respo
 		resp, err = c.HttpClient.Do(req)
 		if err != nil {
 			l.Error("base-http-client: HTTP error response", zap.Error(err))
+			// Turn certain network errors into grpc statuses so we retry
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				return resp, WrapErrors(codes.Unavailable, "unexpected EOF", err)
+			}
+			if errors.Is(err, syscall.ECONNRESET) {
+				return nil, WrapErrors(codes.Unavailable, "connection reset", err)
+			}
 			var urlErr *url.Error
 			if errors.As(err, &urlErr) {
 				if urlErr.Timeout() {
@@ -598,7 +605,7 @@ func WithBearerToken(token string) RequestOption {
 
 func (c *BaseHttpClient) NewRequest(ctx context.Context, method string, url *url.URL, options ...RequestOption) (*http.Request, error) {
 	var buffer io.ReadWriter
-	var headers map[string]string = make(map[string]string)
+	var headers = make(map[string]string)
 	for _, option := range options {
 		buf, h, err := option()
 		if err != nil {

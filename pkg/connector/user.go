@@ -469,7 +469,7 @@ func ToPtr[T any](v T) *T {
 func (r *userResourceType) CreateAccount(
 	ctx context.Context,
 	accountInfo *v2.AccountInfo,
-	credentialOptions *v2.CredentialOptions,
+	credentialOptions *v2.LocalCredentialOptions,
 ) (
 	connectorbuilder.CreateAccountResponse,
 	[]*v2.PlaintextData,
@@ -517,7 +517,7 @@ func (r *userResourceType) CreateAccount(
 	return car, nil, nil, nil
 }
 
-func getCredentialOption(credentialOptions *v2.CredentialOptions) (*okta.UserCredentials, error) {
+func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.UserCredentials, error) {
 	if credentialOptions.GetNoPassword() != nil {
 		return nil, nil
 	}
@@ -527,7 +527,7 @@ func getCredentialOption(credentialOptions *v2.CredentialOptions) (*okta.UserCre
 	}
 
 	length := min(8, credentialOptions.GetRandomPassword().GetLength())
-	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.CredentialOptions_RandomPassword{
+	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.LocalCredentialOptions_RandomPassword{
 		Length: length,
 	})
 	if err != nil {
@@ -571,7 +571,7 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	}, nil
 }
 
-func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.CredentialOptions) (*query.Params, error) {
+func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
 	if credentialOptions.GetNoPassword() != nil {
 		return nil, nil
 	}

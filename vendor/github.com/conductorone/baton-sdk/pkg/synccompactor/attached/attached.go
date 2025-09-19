@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/conductorone/baton-sdk/pkg/connectorstore"
 	"github.com/conductorone/baton-sdk/pkg/dotc1z"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 type Compactor struct {
@@ -22,17 +25,15 @@ func NewAttachedCompactor(base *dotc1z.C1File, applied *dotc1z.C1File, dest *dot
 }
 
 func (c *Compactor) CompactWithSyncID(ctx context.Context, destSyncID string) error {
-	// Get the latest finished full sync ID from base
-	baseSyncID, err := c.base.LatestFinishedSync(ctx)
+	baseSyncID, err := c.base.LatestFinishedSyncID(ctx, connectorstore.SyncTypeAny)
 	if err != nil {
 		return fmt.Errorf("failed to get base sync ID: %w", err)
 	}
 	if baseSyncID == "" {
-		return fmt.Errorf("no finished full sync found in base")
+		return fmt.Errorf("no finished sync found in base")
 	}
 
-	// Get the latest finished sync ID from applied (any type)
-	appliedSyncID, err := c.applied.LatestFinishedSyncAnyType(ctx)
+	appliedSyncID, err := c.applied.LatestFinishedSyncID(ctx, connectorstore.SyncTypeAny)
 	if err != nil {
 		return fmt.Errorf("failed to get applied sync ID: %w", err)
 	}
@@ -45,8 +46,12 @@ func (c *Compactor) CompactWithSyncID(ctx context.Context, destSyncID string) er
 	if err != nil {
 		return fmt.Errorf("failed to attach databases to destination: %w", err)
 	}
+	l := ctxzap.Extract(ctx)
 	defer func() {
-		_, _ = base.DetachFile("base")
+		_, err := base.DetachFile("base")
+		if err != nil {
+			l.Error("failed to detach file", zap.Error(err))
+		}
 	}()
 
 	// Attach both the base and applied databases to the destination
@@ -55,7 +60,10 @@ func (c *Compactor) CompactWithSyncID(ctx context.Context, destSyncID string) er
 		return fmt.Errorf("failed to attach databases to destination: %w", err)
 	}
 	defer func() {
-		_, _ = attached.DetachFile("attached")
+		_, err := attached.DetachFile("attached")
+		if err != nil {
+			l.Error("failed to detach file", zap.Error(err))
+		}
 	}()
 
 	if err := c.processRecords(ctx, attached, destSyncID, baseSyncID, appliedSyncID); err != nil {
