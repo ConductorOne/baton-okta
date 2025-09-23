@@ -166,6 +166,11 @@ var (
 			}
 			role := targetMap["ROLE"][0]
 
+			if len(targetMap["User"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			}
+			user := targetMap["User"][0]
+
 			// for some reason we don't get the role ID (or type) formatted properly.
 			// hack to look it up via DisplayName
 			roleType := StandardRoleTypeFromLabel(role.DisplayName)
@@ -173,12 +178,26 @@ var (
 				return fmt.Errorf("okta-connectorv2: error getting role from label: %s", role.DisplayName)
 			}
 
-			rv.Event = &v2.Event_ResourceChangeEvent{
-				ResourceChangeEvent: &v2.ResourceChangeEvent{
-					ResourceId: &v2.ResourceId{
-						ResourceType: resourceTypeRole.Id,
-						Resource:     roleType.Type,
-					},
+			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
+
+			rv.Event = &v2.Event_CreateGrantEvent{
+				CreateGrantEvent: &v2.CreateGrantEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(roleResource, "assigned"),
+					Principal:   principal,
 				},
 			}
 			return nil
