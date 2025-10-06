@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,8 +35,11 @@ type Okta struct {
 	skipSecondaryEmails bool
 	awsConfig           *awsConfig
 	SyncSecrets         bool
-	userRoleCache       sync.Map
-	userFilters         *userFilterConfig
+	// userRoleCache userId -> []{roleId | type}
+	// roleId means custom role
+	// type means standard role
+	userRoleCache sync.Map
+	userFilters   *userFilterConfig
 }
 
 type ciamConfig struct {
@@ -87,6 +91,11 @@ type userFilterConfig struct {
 	includedEmailDomains []string
 	resultsCache         map[string]userFilterResult // user ID to userFilterResult
 	resultsCacheMutex    sync.Mutex
+}
+
+type getUserProfiler interface {
+	GetId() string
+	GetProfile() oktav5.UserProfile
 }
 
 type Config struct {
@@ -198,7 +207,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	if o.ciamConfig.Enabled {
 		return []connectorbuilder.ResourceSyncer{
 			ciamUserBuilder(o),
-			ciamBuilder(o.client, o.skipSecondaryEmails),
+			ciamBuilder(o.clientV5, o.skipSecondaryEmails),
 		}
 	}
 
@@ -211,17 +220,17 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	}
 
 	resourceSyncer := []connectorbuilder.ResourceSyncer{
-		roleBuilder(o.client, o),
+		roleBuilder(o.clientV5, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.clientV5),
 	}
 
 	if o.syncCustomRoles {
 		resourceSyncer = append(resourceSyncer,
 			customRoleBuilder(o),
-			resourceSetsBuilder(o.domain, o.client, o.clientV5),
-			resourceSetsBindingsBuilder(o.domain, o.client, o.clientV5),
+			resourceSetsBuilder(o.domain, o.clientV5),
+			resourceSetsBindingsBuilder(o.domain, o.clientV5),
 		)
 	}
 
@@ -335,18 +344,18 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 
 	token := newPaginationToken(defaultLimit, "")
 
-	_, respCtx, err := getOrgSettings(ctx, c.client, token)
+	_, resp, err := getOrgSettings(ctx, c.clientV5, token)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: verify failed to fetch org: %w", err)
+		return wrapErrorV5(resp, err, errors.New("okta-connector: verify failed to fetch org"))
 	}
 
-	_, _, err = parseResp(respCtx.OktaResponse)
+	_, _, err = parseRespV5(resp)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: verify failed to parse response: %w", err)
 	}
 
-	if respCtx.OktaResponse.StatusCode != http.StatusOK {
-		err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", respCtx.OktaResponse.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", resp.StatusCode)
 		return nil, err
 	}
 
@@ -661,6 +670,16 @@ func appGroupSAMLRolesWrapper(ctx context.Context, appGroup *okta.ApplicationGro
 	}, nil
 }
 
+func appGroupSAMLRolesWrapperV5(ctx context.Context, appGroup *oktav5.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
+	samlRoles, err := getSAMLRolesFromAppGroupProfileV5(ctx, appGroup)
+	if err != nil {
+		return nil, err
+	}
+	return &OktaAppGroupWrapper{
+		samlRoles: samlRoles,
+	}, nil
+}
+
 func accountIdFromARN(input string) (string, error) {
 	parsedArn, err := arn.Parse(input)
 	if err != nil {
@@ -675,7 +694,7 @@ type userFilterResult struct {
 
 // shouldIncludeUserAndSetCache evaluates and returns if the user meets the filtering criteria,
 // while also writing the result to the user filter cache.
-func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User) bool {
+func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *oktav5.User) bool {
 	// don't bother writing to cache if no email filters are set
 	if len(o.userFilters.includedEmailDomains) == 0 {
 		return true
@@ -686,7 +705,27 @@ func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User
 
 	o.userFilters.resultsCacheMutex.Lock()
 	defer o.userFilters.resultsCacheMutex.Unlock()
-	o.userFilters.resultsCache[user.Id] = userFilterResult{
+	o.userFilters.resultsCache[nullableStr(user.Id)] = userFilterResult{
+		matchedEmailDomains: shouldInclude,
+	}
+
+	return shouldInclude
+}
+
+// shouldIncludeUserAndSetCacheV5 evaluates and returns if the user meets the filtering criteria,
+// while also writing the result to the user filter cache.
+func (o *Okta) shouldIncludeUserAndSetCacheV5(ctx context.Context, user getUserProfiler) bool {
+	// don't bother writing to cache if no email filters are set
+	if len(o.userFilters.includedEmailDomains) == 0 {
+		return true
+	}
+
+	userEmails := extractEmailsFromUserProfileV5(user)
+	shouldInclude := shouldIncludeUserByEmails(userEmails, o.userFilters.includedEmailDomains)
+
+	o.userFilters.resultsCacheMutex.Lock()
+	defer o.userFilters.resultsCacheMutex.Unlock()
+	o.userFilters.resultsCache[user.GetId()] = userFilterResult{
 		matchedEmailDomains: shouldInclude,
 	}
 
