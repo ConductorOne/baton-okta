@@ -172,6 +172,7 @@ github.com/conductorone/baton-sdk/pb/c1/ratelimit/v1
 github.com/conductorone/baton-sdk/pb/c1/reader/v2
 github.com/conductorone/baton-sdk/pb/c1/transport/v1
 github.com/conductorone/baton-sdk/pb/c1/utls/v1
+github.com/conductorone/baton-sdk/pkg/actions
 github.com/conductorone/baton-sdk/pkg/annotations
 github.com/conductorone/baton-sdk/pkg/auth
 github.com/conductorone/baton-sdk/pkg/bid
