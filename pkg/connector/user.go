@@ -721,3 +721,53 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 
 	return oktaUsers, &responseContext{OktaResponse: resp}, nil
 }
+
+// suspendUser suspends a user in Okta by their user ID.
+func suspendUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	l := ctxzap.Extract(ctx)
+	l.Debug("suspending user", zap.String("user_id", oktaUserID))
+
+	// Validate input parameters
+	if oktaUserID == "" {
+		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
+	}
+
+	if client == nil {
+		return fmt.Errorf("okta-connectorv2: client cannot be nil")
+	}
+
+	resp, err := client.User.SuspendUser(ctx, oktaUserID)
+	if err != nil {
+		return fmt.Errorf("okta-connectorv2: failed to suspend user: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("okta-connectorv2: failed to suspend user: %s", resp.Status)
+	}
+
+	l.Info("user suspended", zap.String("user_id", oktaUserID))
+	return nil
+}
+
+func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	l := ctxzap.Extract(ctx)
+	l.Debug("unsuspending user", zap.String("user_id", oktaUserID))
+
+	if oktaUserID == "" {
+		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
+	}
+
+	if client == nil {
+		return fmt.Errorf("okta-connectorv2: client cannot be nil")
+	}
+
+	resp, err := client.User.UnsuspendUser(ctx, oktaUserID)
+	if err != nil {
+		return fmt.Errorf("okta-connectorv2: failed to unsuspend user: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("okta-connectorv2: failed to unsuspend user: %s", resp.Status)
+	}
+
+	l.Info("user unsuspended", zap.String("user_id", oktaUserID))
+	return nil
+}
