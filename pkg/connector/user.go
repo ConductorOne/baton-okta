@@ -690,6 +690,9 @@ func getApplicationUser(ctx context.Context, client *okta.Client, appID string, 
 	return applicationUser, &responseContext{OktaResponse: resp}, nil
 }
 
+// getUser retrieves the Okta user with the specified ID.
+// It returns the Okta user and a responseContext containing the HTTP response; if the user is not found or the request fails, an error is returned.
+// The underlying request omits credentials and related fields from the response to reduce payload size.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
@@ -722,7 +725,11 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 	return oktaUsers, &responseContext{OktaResponse: resp}, nil
 }
 
-// suspendUser suspends a user in Okta by their user ID.
+// suspendUser suspends the Okta user identified by oktaUserID.
+//
+// It validates that oktaUserID and client are provided, invokes the Okta suspend API,
+// and returns an error if validation fails, the API call returns an error,
+// or the API response status is not HTTP 200 OK.
 func suspendUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
 	l := ctxzap.Extract(ctx)
 	l.Debug("suspending user", zap.String("user_id", oktaUserID))
@@ -748,6 +755,10 @@ func suspendUser(ctx context.Context, client *okta.Client, oktaUserID string) er
 	return nil
 }
 
+// unsuspendUser unsuspends the Okta user identified by oktaUserID using the provided client.
+//
+// It validates inputs and returns an error if the client is nil, the user ID is empty,
+// the Okta API call fails, or the API responds with a non-200 status.
 func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
 	l := ctxzap.Extract(ctx)
 	l.Debug("unsuspending user", zap.String("user_id", oktaUserID))

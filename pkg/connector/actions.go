@@ -78,6 +78,13 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 }
 
 // enableAccount "unsuspends" the subject Okta account.
+//
+// It requires the "accountId" field to be provided in the arguments struct,
+// corresponding to the Okta user to be unsuspended.
+//
+// If the account is already active or not suspended, no error is returned and success is indicated.
+// If unsuspension is successful or the status is already correct, a success response
+// is returned. If any other error occurs during the unsuspension process, it is returned.
 func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
@@ -101,7 +108,7 @@ func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*struc
 		// success since the state of the account matches the requested state
 		if strings.Contains(err.Error(), "Cannot unsuspend a user that is not suspended") {
 			// TODO: Update baton-sdk to handle an annotation in order to notify the
-			// user that the user is already suspended.
+			// user that the user is already active.
 			l.Debug("user is already enabled.")
 		} else {
 			return nil, nil, err
@@ -118,6 +125,13 @@ func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*struc
 }
 
 // disableAccount suspends the subject Okta account.
+//
+// It requires the "accountId" field to be provided in the arguments struct,
+// corresponding to the Okta user to be suspended.
+//
+// If the account is already suspended, no error is returned and success is indicated.
+// If suspension is successful or the status is already correct, a success response
+// is returned. If any other error occurs during the suspension process, it is returned.
 func (o *Okta) disableAccount(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
