@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
@@ -88,21 +87,13 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	if args == nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: no arguments provided")
-	}
-
-	if args.Fields == nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: no fields provided")
-	}
-
-	accountID := args.Fields["accountId"].GetStringValue()
-	if accountID == "" {
-		return nil, nil, fmt.Errorf("okta-connectorv2: account ID cannot be empty")
+	accountID, err := extractFieldAsString(args, "accountId")
+	if err != nil {
+		return nil, nil, err
 	}
 	l.Debug("enabling account", zap.String("accountID", accountID))
 
-	err := unsuspendUser(ctx, o.client, accountID)
+	err = unsuspendUser(ctx, o.client, accountID)
 	if err != nil {
 		// if user is already active, do not surface the error and instead respond with
 		// success since the state of the account matches the requested state
@@ -135,17 +126,13 @@ func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*struc
 func (o *Okta) disableAccount(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	if args == nil || args.Fields == nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: invalid arguments provided")
-	}
-
-	accountID := args.Fields["accountId"].GetStringValue()
-	if accountID == "" {
-		return nil, nil, fmt.Errorf("okta-connectorv2: account ID cannot be empty")
+	accountID, err := extractFieldAsString(args, "accountId")
+	if err != nil {
+		return nil, nil, err
 	}
 	l.Debug("disabling account", zap.String("accountID", accountID))
 
-	err := suspendUser(ctx, o.client, accountID)
+	err = suspendUser(ctx, o.client, accountID)
 	if err != nil {
 		// if user is already suspended, do not surface the error and instead respond
 		// with success since the state of the account matches the requested state
