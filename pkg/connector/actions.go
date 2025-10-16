@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
@@ -30,6 +31,11 @@ var disableAccount = &v2.BatonActionSchema{
 			DisplayName: "Success",
 			Field:       &config.Field_BoolField{},
 		},
+		{
+			Name:        "message",
+			DisplayName: "Message",
+			Field:       &config.Field_StringField{},
+		},
 	},
 	ActionType: []v2.ActionType{
 		v2.ActionType_ACTION_TYPE_ACCOUNT,
@@ -52,6 +58,11 @@ var enableAccount = &v2.BatonActionSchema{
 			Name:        "success",
 			DisplayName: "Success",
 			Field:       &config.Field_BoolField{},
+		},
+		{
+			Name:        "message",
+			DisplayName: "Message",
+			Field:       &config.Field_StringField{},
 		},
 	},
 	ActionType: []v2.ActionType{
@@ -100,19 +111,14 @@ func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*struc
 		if strings.Contains(err.Error(), "Cannot unsuspend a user that is not suspended") {
 			// TODO: Update baton-sdk to handle an annotation in order to notify the
 			// user that the user is already active.
-			l.Debug("user is already enabled.")
+			l.Debug("user is already enabled", zap.String("accountID", accountID))
+			return createSuccessResponse(fmt.Sprintf("Account %s was already enabled", accountID)), nil, nil
 		} else {
 			return nil, nil, err
 		}
 	}
 
-	response := &structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			"success": structpb.NewBoolValue(true),
-		},
-	}
-
-	return response, nil, nil
+	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully enabled", accountID)), nil, nil
 }
 
 // disableAccount suspends the subject Okta account.
@@ -139,17 +145,12 @@ func (o *Okta) disableAccount(ctx context.Context, args *structpb.Struct) (*stru
 		if strings.Contains(err.Error(), "Cannot suspend a user that is not active") {
 			// TODO: Update baton-sdk to handle an annotation in order to notify the
 			// user that the user is already suspended.
-			l.Debug("user is already suspended.")
+			l.Debug("user is already suspended", zap.String("accountID", accountID))
+			return createSuccessResponse(fmt.Sprintf("Account %s was already disabled", accountID)), nil, nil
 		} else {
 			return nil, nil, err
 		}
 	}
 
-	response := &structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			"success": structpb.NewBoolValue(true),
-		},
-	}
-
-	return response, nil, nil
+	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully disabled", accountID)), nil, nil
 }

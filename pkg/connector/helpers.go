@@ -161,3 +161,18 @@ func convertNotFoundError(err error, message string) error {
 	allErrs := append([]error{grpcErr}, err)
 	return errors.Join(allErrs...)
 }
+
+// createSuccessResponse creates a standardized success response struct.
+// This helper is used by action functions to return consistent success responses.
+// The message parameter provides additional context about the action result.
+func createSuccessResponse(message string) *structpb.Struct {
+	fields := map[string]*structpb.Value{
+		"success": structpb.NewBoolValue(true),
+	}
+	if message != "" {
+		fields["message"] = structpb.NewStringValue(message)
+	}
+	return &structpb.Struct{
+		Fields: fields,
+	}
+}
