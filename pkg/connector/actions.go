@@ -113,9 +113,9 @@ func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*struc
 			// user that the user is already active.
 			l.Debug("user is already enabled", zap.String("accountID", accountID))
 			return createSuccessResponse(fmt.Sprintf("Account %s was already enabled", accountID)), nil, nil
-		} else {
-			return nil, nil, err
 		}
+
+		return nil, nil, err
 	}
 
 	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully enabled", accountID)), nil, nil
@@ -147,9 +147,9 @@ func (o *Okta) disableAccount(ctx context.Context, args *structpb.Struct) (*stru
 			// user that the user is already suspended.
 			l.Debug("user is already suspended", zap.String("accountID", accountID))
 			return createSuccessResponse(fmt.Sprintf("Account %s was already disabled", accountID)), nil, nil
-		} else {
-			return nil, nil, err
 		}
+
+		return nil, nil, err
 	}
 
 	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully disabled", accountID)), nil, nil
