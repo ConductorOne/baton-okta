@@ -15,8 +15,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-var disableAccount = &v2.BatonActionSchema{
-	Name: "disableAccount",
+var disableUser = &v2.BatonActionSchema{
+	Name: "disable_user",
 	Arguments: []*config.Field{
 		{
 			Name:        "accountId",
@@ -43,8 +43,8 @@ var disableAccount = &v2.BatonActionSchema{
 	},
 }
 
-var enableAccount = &v2.BatonActionSchema{
-	Name: "enableAccount",
+var enableUser = &v2.BatonActionSchema{
+	Name: "enable_user",
 	Arguments: []*config.Field{
 		{
 			Name:        "accountId",
@@ -74,12 +74,12 @@ var enableAccount = &v2.BatonActionSchema{
 func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.CustomActionManager, error) {
 	actionManager := actions.NewActionManager(ctx)
 
-	err := actionManager.RegisterAction(ctx, enableAccount.Name, enableAccount, o.enableAccount)
+	err := actionManager.RegisterAction(ctx, enableUser.Name, enableUser, o.enableUser)
 	if err != nil {
 		return nil, err
 	}
 
-	err = actionManager.RegisterAction(ctx, disableAccount.Name, disableAccount, o.disableAccount)
+	err = actionManager.RegisterAction(ctx, disableUser.Name, disableUser, o.disableUser)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 	return actionManager, nil
 }
 
-// enableAccount "unsuspends" the subject Okta account.
+// enableUser "unsuspends" the subject Okta account.
 //
 // It requires the "accountId" field to be provided in the arguments struct,
 // corresponding to the Okta user to be unsuspended.
@@ -95,7 +95,7 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 // If the account is already active or not suspended, no error is returned and success is indicated.
 // If unsuspension is successful or the status is already correct, a success response
 // is returned. If any other error occurs during the unsuspension process, it is returned.
-func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
 	accountID, err := extractFieldAsString(args, "accountId")
@@ -121,15 +121,15 @@ func (o *Okta) enableAccount(ctx context.Context, args *structpb.Struct) (*struc
 	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully enabled", accountID)), nil, nil
 }
 
-// disableAccount suspends the subject Okta account.
+// disableUser suspends the subject Okta account.
 //
 // It requires the "accountId" field to be provided in the arguments struct,
 // corresponding to the Okta user to be suspended.
 //
-// If the account is already suspended, no error is returned and success is indicated.
+// If the user is already suspended, no error is returned and success is indicated.
 // If suspension is successful or the status is already correct, a success response
 // is returned. If any other error occurs during the suspension process, it is returned.
-func (o *Okta) disableAccount(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
 	accountID, err := extractFieldAsString(args, "accountId")
