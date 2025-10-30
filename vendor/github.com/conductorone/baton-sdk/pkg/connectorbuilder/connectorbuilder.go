@@ -24,6 +24,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/metrics"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/retry"
+	"github.com/conductorone/baton-sdk/pkg/sdk"
 	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/conductorone/baton-sdk/pkg/types/tasks"
@@ -146,6 +147,12 @@ type AccountManager interface {
 	CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error)
 }
 
+type OldAccountManager interface {
+	CreateAccount(ctx context.Context,
+		accountInfo *v2.AccountInfo,
+		credentialOptions *v2.CredentialOptions) (CreateAccountResponse, []*v2.PlaintextData, annotations.Annotations, error)
+}
+
 // CredentialManager extends ResourceSyncer to add capabilities for managing credentials.
 //
 // Implementing this interface indicates the connector supports rotating credentials
@@ -157,6 +164,12 @@ type CredentialManager interface {
 		resourceId *v2.ResourceId,
 		credentialOptions *v2.LocalCredentialOptions) ([]*v2.PlaintextData, annotations.Annotations, error)
 	RotateCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsCredentialRotation, annotations.Annotations, error)
+}
+
+type OldCredentialManager interface {
+	Rotate(ctx context.Context,
+		resourceId *v2.ResourceId,
+		credentialOptions *v2.CredentialOptions) ([]*v2.PlaintextData, annotations.Annotations, error)
 }
 
 // Compatibility interface lets us handle both EventFeed and EventProvider the same.
@@ -644,11 +657,19 @@ func NewConnector(ctx context.Context, in interface{}, opts ...Opt) (types.Conne
 				}
 			}
 
+			if _, ok := rb.(OldAccountManager); ok {
+				return nil, fmt.Errorf("error: old account manager interface implemented for %s", rType.Id)
+			}
+
 			if accountManager, ok := rb.(AccountManager); ok {
 				if ret.accountManager != nil {
 					return nil, fmt.Errorf("error: duplicate resource type found for account manager %s", rType.Id)
 				}
 				ret.accountManager = accountManager
+			}
+
+			if _, ok := rb.(OldCredentialManager); ok {
+				return nil, fmt.Errorf("error: old credential manager interface implemented for %s", rType.Id)
 			}
 
 			if credentialManagers, ok := rb.(CredentialManager); ok {
@@ -855,7 +876,6 @@ func (b *builderImpl) ListGrants(ctx context.Context, request *v2.GrantsServiceL
 		Token: request.PageToken,
 	})
 
-	// annos.Append(&v2.ActiveSync{ActiveSyncId: request.Annotations.GetActiveSyncId()})
 	resp := &v2.GrantsServiceListGrantsResponse{
 		List:          out,
 		NextPageToken: nextPageToken,
@@ -1060,7 +1080,10 @@ func (b *builderImpl) Validate(ctx context.Context, request *v2.ConnectorService
 	for {
 		annos, err := b.cb.Validate(ctx)
 		if err == nil {
-			return &v2.ConnectorServiceValidateResponse{Annotations: annos}, nil
+			return &v2.ConnectorServiceValidateResponse{
+				Annotations: annos,
+				SdkVersion:  sdk.Version,
+			}, nil
 		}
 
 		if retryer.ShouldWaitAndRetry(ctx, err) {
@@ -1423,16 +1446,10 @@ func (b *builderImpl) Cleanup(ctx context.Context, request *v2.ConnectorServiceC
 	sessionCache, err := session.GetSession(ctx)
 	if err != nil {
 		l.Warn("error getting session cache", zap.Error(err))
-	} else {
-		activeSync, err := annotations.GetActiveSyncIdFromAnnotations(annotations.Annotations(request.GetAnnotations()))
+	} else if request.GetActiveSyncId() != "" {
+		err = sessionCache.Clear(ctx, session.WithSyncID(request.GetActiveSyncId()))
 		if err != nil {
-			l.Warn("error getting active sync id", zap.Error(err))
-		}
-		if activeSync != "" {
-			err = sessionCache.Clear(ctx)
-			if err != nil {
-				l.Warn("error clearing session cache", zap.Error(err))
-			}
+			l.Warn("error clearing session cache", zap.Error(err))
 		}
 	}
 	// Clear all http caches at the end of a sync. This must be run in the child process, which is why it's in this function and not in syncer.go

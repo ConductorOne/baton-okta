@@ -14,6 +14,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -42,6 +43,26 @@ func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
 		ResourceType: resourceTypeID,
 		Resource:     id,
 	}
+}
+
+// extractFieldAsString extracts and validates a string field from the arguments struct by key.
+// It returns the value string and an error if validation fails.
+func extractFieldAsString(args *structpb.Struct, fieldName string) (string, error) {
+	if args == nil || args.Fields == nil {
+		return "", fmt.Errorf("okta-connectorv2: no arguments provided")
+	}
+
+	field, ok := args.Fields[fieldName]
+	if !ok || field == nil {
+		return "", fmt.Errorf("okta-connectorv2: %s cannot be empty", fieldName)
+	}
+
+	value := field.GetStringValue()
+	if value == "" {
+		return "", fmt.Errorf("okta-connectorv2: %s cannot be empty", fieldName)
+	}
+
+	return value, nil
 }
 
 func queryParams(size int, after string) *query.Params {
@@ -139,4 +160,19 @@ func convertNotFoundError(err error, message string) error {
 	grpcErr := status.Error(codes.NotFound, message)
 	allErrs := append([]error{grpcErr}, err)
 	return errors.Join(allErrs...)
+}
+
+// createSuccessResponse creates a standardized success response struct.
+// This helper is used by action functions to return consistent success responses.
+// The message parameter provides additional context about the action result.
+func createSuccessResponse(message string) *structpb.Struct {
+	fields := map[string]*structpb.Value{
+		"success": structpb.NewBoolValue(true),
+	}
+	if message != "" {
+		fields["message"] = structpb.NewStringValue(message)
+	}
+	return &structpb.Struct{
+		Fields: fields,
+	}
 }
