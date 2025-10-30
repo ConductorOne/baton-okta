@@ -19,8 +19,8 @@ var disableUser = &v2.BatonActionSchema{
 	Name: "disable_user",
 	Arguments: []*config.Field{
 		{
-			Name:        "accountId",
-			DisplayName: "Account ID",
+			Name:        "okta_user_id",
+			DisplayName: "Okta User ID",
 			Field:       &config.Field_StringField{},
 			IsRequired:  true,
 		},
@@ -47,8 +47,8 @@ var enableUser = &v2.BatonActionSchema{
 	Name: "enable_user",
 	Arguments: []*config.Field{
 		{
-			Name:        "accountId",
-			DisplayName: "Account ID",
+			Name:        "okta_user_id",
+			DisplayName: "Okta User ID",
 			Field:       &config.Field_StringField{},
 			IsRequired:  true,
 		},
@@ -89,7 +89,7 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 
 // enableUser "unsuspends" the subject Okta account.
 //
-// It requires the "accountId" field to be provided in the arguments struct,
+// It requires the "okta_user_id" field to be provided in the arguments struct,
 // corresponding to the Okta user to be unsuspended.
 //
 // If the account is already active or not suspended, no error is returned and success is indicated.
@@ -98,32 +98,32 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	accountID, err := extractFieldAsString(args, "accountId")
+	oktaUserID, err := extractFieldAsString(args, "okta_user_id")
 	if err != nil {
 		return nil, nil, err
 	}
-	l.Debug("enabling account", zap.String("accountID", accountID))
+	l.Debug("enabling account", zap.String("oktaUserID", oktaUserID))
 
-	err = unsuspendUser(ctx, o.client, accountID)
+	err = unsuspendUser(ctx, o.client, oktaUserID)
 	if err != nil {
 		// if user is already active, do not surface the error and instead respond with
 		// success since the state of the account matches the requested state
 		if strings.Contains(err.Error(), "Cannot unsuspend a user that is not suspended") {
 			// TODO: Update baton-sdk to handle an annotation in order to notify the
 			// user that the user is already active.
-			l.Debug("user is already enabled", zap.String("accountID", accountID))
-			return createSuccessResponse(fmt.Sprintf("Account %s was already enabled", accountID)), nil, nil
+			l.Debug("user is already enabled", zap.String("oktaUserID", oktaUserID))
+			return createSuccessResponse(fmt.Sprintf("Account %s was already enabled", oktaUserID)), nil, nil
 		}
 
 		return nil, nil, err
 	}
 
-	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully enabled", accountID)), nil, nil
+	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully enabled", oktaUserID)), nil, nil
 }
 
 // disableUser suspends the subject Okta account.
 //
-// It requires the "accountId" field to be provided in the arguments struct,
+// It requires the "okta_user_id" field to be provided in the arguments struct,
 // corresponding to the Okta user to be suspended.
 //
 // If the user is already suspended, no error is returned and success is indicated.
@@ -132,25 +132,25 @@ func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb
 func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	accountID, err := extractFieldAsString(args, "accountId")
+	oktaUserID, err := extractFieldAsString(args, "okta_user_id")
 	if err != nil {
 		return nil, nil, err
 	}
-	l.Debug("disabling account", zap.String("accountID", accountID))
+	l.Debug("disabling account", zap.String("oktaUserID", oktaUserID))
 
-	err = suspendUser(ctx, o.client, accountID)
+	err = suspendUser(ctx, o.client, oktaUserID)
 	if err != nil {
 		// if user is already suspended, do not surface the error and instead respond
 		// with success since the state of the account matches the requested state
 		if strings.Contains(err.Error(), "Cannot suspend a user that is not active") {
 			// TODO: Update baton-sdk to handle an annotation in order to notify the
 			// user that the user is already suspended.
-			l.Debug("user is already suspended", zap.String("accountID", accountID))
-			return createSuccessResponse(fmt.Sprintf("Account %s was already disabled", accountID)), nil, nil
+			l.Debug("user is already suspended", zap.String("oktaUserID", oktaUserID))
+			return createSuccessResponse(fmt.Sprintf("Account %s was already disabled", oktaUserID)), nil, nil
 		}
 
 		return nil, nil, err
 	}
 
-	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully disabled", accountID)), nil, nil
+	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully disabled", oktaUserID)), nil, nil
 }
