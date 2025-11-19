@@ -19,8 +19,8 @@ var disableUser = &v2.BatonActionSchema{
 	Name: "disable_user",
 	Arguments: []*config.Field{
 		{
-			Name:        "okta_user_id",
-			DisplayName: "Okta User ID",
+			Name:        "user_id",
+			DisplayName: "User ID",
 			Field:       &config.Field_StringField{},
 			IsRequired:  true,
 		},
@@ -47,8 +47,8 @@ var enableUser = &v2.BatonActionSchema{
 	Name: "enable_user",
 	Arguments: []*config.Field{
 		{
-			Name:        "okta_user_id",
-			DisplayName: "Okta User ID",
+			Name:        "user_id",
+			DisplayName: "User ID",
 			Field:       &config.Field_StringField{},
 			IsRequired:  true,
 		},
@@ -89,7 +89,7 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 
 // enableUser "unsuspends" the subject Okta account.
 //
-// It requires the "okta_user_id" field to be provided in the arguments struct,
+// It requires the "user_id" field to be provided in the arguments struct,
 // corresponding to the Okta user to be unsuspended.
 //
 // If the account is already active or not suspended, no error is returned and success is indicated.
@@ -98,7 +98,7 @@ func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.Cust
 func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	oktaUserID, err := extractFieldAsString(args, "okta_user_id")
+	oktaUserID, err := extractFieldAsString(args, "user_id")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -123,7 +123,7 @@ func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb
 
 // disableUser suspends the subject Okta account.
 //
-// It requires the "okta_user_id" field to be provided in the arguments struct,
+// It requires the "user_id" field to be provided in the arguments struct,
 // corresponding to the Okta user to be suspended.
 //
 // If the user is already suspended, no error is returned and success is indicated.
@@ -132,7 +132,7 @@ func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb
 func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	oktaUserID, err := extractFieldAsString(args, "okta_user_id")
+	oktaUserID, err := extractFieldAsString(args, "user_id")
 	if err != nil {
 		return nil, nil, err
 	}

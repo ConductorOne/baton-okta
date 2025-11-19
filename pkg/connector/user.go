@@ -739,10 +739,6 @@ func suspendUser(ctx context.Context, client *okta.Client, oktaUserID string) er
 		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
 	}
 
-	if client == nil {
-		return fmt.Errorf("okta-connectorv2: client cannot be nil")
-	}
-
 	resp, err := client.User.SuspendUser(ctx, oktaUserID)
 	if err != nil {
 		return fmt.Errorf("okta-connectorv2: failed to suspend user: %w", err)
@@ -765,10 +761,6 @@ func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) 
 
 	if oktaUserID == "" {
 		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
-	}
-
-	if client == nil {
-		return fmt.Errorf("okta-connectorv2: client cannot be nil")
 	}
 
 	resp, err := client.User.UnsuspendUser(ctx, oktaUserID)
