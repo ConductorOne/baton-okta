@@ -600,7 +600,6 @@ type JSONPatchOperation struct {
 }
 
 func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
 	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		return nil, fmt.Errorf("okta-aws-connector: only users or groups can be granted app membership")
 	}
@@ -629,8 +628,6 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 		appUser, response, err := o.connector.client.Application.GetApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
 			if response == nil {
-				l.Warn("okta-aws-connector: failed to fetch application user, nil response",
-					zap.String("app_id", appID), zap.String("user_id", userID), zap.Error(err))
 				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application user: %w", err)
 			}
 			defer response.Body.Close()
@@ -695,8 +692,6 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 		appGroup, response, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
 		if err != nil {
 			if response == nil {
-				l.Warn("okta-aws-connector: failed to fetch application group assignment, nil response",
-					zap.String("app_id", appID), zap.String("group_id", groupID), zap.Error(err))
 				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application group assignment: %w", err)
 			}
 			defer response.Body.Close()
@@ -747,7 +742,6 @@ func (o *accountResourceType) Grant(ctx context.Context, principal *v2.Resource,
 }
 
 func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
 	if grant.Principal.Id.ResourceType != resourceTypeUser.Id && grant.Principal.Id.ResourceType != resourceTypeGroup.Id {
 		return nil, fmt.Errorf("okta-aws-connector: only users or groups can be have aws account role revoked")
 	}
@@ -776,8 +770,6 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		appUser, response, err := o.connector.client.Application.GetApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
 			if response == nil {
-				l.Warn("okta-aws-connector: failed to fetch application user, nil response",
-					zap.String("app_id", appID), zap.String("user_id", userID), zap.Error(err))
 				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application user: %w", err)
 			}
 			defer response.Body.Close()
@@ -826,8 +818,6 @@ func (o *accountResourceType) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		appGroup, response, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
 		if err != nil {
 			if response == nil {
-				l.Warn("okta-aws-connector: failed to fetch application group assignment, nil response",
-					zap.String("app_id", appID), zap.String("group_id", groupID), zap.Error(err))
 				return nil, fmt.Errorf("okta-aws-connector: failed to fetch application group assignment: %w", err)
 			}
 			defer response.Body.Close()
