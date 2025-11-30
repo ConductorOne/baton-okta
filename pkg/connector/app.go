@@ -404,7 +404,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			Id:    userID,
 			Scope: strings.ToUpper(principal.Id.ResourceType),
 		}
-		assignedUser, response, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
+		assignedUser, _, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
 		if err != nil {
 			l.Warn(
 				"okta-connector: The app specified cannot be assigned to the user",
