@@ -194,7 +194,7 @@ func (g *ciamResourceBuilder) Grant(ctx context.Context, principal *v2.Resource,
 			if response == nil {
 				l.Warn("okta-connector: failed to assign role to user, nil response",
 					zap.String("user_id", userId), zap.String("role_id", roleId), zap.Error(err))
-				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", err)
+				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %s", err.Error())
 			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -233,7 +233,7 @@ func (g *ciamResourceBuilder) Grant(ctx context.Context, principal *v2.Resource,
 			if response == nil {
 				l.Warn("okta-connector: failed to assign role to group, nil response",
 					zap.String("group_id", groupId), zap.String("role_id", roleId), zap.Error(err))
-				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", err)
+				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %s", err.Error())
 			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -289,7 +289,7 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		userId := principal.Id.Resource
 		roles, _, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", err)
+			return nil, fmt.Errorf("okta-connector: failed to get roles: %s", err.Error())
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
@@ -308,7 +308,7 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		roleId = roles[rolePos].Id
 		response, err := g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %w", err)
+			return nil, fmt.Errorf("okta-connector: failed to remove role: %s", err.Error())
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
@@ -320,7 +320,7 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		groupId := principal.Id.Resource
 		roles, _, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", err)
+			return nil, fmt.Errorf("okta-connector: failed to get roles: %s", err.Error())
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
@@ -339,7 +339,7 @@ func (g *ciamResourceBuilder) Revoke(ctx context.Context, grant *v2.Grant) (anno
 		roleId = roles[rolePos].Id
 		response, err := g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %w", err)
+			return nil, fmt.Errorf("okta-connector: failed to remove role: %s", err.Error())
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {

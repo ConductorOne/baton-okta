@@ -361,7 +361,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			if response == nil {
 				l.Warn("okta-connector: failed to fetch application user, nil response",
 					zap.String("app_id", appID), zap.String("user_id", userID), zap.Error(err))
-				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %w", err)
+				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %s", err.Error())
 			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -433,7 +433,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			if response == nil {
 				l.Warn("okta-connector: failed to fetch application group assignment, nil response",
 					zap.String("app_id", appID), zap.String("group_id", groupID), zap.Error(err))
-				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %w", err)
+				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %s", err.Error())
 			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -518,7 +518,7 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 
 		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %w", err)
+			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %s", err.Error())
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
@@ -540,7 +540,7 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 
 		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %w", err)
+			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %s", err.Error())
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
