@@ -588,9 +588,11 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 		return nil, handleOktaResponseError(response, err)
 	}
 
-	l.Debug("Membership has been created",
-		zap.String("Status", response.Status),
-	)
+	if response != nil {
+		l.Debug("Membership has been created", zap.String("Status", response.Status))
+	} else {
+		l.Debug("Membership has been created")
+	}
 
 	return nil, nil
 }
@@ -616,9 +618,11 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 		return nil, handleOktaResponseError(response, err)
 	}
 
-	l.Warn("Membership has been revoked",
-		zap.String("Status", response.Status),
-	)
+	if response != nil {
+		l.Warn("Membership has been revoked", zap.String("Status", response.Status))
+	} else {
+		l.Warn("Membership has been revoked")
+	}
 
 	return nil, nil
 }

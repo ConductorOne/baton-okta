@@ -499,6 +499,11 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 		}
 		createdRole, response, err := g.client.User.AssignRoleToUser(ctx, userId, role, nil)
 		if err != nil {
+			if response == nil {
+				l.Warn("okta-connector: failed to assign role to user, nil response",
+					zap.String("user_id", userId), zap.String("role_id", roleId), zap.Error(err))
+				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %s", err.Error())
+			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
 			if err != nil {
@@ -533,6 +538,11 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 		}
 		createdRole, response, err := g.client.Group.AssignRoleToGroup(ctx, groupId, role, nil)
 		if err != nil {
+			if response == nil {
+				l.Warn("okta-connector: failed to assign role to group, nil response",
+					zap.String("group_id", groupId), zap.String("role_id", roleId), zap.Error(err))
+				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %s", err.Error())
+			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
 			if err != nil {
@@ -585,9 +595,9 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userId := principal.Id.Resource
-		roles, response, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+		roles, _, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to get roles: %s", err.Error())
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
@@ -604,21 +614,21 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 
 		roleId = roles[rolePos].Id
-		response, err = g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
+		response, err := g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to remove role: %s", err.Error())
 		}
 
-		if response.StatusCode == http.StatusNoContent {
+		if response != nil && response.StatusCode == http.StatusNoContent {
 			l.Warn("Membership has been revoked",
 				zap.String("Status", response.Status),
 			)
 		}
 	case resourceTypeGroup.Id:
 		groupId := principal.Id.Resource
-		roles, response, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
+		roles, _, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to get roles: %s", err.Error())
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
@@ -635,12 +645,12 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 
 		roleId = roles[rolePos].Id
-		response, err = g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
+		response, err := g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to remove role: %s", err.Error())
 		}
 
-		if response.StatusCode == http.StatusNoContent {
+		if response != nil && response.StatusCode == http.StatusNoContent {
 			l.Warn("Membership has been revoked",
 				zap.String("Status", response.Status),
 			)

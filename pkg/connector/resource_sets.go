@@ -288,10 +288,10 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 	customRoleId := principal.Id.Resource
 	response, err := rs.deleteBinding(ctx, resourceSetId, customRoleId, nil)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
+		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s", err.Error())
 	}
 
-	if response.StatusCode == http.StatusNoContent {
+	if response != nil && response.StatusCode == http.StatusNoContent {
 		l.Warn("Resource Set Membership has been revoked",
 			zap.String("Status", response.Status),
 		)

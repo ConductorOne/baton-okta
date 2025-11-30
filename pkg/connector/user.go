@@ -502,7 +502,7 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if response.StatusCode != http.StatusOK {
+	if response != nil && response.StatusCode != http.StatusOK {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
 
