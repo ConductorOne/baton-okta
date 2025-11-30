@@ -411,8 +411,8 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return nil, fmt.Errorf("okta-connector: The app specified cannot be assigned to the user %s %s",
-				err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: The app specified cannot be assigned to the user %s",
+				err.Error())
 		}
 
 		l.Warn("App Membership has been created.",
