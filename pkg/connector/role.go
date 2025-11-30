@@ -595,7 +595,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userId := principal.Id.Resource
-		roles, response, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+		roles, _, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", err)
 		}
@@ -614,7 +614,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 
 		roleId = roles[rolePos].Id
-		response, err = g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
+		response, err := g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to remove role: %w", err)
 		}
@@ -626,7 +626,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 	case resourceTypeGroup.Id:
 		groupId := principal.Id.Resource
-		roles, response, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
+		roles, _, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", err)
 		}
@@ -645,7 +645,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 
 		roleId = roles[rolePos].Id
-		response, err = g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
+		response, err := g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to remove role: %w", err)
 		}
