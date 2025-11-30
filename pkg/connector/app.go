@@ -358,6 +358,11 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		userID := principal.Id.Resource
 		appUser, response, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
+			if response == nil {
+				l.Warn("okta-connector: failed to fetch application user, nil response",
+					zap.String("app_id", appID), zap.String("user_id", userID), zap.Error(err))
+				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %w", err)
+			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
 			if err != nil {
@@ -425,6 +430,11 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		groupID := principal.Id.Resource
 		appGroup, response, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
 		if err != nil {
+			if response == nil {
+				l.Warn("okta-connector: failed to fetch application group assignment, nil response",
+					zap.String("app_id", appID), zap.String("group_id", groupID), zap.Error(err))
+				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %w", err)
+			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
 			if err != nil {
@@ -508,10 +518,10 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 
 		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %w", err)
 		}
 
-		if response.StatusCode == http.StatusNoContent {
+		if response != nil && response.StatusCode == http.StatusNoContent {
 			l.Warn("Membership has been revoked",
 				zap.String("Status", response.Status),
 			)
@@ -530,10 +540,10 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 
 		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %w", err)
 		}
 
-		if response.StatusCode == http.StatusNoContent {
+		if response != nil && response.StatusCode == http.StatusNoContent {
 			l.Warn("Membership has been revoked",
 				zap.String("Status", response.Status),
 			)

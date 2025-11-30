@@ -314,10 +314,10 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 		memberUrl,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s %s", err.Error(), response.Body)
+		return nil, fmt.Errorf("okta-connector: failed to assign roles: %w", err)
 	}
 
-	if response.StatusCode == http.StatusOK {
+	if response != nil && response.StatusCode == http.StatusOK {
 		l.Warn("Resource Set Binding has been granted",
 			zap.String("Status", response.Status),
 		)
@@ -370,10 +370,10 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 	if memberId != "" {
 		response, err := rsb.unassignMemberFromBinding(ctx, resourceSetId, customRoleId, memberId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove roles: %s %s", err.Error(), response.Body)
+			return nil, fmt.Errorf("okta-connector: failed to remove roles: %w", err)
 		}
 
-		if response.StatusCode == http.StatusNoContent {
+		if response != nil && response.StatusCode == http.StatusNoContent {
 			l.Warn("Resource Set Binding has been revoked",
 				zap.String("Status", response.Status),
 			)
