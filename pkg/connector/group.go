@@ -589,9 +589,9 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 	}
 
 	if response != nil {
-		l.Debug("Membership has been created",
-			zap.String("Status", response.Status),
-		)
+		l.Debug("Membership has been created", zap.String("Status", response.Status))
+	} else {
+		l.Debug("Membership has been created")
 	}
 
 	return nil, nil
@@ -619,9 +619,9 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	}
 
 	if response != nil {
-		l.Warn("Membership has been revoked",
-			zap.String("Status", response.Status),
-		)
+		l.Warn("Membership has been revoked", zap.String("Status", response.Status))
+	} else {
+		l.Warn("Membership has been revoked")
 	}
 
 	return nil, nil
