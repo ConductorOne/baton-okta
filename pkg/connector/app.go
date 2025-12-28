@@ -21,12 +21,13 @@ import (
 )
 
 type appResourceType struct {
-	resourceType     *v2.ResourceType
-	domain           string
-	apiToken         string
-	syncInactiveApps bool
-	userEmailFilters []string
-	client           *okta.Client
+	resourceType             *v2.ResourceType
+	domain                   string
+	apiToken                 string
+	syncInactiveApps         bool
+	userEmailFilters         []string
+	client                   *okta.Client
+	useAppLinksForUserGrants bool
 }
 
 const (
@@ -34,23 +35,19 @@ const (
 	appGrantUser  = "user"
 )
 
-var appGrantTypes = []string{
-	appGrantGroup,
-	appGrantUser,
-}
-
 func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, useAppLinksForUserGrants bool, client *okta.Client) *appResourceType {
 	return &appResourceType{
-		resourceType:     resourceTypeApp,
-		domain:           domain,
-		apiToken:         apiToken,
-		client:           client,
-		syncInactiveApps: syncInactiveApps,
-		userEmailFilters: filterEmailDomains,
+		resourceType:             resourceTypeApp,
+		domain:                   domain,
+		apiToken:                 apiToken,
+		client:                   client,
+		syncInactiveApps:         syncInactiveApps,
+		userEmailFilters:         filterEmailDomains,
+		useAppLinksForUserGrants: useAppLinksForUserGrants,
 	}
 }
 
@@ -129,10 +126,24 @@ func (o *appResourceType) Grants(
 	switch bag.ResourceID() {
 	case "":
 		bag.Pop()
-		for _, appGrantType := range appGrantTypes {
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeApp.Id,
+			ResourceID:     appGrantGroup,
+		})
+		var appStatus string
+		appTrait, err := sdkResource.GetAppTrait(resource)
+		// If we can't get the app trait on the app resource, we don't know if it's active or not, so we have to fall back to the slow listAppUsersGrants().
+		if err == nil {
+			appStatusValue, ok := appTrait.Profile.AsMap()["status"]
+			if ok {
+				appStatus, _ = appStatusValue.(string)
+			}
+		}
+		// The app links API for users does not return inactive apps, so we have to fall back to the slow listAppUsersGrants().
+		if !o.useAppLinksForUserGrants || strings.ToUpper(appStatus) != "ACTIVE" {
 			bag.Push(pagination.PageState{
 				ResourceTypeID: resourceTypeApp.Id,
-				ResourceID:     appGrantType,
+				ResourceID:     appGrantUser,
 			})
 		}
 	case appGrantGroup:
@@ -190,6 +201,10 @@ func (o *appResourceType) listAppGroupGrants(
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 				},
 			),
+			sdkGrant.WithAnnotation(&v2.GrantExpandable{
+				EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
+				Shallow:        true,
+			}),
 		))
 	}
 

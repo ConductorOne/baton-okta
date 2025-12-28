@@ -50,6 +50,7 @@ jobs:
       BATON_API_TOKEN: ${{ secrets.BATON_API_TOKEN }}
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
       BATON_SYNC_CUSTOM_ROLES: true
+      BATON_USE_APP_LINKS_FOR_USER_GRANTS: true
     steps:
       - name: Install Go
         uses: actions/setup-go@v5

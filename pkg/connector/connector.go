@@ -24,18 +24,19 @@ const AccessDeniedErrorCode = "E0000006"
 const ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances = 3
 
 type Okta struct {
-	client              *okta.Client
-	clientV5            *oktav5.APIClient
-	domain              string
-	apiToken            string
-	syncInactiveApps    bool
-	ciamConfig          *ciamConfig
-	syncCustomRoles     bool
-	skipSecondaryEmails bool
-	awsConfig           *awsConfig
-	SyncSecrets         bool
-	userRoleCache       sync.Map
-	userFilters         *userFilterConfig
+	client                   *okta.Client
+	clientV5                 *oktav5.APIClient
+	domain                   string
+	apiToken                 string
+	syncInactiveApps         bool
+	ciamConfig               *ciamConfig
+	syncCustomRoles          bool
+	skipSecondaryEmails      bool
+	awsConfig                *awsConfig
+	SyncSecrets              bool
+	userRoleCache            sync.Map
+	userFilters              *userFilterConfig
+	useAppLinksForUserGrants bool
 }
 
 type ciamConfig struct {
@@ -110,6 +111,7 @@ type Config struct {
 	AllowGroupToDirectAssignmentConversionForProvisioning bool
 	SyncSecrets                                           bool
 	FilterEmailDomains                                    []string
+	UseAppLinksForUserGrants                              bool
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -143,6 +145,12 @@ var (
 		DisplayName: "User",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: v1AnnotationsForResourceType("user", true),
+	}
+	resourceTypeUserWithGrants = &v2.ResourceType{
+		Id:          "user",
+		DisplayName: "User",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
+		Annotations: v1AnnotationsForResourceType("user", false),
 	}
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
@@ -214,7 +222,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.useAppLinksForUserGrants, o.client),
 	}
 
 	if o.syncCustomRoles {
@@ -369,6 +377,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		oktaClient *okta.Client
 		scopes     = defaultScopes
 	)
+
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
 		return nil, err
@@ -454,14 +463,15 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 	}
 
 	return &Okta{
-		client:              oktaClient,
-		clientV5:            oktaClientV5,
-		domain:              cfg.Domain,
-		apiToken:            cfg.ApiToken,
-		syncInactiveApps:    cfg.SyncInactiveApps,
-		syncCustomRoles:     cfg.SyncCustomRoles,
-		skipSecondaryEmails: cfg.SkipSecondaryEmails,
-		SyncSecrets:         cfg.SyncSecrets,
+		client:                   oktaClient,
+		clientV5:                 oktaClientV5,
+		domain:                   cfg.Domain,
+		apiToken:                 cfg.ApiToken,
+		syncInactiveApps:         cfg.SyncInactiveApps,
+		useAppLinksForUserGrants: cfg.UseAppLinksForUserGrants,
+		syncCustomRoles:          cfg.SyncCustomRoles,
+		skipSecondaryEmails:      cfg.SkipSecondaryEmails,
+		SyncSecrets:              cfg.SyncSecrets,
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
 			EmailDomains: cfg.CiamEmailDomains,
