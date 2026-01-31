@@ -7,21 +7,24 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/structpb"
-
+	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const membershipUpdatedField = "lastMembershipUpdated"
@@ -745,5 +748,379 @@ func groupBuilder(connector *Okta) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
 		connector:    connector,
+	}
+}
+
+func (o *groupResourceType) ResourceActions(ctx context.Context, registry actions.ActionRegistry) error {
+	l := ctxzap.Extract(ctx)
+
+	// Base arguments for the action
+	arguments := []*config.Field{
+		{
+			Name:        "name",
+			DisplayName: "Group Name",
+			Description: "The name of the group to create",
+			Field:       &config.Field_StringField{},
+			IsRequired:  true,
+		},
+		{
+			Name:        "description",
+			DisplayName: "Description",
+			Description: "Description of the group",
+			Field:       &config.Field_StringField{},
+			IsRequired:  false,
+		},
+	}
+
+	// Fetch the group schema to add custom attributes
+	customFields := o.getCustomGroupSchemaFields(ctx)
+	if len(customFields) > 0 {
+		l.Debug("adding custom group schema fields to create action", zap.Int("count", len(customFields)))
+		arguments = append(arguments, customFields...)
+	}
+
+	return registry.Register(ctx, &v2.BatonActionSchema{
+		Name:        "create",
+		DisplayName: "Create Group",
+		Description: "Creates a new Okta group",
+		Arguments:   arguments,
+		ReturnTypes: []*config.Field{
+			{Name: "success", DisplayName: "Success", Field: &config.Field_BoolField{}},
+			{Name: "resource", DisplayName: "Created Group", Field: &config.Field_ResourceField{}},
+		},
+		ActionType: []v2.ActionType{v2.ActionType_ACTION_TYPE_RESOURCE_CREATE},
+	}, o.handleCreateGroupAction)
+}
+
+func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	name, err := actions.RequireStringArg(args, "name")
+	if err != nil {
+		return nil, nil, err
+	}
+	description, _ := actions.GetStringArg(args, "description")
+
+	profile := oktav5.NewGroupProfile()
+	profile.SetName(name)
+	if description != "" {
+		profile.SetDescription(description)
+	}
+
+	// Refetch schema to get real types for custom attribute conversion.
+	schema, _, err := o.connector.clientV5.SchemaAPI.GetGroupSchema(ctx).Execute()
+	if err != nil {
+		// Check if caller provided any custom fields - if so, we must fail.
+		for k := range args.GetFields() {
+			if strings.HasPrefix(k, "custom_") {
+				return nil, nil, fmt.Errorf("failed to fetch group schema for custom attributes: %w", err)
+			}
+		}
+		l.Warn("failed to fetch group schema, proceeding without custom attributes", zap.Error(err))
+	} else {
+		if err := o.applyCustomAttributes(profile, schema, args); err != nil {
+			return nil, nil, fmt.Errorf("failed to apply custom attributes: %w", err)
+		}
+	}
+
+	group := oktav5.NewGroup()
+	group.SetProfile(*profile)
+
+	createdGroup, _, err := o.connector.clientV5.GroupAPI.CreateGroup(ctx).Group(*group).Execute()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create group: %w", err)
+	}
+
+	l.Info("group created", zap.String("group_id", createdGroup.GetId()), zap.String("name", name))
+
+	resource, err := o.groupResource(ctx, &okta.Group{
+		Id: createdGroup.GetId(),
+		Profile: &okta.GroupProfile{
+			Name:        createdGroup.Profile.GetName(),
+			Description: createdGroup.Profile.GetDescription(),
+		},
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build group resource: %w", err)
+	}
+
+	resourceRv, err := actions.NewResourceReturnField("resource", resource)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create resource return field: %w", err)
+	}
+	return actions.NewReturnValues(true, resourceRv), nil, nil
+}
+
+// applyCustomAttributes validates and applies custom schema attributes to the profile.
+func (o *groupResourceType) applyCustomAttributes(profile *oktav5.GroupProfile, schema *oktav5.GroupSchema, args *structpb.Struct) error {
+	if schema.Definitions == nil || schema.Definitions.Custom == nil || schema.Definitions.Custom.Properties == nil {
+		return nil
+	}
+
+	required := make(map[string]bool)
+	for _, f := range schema.Definitions.Custom.Required {
+		required[f] = true
+	}
+
+	for attrName, attr := range *schema.Definitions.Custom.Properties {
+		val := args.GetFields()["custom_"+attrName]
+		isEmpty := val == nil || isEmptyValue(val)
+
+		if (required[attrName] || (attr.Required != nil && *attr.Required)) && isEmpty {
+			return fmt.Errorf("required field %q is missing", attrName)
+		}
+		if isEmpty {
+			continue
+		}
+
+		attrType := "string"
+		if attr.Type != nil {
+			attrType = *attr.Type
+		}
+
+		converted, err := convertToOktaSchemaType(val, attrType)
+		if err != nil {
+			return fmt.Errorf("field %q: %w", attrName, err)
+		}
+		if converted != nil {
+			if profile.AdditionalProperties == nil {
+				profile.AdditionalProperties = make(map[string]any)
+			}
+			profile.AdditionalProperties[attrName] = converted
+		}
+	}
+	return nil
+}
+
+func isEmptyValue(v *structpb.Value) bool {
+	switch val := v.GetKind().(type) {
+	case *structpb.Value_NullValue:
+		return true
+	case *structpb.Value_StringValue:
+		return val.StringValue == ""
+	case *structpb.Value_ListValue:
+		return val.ListValue == nil || len(val.ListValue.Values) == 0
+	}
+	return false
+}
+
+// convertToOktaSchemaType converts a structpb.Value to the Go type expected by the Okta API
+// based on the attribute's declared schema type (string, boolean, integer, number, array).
+func convertToOktaSchemaType(v *structpb.Value, attrType string) (any, error) {
+	switch attrType {
+	case "boolean":
+		if b, ok := v.GetKind().(*structpb.Value_BoolValue); ok {
+			return b.BoolValue, nil
+		}
+		if s, ok := v.GetKind().(*structpb.Value_StringValue); ok {
+			return s.StringValue == "true", nil
+		}
+	case "integer":
+		if n, ok := v.GetKind().(*structpb.Value_NumberValue); ok {
+			return int64(n.NumberValue), nil
+		}
+		if s, ok := v.GetKind().(*structpb.Value_StringValue); ok {
+			var i int64
+			if _, err := fmt.Sscanf(s.StringValue, "%d", &i); err != nil {
+				return nil, fmt.Errorf("invalid integer %q", s.StringValue)
+			}
+			return i, nil
+		}
+	case "number":
+		if n, ok := v.GetKind().(*structpb.Value_NumberValue); ok {
+			return n.NumberValue, nil
+		}
+		if s, ok := v.GetKind().(*structpb.Value_StringValue); ok {
+			var f float64
+			if _, err := fmt.Sscanf(s.StringValue, "%f", &f); err != nil {
+				return nil, fmt.Errorf("invalid number %q", s.StringValue)
+			}
+			return f, nil
+		}
+	case "array":
+		if list, ok := v.GetKind().(*structpb.Value_ListValue); ok && list.ListValue != nil {
+			result := make([]any, 0, len(list.ListValue.Values))
+			for _, item := range list.ListValue.Values {
+				switch iv := item.GetKind().(type) {
+				case *structpb.Value_StringValue:
+					result = append(result, iv.StringValue)
+				case *structpb.Value_NumberValue:
+					result = append(result, iv.NumberValue)
+				case *structpb.Value_BoolValue:
+					result = append(result, iv.BoolValue)
+				}
+			}
+			return result, nil
+		}
+	default:
+		if s, ok := v.GetKind().(*structpb.Value_StringValue); ok && s.StringValue != "" {
+			return s.StringValue, nil
+		}
+	}
+	return nil, nil
+}
+
+// getCustomGroupSchemaFields fetches the Okta group schema and returns config fields
+// for any custom attributes defined in the schema.
+func (o *groupResourceType) getCustomGroupSchemaFields(ctx context.Context) []*config.Field {
+	l := ctxzap.Extract(ctx)
+
+	schema, _, err := o.connector.clientV5.SchemaAPI.GetGroupSchema(ctx).Execute()
+	if err != nil {
+		l.Warn("failed to fetch group schema for custom attributes", zap.Error(err))
+		return nil
+	}
+
+	if schema.Definitions == nil || schema.Definitions.Custom == nil || schema.Definitions.Custom.Properties == nil {
+		return nil
+	}
+
+	// Build a set of required field names from the schema-level Required array
+	requiredFields := make(map[string]bool)
+	for _, fieldName := range schema.Definitions.Custom.Required {
+		requiredFields[fieldName] = true
+	}
+
+	var fields []*config.Field
+	for attrName, attr := range *schema.Definitions.Custom.Properties {
+		if field := oktaSchemaAttrToConfigField(attrName, attr, requiredFields); field != nil {
+			fields = append(fields, field)
+		}
+	}
+
+	return fields
+}
+
+// oktaSchemaAttrToConfigField converts an Okta GroupSchemaAttribute to a baton config.Field.
+// Returns nil for read-only attributes.
+func oktaSchemaAttrToConfigField(name string, attr oktav5.GroupSchemaAttribute, requiredFields map[string]bool) *config.Field {
+	if attr.Mutability != nil && *attr.Mutability == "READ_ONLY" {
+		return nil
+	}
+
+	displayName := name
+	if attr.Title != nil && *attr.Title != "" {
+		displayName = *attr.Title
+	}
+
+	description := ""
+	if attr.Description != nil {
+		description = *attr.Description
+	}
+
+	isRequired := requiredFields[name] || (attr.Required != nil && *attr.Required)
+
+	// Prefix custom attributes to avoid collision with built-in fields
+	fieldName := "custom_" + name
+
+	attrType := "string"
+	if attr.Type != nil {
+		attrType = *attr.Type
+	}
+
+	switch attrType {
+	case "boolean":
+		return &config.Field{
+			Name:        fieldName,
+			DisplayName: displayName,
+			Description: description,
+			Field:       &config.Field_BoolField{},
+			IsRequired:  isRequired,
+		}
+	case "integer", "number":
+		// Okta's "number" type is float64, but baton-sdk only has IntField (int64).
+		var intRules *config.Int64Rules
+		minimum, hasMin := attr.AdditionalProperties["minimum"]
+		maximum, hasMax := attr.AdditionalProperties["maximum"]
+		if hasMin || hasMax {
+			intRules = &config.Int64Rules{}
+			if hasMin {
+				if minVal, ok := minimum.(float64); ok {
+					gte := int64(minVal)
+					intRules.Gte = &gte
+				}
+			}
+			if hasMax {
+				if maxVal, ok := maximum.(float64); ok {
+					lte := int64(maxVal)
+					intRules.Lte = &lte
+				}
+			}
+		}
+		return &config.Field{
+			Name:        fieldName,
+			DisplayName: displayName,
+			Description: description,
+			Field: &config.Field_IntField{
+				IntField: &config.IntField{
+					Rules: intRules,
+				},
+			},
+			IsRequired: isRequired,
+		}
+	case "array":
+		// Check element type from Items.Type if available
+		itemType := "string"
+		if attr.Items != nil && attr.Items.Type != nil {
+			itemType = *attr.Items.Type
+		}
+
+		// For integer arrays, we still use StringSliceField since baton-sdk
+		// doesn't have an IntSliceField. Values are converted at apply time.
+		if itemType == "integer" || itemType == "number" {
+			description += " (numeric values)"
+		}
+
+		// Okta does not have rules for array fields
+		return &config.Field{
+			Name:        fieldName,
+			DisplayName: displayName,
+			Description: description,
+			Field: &config.Field_StringSliceField{
+				StringSliceField: &config.StringSliceField{},
+			},
+			IsRequired: isRequired,
+		}
+	default: // string and others
+		var stringRules *config.StringRules
+		if attr.MinLength != nil || attr.MaxLength != nil || len(attr.Enum) > 0 {
+			stringRules = &config.StringRules{}
+			if attr.MinLength != nil {
+				minLen := uint64(*attr.MinLength)
+				stringRules.MinLen = &minLen
+			}
+			if attr.MaxLength != nil {
+				maxLen := uint64(*attr.MaxLength)
+				stringRules.MaxLen = &maxLen
+			}
+			if len(attr.Enum) > 0 {
+				stringRules.In = attr.Enum
+			}
+		}
+
+		var options []*config.StringFieldOption
+		if len(attr.Enum) > 0 {
+			options = make([]*config.StringFieldOption, 0, len(attr.Enum))
+			for _, enumVal := range attr.Enum {
+				options = append(options, &config.StringFieldOption{
+					Name:        enumVal,
+					DisplayName: enumVal,
+					Value:       enumVal,
+				})
+			}
+		}
+
+		return &config.Field{
+			Name:        fieldName,
+			DisplayName: displayName,
+			Description: description,
+			Field: &config.Field_StringField{
+				StringField: &config.StringField{
+					Rules:   stringRules,
+					Options: options,
+				},
+			},
+			IsRequired: isRequired,
+		}
 	}
 }
