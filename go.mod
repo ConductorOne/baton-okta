@@ -6,9 +6,10 @@ require (
 	github.com/conductorone/baton-sdk v0.7.14
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.6-conductorone
 	github.com/deckarep/golang-set/v2 v2.7.0
+	github.com/ennyjfrick/ruleguard-logfatal v0.0.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/okta/okta-sdk-golang/v2 v2.20.0
-	github.com/spf13/viper v1.19.0
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	go.uber.org/zap v1.27.1
 	google.golang.org/protobuf v1.36.10
 )
@@ -43,6 +44,7 @@ require (
 	github.com/pquerna/cachecontrol v0.2.0 // indirect
 	github.com/pquerna/xjwt/xkeyset v0.0.0-20241217022915-10fc997b2a9f // indirect
 	github.com/shirou/gopsutil/v4 v4.25.11 // indirect
+	github.com/spf13/viper v1.19.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.14.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.63.0 // indirect
@@ -62,7 +64,7 @@ require (
 	filippo.io/age v1.2.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.0
+	github.com/aws/aws-sdk-go-v2 v1.41.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.29.2 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.55 // indirect
