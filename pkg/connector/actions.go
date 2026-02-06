@@ -71,15 +71,15 @@ var enableUser = &v2.BatonActionSchema{
 	},
 }
 
-func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.CustomActionManager, error) {
+func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.CustomActionManager, error) { //nolint:staticcheck // deprecated interface still required by SDK
 	actionManager := actions.NewActionManager(ctx)
 
-	err := actionManager.RegisterAction(ctx, enableUser.Name, enableUser, o.enableUser)
+	err := actionManager.RegisterAction(ctx, enableUser.Name, enableUser, o.enableUser) //nolint:staticcheck // deprecated method still required by SDK
 	if err != nil {
 		return nil, err
 	}
 
-	err = actionManager.RegisterAction(ctx, disableUser.Name, disableUser, o.disableUser)
+	err = actionManager.RegisterAction(ctx, disableUser.Name, disableUser, o.disableUser) //nolint:staticcheck // deprecated method still required by SDK
 	if err != nil {
 		return nil, err
 	}

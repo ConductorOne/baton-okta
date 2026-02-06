@@ -13,16 +13,6 @@ import (
 
 const defaultLimit = 1000
 
-func parseGetResp(resp *okta.Response) (annotations.Annotations, error) {
-	var annos annotations.Annotations
-	if resp != nil {
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
-	}
-	return annos, nil
-}
-
 func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 	var nextPage string

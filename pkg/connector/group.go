@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -347,20 +346,6 @@ func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, 
 	return users, reqCtx, nil
 }
 
-func listUsersGroupsClient(ctx context.Context, client *okta.Client, userId string) ([]*okta.Group, *responseContext, error) {
-	users, resp, err := client.User.ListUserGroups(ctx, userId)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", handleOktaResponseError(resp, err))
-	}
-
-	reqCtx, err := responseToContext(&pagination.Token{}, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return users, reqCtx, nil
-}
-
 func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error) {
 	trait, err := o.groupTrait(ctx, group)
 	if err != nil {
@@ -528,31 +513,6 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	}
 
 	return nil, nil
-}
-
-func embeddedOktaGroupFromAppGroup(appGroup *okta.ApplicationGroupAssignment) (*okta.Group, error) {
-	embedded := appGroup.Embedded
-	if embedded == nil {
-		return nil, fmt.Errorf("app group '%s' embedded data was nil", appGroup.Id)
-	}
-	embeddedMap, ok := embedded.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("app group embedded data was not a map for group with id '%s'", appGroup.Id)
-	}
-	embeddedGroup, ok := embeddedMap["group"]
-	if !ok {
-		return nil, fmt.Errorf("embedded group data was nil for app group '%s'", appGroup.Id)
-	}
-	groupJSON, err := json.Marshal(embeddedGroup)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling embedded group data for app group '%s': %w", appGroup.Id, err)
-	}
-	oktaGroup := &okta.Group{}
-	err = json.Unmarshal(groupJSON, &oktaGroup)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling embedded group data for app group '%s': %w", appGroup.Id, err)
-	}
-	return oktaGroup, nil
 }
 
 func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {

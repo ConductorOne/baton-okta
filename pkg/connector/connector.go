@@ -91,11 +91,6 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_APP},
 		Annotations: v1AnnotationsForResourceType("app", false),
 	}
-	resourceTypeAccount = &v2.ResourceType{
-		Id:          "account",
-		DisplayName: "Account",
-		Annotations: v1AnnotationsForResourceType("account", false),
-	}
 	resourceTypeResourceSets = &v2.ResourceType{
 		Id:          "resource-set",
 		DisplayName: "Resource Set",
