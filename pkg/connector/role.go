@@ -78,40 +78,41 @@ func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 func (o *roleResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
-	token *pagination.Token,
-) ([]*v2.Resource, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	var (
 		nextPageToken string
 		rv            []*v2.Resource
 	)
 	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	rv, err = o.listSystemRoles(ctx, resourceID, token)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
 	}
 
 	err = bag.Next(nextPageToken)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	nextPageToken, err = bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, nextPageToken, nil, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: nextPageToken}, nil
 }
 
 func (o *roleResourceType) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var (
 		rv   []*v2.Entitlement
 		role *okta.Role
@@ -134,36 +135,37 @@ func (o *roleResourceType) Entitlements(
 	)
 	rv = append(rv, en)
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 func (o *roleResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Grant, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	var rv []*v2.Grant
 
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	qp := queryParams(token.Size, page)
 
 	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.connector.client, token, qp)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, user := range usersWithRoleAssignments {
@@ -174,7 +176,7 @@ func (o *roleResourceType) Grants(
 		if !ok {
 			user, _, err := o.connector.client.User.GetUser(ctx, userId)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, user)
 		}
@@ -184,14 +186,14 @@ func (o *roleResourceType) Grants(
 
 		userRoles, err := o.getUserRolesFromCache(ctx, userId)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		if userRoles == nil {
 			userRoles = mapset.NewSet[string]()
 			roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			for _, role := range roles {
 				if role.Status == roleStatusInactive {
@@ -222,10 +224,10 @@ func (o *roleResourceType) Grants(
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource *v2.Resource) bool {

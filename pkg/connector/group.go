@@ -41,11 +41,12 @@ func (o *groupResourceType) ResourceType(ctx context.Context) *v2.ResourceType {
 func (o *groupResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
-	token *pagination.Token,
-) ([]*v2.Resource, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeGroup.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
@@ -53,34 +54,34 @@ func (o *groupResourceType) List(
 	var respCtx *responseContext
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
 		if o.connector.awsConfig.AWSSourceIdentityMode {
-			return rv, "", nil, nil
+			return rv, nil, nil
 		}
 		groups, respCtx, err = o.listAWSGroups(ctx, token, page)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
 		}
 	} else {
 		qp := queryParamsExpand(token.Size, page, "stats")
 		groups, respCtx, err = o.listGroups(ctx, token, qp)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
 		}
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, group := range groups {
 		resource, err := o.groupResource(ctx, group)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		rv = append(rv, resource)
@@ -88,25 +89,25 @@ func (o *groupResourceType) List(
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func (o *groupResourceType) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
-		return rv, "", nil, nil
+		return rv, nil, nil
 	}
 
 	rv = append(rv, o.groupEntitlement(ctx, resource))
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) {
@@ -128,19 +129,20 @@ func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) 
 func (o *groupResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Grant, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	l := ctxzap.Extract(ctx)
 
 	var rv []*v2.Grant
 	bag := &pagination.Bag{}
 	err := bag.Unmarshal(token.Token)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
-		return rv, "", nil, nil
+		return rv, nil, nil
 	}
 
 	if bag.Current() == nil {
@@ -162,7 +164,7 @@ func (o *groupResourceType) Grants(
 	case resourceTypeUser.Id:
 		groupTrait, err := sdkResource.GetGroupTrait(resource)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
 		}
 		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
 
@@ -177,12 +179,12 @@ func (o *groupResourceType) Grants(
 
 			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
 			if err != nil {
-				return nil, "", nil, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+				return nil, nil, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
 			}
 
 			nextPage, annos, err = parseResp(respCtx.OktaResponse)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
 
 			for _, user := range users {
@@ -199,12 +201,12 @@ func (o *groupResourceType) Grants(
 
 		err = bag.Next(nextPage)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 		}
 
 		pageToken, err := bag.Marshal()
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		if pageToken == "" {
@@ -214,31 +216,31 @@ func (o *groupResourceType) Grants(
 			annos.Update(etag)
 		}
 
-		return rv, pageToken, annos, nil
+		return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	case resourceTypeRole.Id:
 		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
 		if err != nil {
 			if resp == nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
 			}
 
 			defer resp.Body.Close()
 			errOkta, err := getError(resp)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			if errOkta.ErrorCode == AccessDeniedErrorCode {
 				err = bag.Next("")
 				if err != nil {
-					return nil, "", nil, err
+					return nil, nil, err
 				}
 				pageToken, err := bag.Marshal()
 				if err != nil {
-					return nil, "", nil, err
+					return nil, nil, err
 				}
-				return nil, pageToken, nil, nil
+				return nil, &sdkResource.SyncOpResults{NextPageToken: pageToken}, nil
 			} else {
-				return nil, "", nil, convertNotFoundError(&errOkta, "okta-connectorv2: failed to list group roles")
+				return nil, nil, convertNotFoundError(&errOkta, "okta-connectorv2: failed to list group roles")
 			}
 		}
 
@@ -266,12 +268,12 @@ func (o *groupResourceType) Grants(
 				}, resourceTypeRole)
 			}
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 
 			groupTrait, err := sdkResource.GetGroupTrait(resource)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
 			}
 			usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
 			shouldExpand := !ok || usersCount > 0
@@ -284,27 +286,27 @@ func (o *groupResourceType) Grants(
 		// TODO(lauren) Move this to list method like other methods do
 		respCtx, err := responseToContext(token, resp)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		nextPage, annos, err := parseResp(respCtx.OktaResponse)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 		}
 
 		err = bag.Next(nextPage)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 		}
 
 		pageToken, err := bag.Marshal()
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
-		return rv, pageToken, annos, nil
+		return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	default:
-		return nil, "", nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
+		return nil, nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
 	}
 }
 

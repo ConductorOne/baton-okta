@@ -12,6 +12,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -31,38 +32,39 @@ func (o *customRoleResourceType) ResourceType(_ context.Context) *v2.ResourceTyp
 func (o *customRoleResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
-	token *pagination.Token,
-) ([]*v2.Resource, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	var nextPageToken string
 	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
 	rv, err = o.listCustomRoles(ctx, resourceID, token)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
 	}
 
 	err = bag.Next(nextPageToken)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	nextPageToken, err = bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, nextPageToken, nil, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: nextPageToken}, nil
 }
 
 func (o *customRoleResourceType) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 
 	role := &okta.Role{
@@ -80,7 +82,7 @@ func (o *customRoleResourceType) Entitlements(
 	)
 	rv = append(rv, en)
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 // listGroupAssignedRoles. List all group role assignments
@@ -130,30 +132,31 @@ func listAssignedRolesForUser(ctx context.Context, client *okta.Client, userId s
 func (o *customRoleResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Grant, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	var rv []*v2.Grant
 
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	qp := queryParams(token.Size, page)
 
 	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.connector.client, token, qp)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, user := range usersWithRoleAssignments {
@@ -161,14 +164,14 @@ func (o *customRoleResourceType) Grants(
 
 		userRoles, err := o.getUserRolesFromCache(ctx, userId)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		if userRoles == nil {
 			userRoles = mapset.NewSet[string]()
 			roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			for _, role := range roles {
 				if role.Status == roleStatusInactive || role.AssignmentType != "USER" {
@@ -190,10 +193,10 @@ func (o *customRoleResourceType) Grants(
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func (o *customRoleResourceType) listCustomRoles(

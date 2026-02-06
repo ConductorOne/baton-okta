@@ -108,33 +108,34 @@ func listResourceSets(
 	return resourceSets.ResourceSets, respCtx, nil
 }
 
-func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, attrs sdkResource.SyncOpAttrs) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	pToken := &attrs.PageToken
 	var rv []*v2.Resource
 	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	qp := queryParams(pToken.Size, page)
 	resourceSets, respCtx, err := listResourceSets(ctx, rs.client, pToken, qp)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, resourceSet := range resourceSets {
 		resource, err := resourceSetsResource(ctx, &resourceSet, nil)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-sets: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to create resource-sets: %w", err)
 		}
 
 		rv = append(rv, resource)
@@ -142,13 +143,13 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
-func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ sdkResource.SyncOpAttrs) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
@@ -160,7 +161,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding", resource.DisplayName)),
 			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set in Okta", resource.DisplayName)),
 		),
-	}, "", nil, nil
+	}, nil, nil
 }
 
 // listBindings. List all Role Resource Set Bindings.
@@ -223,18 +224,19 @@ func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceS
 	return resp, nil
 }
 
-func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	pToken := &attrs.PageToken
 	var rv []*v2.Grant
 	bag, page, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	qp := queryParams(pToken.Size, page)
 
 	roles, respCtx, err := listBindings(ctx, rs.client, resource.Id.Resource, qp)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	for _, role := range roles {
@@ -249,20 +251,20 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 
 	nextPage, annos, err := parseResp(respCtx)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func (rs *resourceSetsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

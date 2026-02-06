@@ -9,8 +9,10 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	cfg "github.com/conductorone/baton-okta/pkg/config"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -194,23 +196,23 @@ var (
 	// TODO(lauren) use different scopes for aws mode?
 )
 
-func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
+func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	if o.ciamConfig.Enabled {
-		return []connectorbuilder.ResourceSyncer{
+		return []connectorbuilder.ResourceSyncerV2{
 			ciamUserBuilder(o),
 			ciamBuilder(o.client, o.skipSecondaryEmails),
 		}
 	}
 
 	if o.awsConfig.Enabled {
-		resourceSyncer := []connectorbuilder.ResourceSyncer{accountBuilder(o), groupBuilder(o)}
+		resourceSyncer := []connectorbuilder.ResourceSyncerV2{accountBuilder(o), groupBuilder(o)}
 		if !o.awsConfig.AWSSourceIdentityMode {
 			resourceSyncer = append(resourceSyncer, userBuilder(o))
 		}
 		return resourceSyncer
 	}
 
-	resourceSyncer := []connectorbuilder.ResourceSyncer{
+	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
@@ -364,115 +366,133 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func New(ctx context.Context, cfg *Config) (*Okta, error) {
+// safeCacheInt32 converts int to int32 with bounds checking.
+func safeCacheInt32(val int) (int32, error) {
+	if val > 2147483647 || val < 0 {
+		return 0, fmt.Errorf("value %d is out of range for int32", val)
+	}
+	return int32(val), nil
+}
+
+func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
 	var (
 		oktaClient *okta.Client
 		scopes     = defaultScopes
 	)
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	cacheTTI, err := safeCacheInt32(cc.CacheTti)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cacheTTL, err := safeCacheInt32(cc.CacheTtl)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	var oktaClientV5 *oktav5.APIClient
 
-	if cfg.ApiToken != "" && cfg.Domain != "" {
+	if cc.ApiToken != "" && cc.Domain != "" {
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
-			okta.WithToken(cfg.ApiToken),
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
+			okta.WithToken(cc.ApiToken),
 			okta.WithHttpClientPtr(client),
-			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
+			okta.WithCache(cc.Cache),
+			okta.WithCacheTti(cacheTTI),
+			okta.WithCacheTtl(cacheTTL),
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		config, err := oktav5.NewConfiguration(
-			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
-			oktav5.WithToken(cfg.ApiToken),
+			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
+			oktav5.WithToken(cc.ApiToken),
 			oktav5.WithHttpClientPtr(client),
-			oktav5.WithCache(cfg.Cache),
-			oktav5.WithCacheTti(cfg.CacheTTI),
-			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithCache(cc.Cache),
+			oktav5.WithCacheTti(cacheTTI),
+			oktav5.WithCacheTtl(cacheTTL),
 			oktav5.WithRateLimitPrevent(true),
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	}
 
-	if cfg.OktaClientId != "" && cfg.OktaPrivateKey != "" && cfg.Domain != "" {
-		if cfg.OktaProvisioning {
+	if cc.OktaClientId != "" && cc.OktaPrivateKey != "" && cc.Domain != "" {
+		if cc.OktaProvisioning {
 			scopes = append(scopes, provisioningScopes...)
 		}
 
-		if cfg.SyncSecrets {
-			defaultScopes = append(defaultScopes, "okta.apiTokens.read")
+		if cc.SyncSecrets {
+			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
+			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			okta.WithAuthorizationMode("PrivateKey"),
-			okta.WithClientId(cfg.OktaClientId),
+			okta.WithClientId(cc.OktaClientId),
 			okta.WithScopes(scopes),
-			okta.WithPrivateKey(cfg.OktaPrivateKey),
-			okta.WithPrivateKeyId(cfg.OktaPrivateKeyId),
-			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
+			okta.WithPrivateKey(cc.OktaPrivateKey),
+			okta.WithPrivateKeyId(cc.OktaPrivateKeyId),
+			okta.WithCache(cc.Cache),
+			okta.WithCacheTti(cacheTTI),
+			okta.WithCacheTtl(cacheTTL),
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		config, err := oktav5.NewConfiguration(
-			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
+			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			oktav5.WithAuthorizationMode("PrivateKey"),
-			oktav5.WithClientId(cfg.OktaClientId),
+			oktav5.WithClientId(cc.OktaClientId),
 			oktav5.WithScopes(scopes),
-			oktav5.WithPrivateKey(cfg.OktaPrivateKey),
-			oktav5.WithPrivateKeyId(cfg.OktaPrivateKeyId),
-			oktav5.WithCache(cfg.Cache),
-			oktav5.WithCacheTti(cfg.CacheTTI),
-			oktav5.WithCacheTtl(cfg.CacheTTL),
+			oktav5.WithPrivateKey(cc.OktaPrivateKey),
+			oktav5.WithPrivateKeyId(cc.OktaPrivateKeyId),
+			oktav5.WithCache(cc.Cache),
+			oktav5.WithCacheTti(cacheTTI),
+			oktav5.WithCacheTtl(cacheTTL),
 			oktav5.WithRateLimitPrevent(true),
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	}
 
 	awsConfig := &awsConfig{
-		Enabled:               cfg.AWSMode,
-		OktaAppId:             cfg.AWSOktaAppId,
-		AWSSourceIdentityMode: cfg.AWSSourceIdentityMode,
-		AllowGroupToDirectAssignmentConversionForProvisioning: cfg.AllowGroupToDirectAssignmentConversionForProvisioning,
+		Enabled:               cc.AwsIdentityCenterMode,
+		OktaAppId:             cc.AwsOktaAppId,
+		AWSSourceIdentityMode: cc.AwsSourceIdentityMode,
+		AllowGroupToDirectAssignmentConversionForProvisioning: cc.AwsAllowGroupToDirectAssignmentConversionForProvisioning,
 	}
 
 	return &Okta{
 		client:              oktaClient,
 		clientV5:            oktaClientV5,
-		domain:              cfg.Domain,
-		apiToken:            cfg.ApiToken,
-		syncInactiveApps:    cfg.SyncInactiveApps,
-		syncCustomRoles:     cfg.SyncCustomRoles,
-		skipSecondaryEmails: cfg.SkipSecondaryEmails,
-		SyncSecrets:         cfg.SyncSecrets,
+		domain:              cc.Domain,
+		apiToken:            cc.ApiToken,
+		syncInactiveApps:    cc.SyncInactiveApps,
+		syncCustomRoles:     cc.SyncCustomRoles,
+		skipSecondaryEmails: cc.SkipSecondaryEmails,
+		SyncSecrets:         cc.SyncSecrets,
 		ciamConfig: &ciamConfig{
-			Enabled:      cfg.Ciam,
-			EmailDomains: cfg.CiamEmailDomains,
+			Enabled:      cc.Ciam,
+			EmailDomains: cc.CiamEmailDomains,
 		},
 		awsConfig: awsConfig,
 		userFilters: &userFilterConfig{
-			includedEmailDomains: lowerEmailDomains(cfg.FilterEmailDomains),
+			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 			resultsCache:         make(map[string]userFilterResult),
 			resultsCacheMutex:    sync.Mutex{},
 		},
-	}, nil
+	}, nil, nil
 }
 
 func lowerEmailDomains(emailDomains []string) []string {

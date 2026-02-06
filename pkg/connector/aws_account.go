@@ -57,24 +57,25 @@ func accountBuilder(connector *Okta) *accountResourceType {
 func (o *accountResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
-	token *pagination.Token,
-) ([]*v2.Resource, string, annotations.Annotations, error) {
+	attrs resource2.SyncOpAttrs,
+) ([]*v2.Resource, *resource2.SyncOpResults, error) {
+	token := &attrs.PageToken
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("error getting aws app settings config")
+		return nil, nil, fmt.Errorf("error getting aws app settings config")
 	}
 	if !awsConfig.UseGroupMapping {
 		accountId := awsConfig.IdentityProviderArnAccountID
 		// TODO(lauren) what should name be?
 		resource, err := resource2.NewResource(accountId, o.resourceType, accountId)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
-		return []*v2.Resource{resource}, "", nil, nil
+		return []*v2.Resource{resource}, nil, nil
 	} else {
 		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeAccount.Id})
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 		}
 
 		qp := queryParams(token.Size, page)
@@ -82,24 +83,24 @@ func (o *accountResourceType) List(
 
 		appGroups, respCtx, err := listGroupsHelper(ctx, o.connector.client, token, qp)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to list application groups: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to list application groups: %w", err)
 		}
 
 		var rv []*v2.Resource
 
 		nextPage, annos, err := parseResp(respCtx.OktaResponse)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
 		}
 		err = bag.Next(nextPage)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
 		}
 
 		for _, group := range appGroups {
 			accountId, _, matchesRolePattern, err := parseAccountIDAndRoleFromGroupName(ctx, awsConfig.RoleRegex, group.Profile.Name)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
+				return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
 			}
 			if !matchesRolePattern {
 				continue
@@ -110,69 +111,70 @@ func (o *accountResourceType) List(
 		for accountId := range accountSet.Iterator().C {
 			resource, err := resource2.NewResource(accountId, o.resourceType, accountId)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			rv = append(rv, resource)
 		}
 
 		pageToken, err := bag.Marshal()
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
-		return rv, pageToken, annos, nil
+		return rv, &resource2.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	}
 }
 
 func (o *accountResourceType) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	attrs resource2.SyncOpAttrs,
+) ([]*v2.Entitlement, *resource2.SyncOpResults, error) {
+	token := &attrs.PageToken
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("error getting aws app settings config")
+		return nil, nil, fmt.Errorf("error getting aws app settings config")
 	}
 	var rv []*v2.Entitlement
 	if !awsConfig.UseGroupMapping {
 		awsRoles, respCtx, err := o.listAWSSamlRoles(ctx)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 		for _, role := range awsRoles.SamlIamRole {
 			rv = append(rv, samlRoleEntitlement(resource, role))
 		}
 		annos, err := parseGetResp(respCtx.OktaResponse)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
-		return rv, "", annos, nil
+		return rv, &resource2.SyncOpResults{Annotations: annos}, nil
 	} else {
 		bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeAccount.Id})
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 		}
 
 		qp := queryParams(token.Size, page)
 
 		groups, respCtx, err := listGroupsHelper(ctx, o.connector.client, token, qp)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to list application groups: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to list application groups: %w", err)
 		}
 
 		nextPage, annos, err := parseResp(respCtx.OktaResponse)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
 		}
 		err = bag.Next(nextPage)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
+			return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
 		}
 
 		for _, group := range groups {
 			accountId, roleName, matchesRolePattern, err := parseAccountIDAndRoleFromGroupName(ctx, awsConfig.RoleRegex, group.Profile.Name)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
+				return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
 			}
 			if !matchesRolePattern || accountId != resource.GetId().Resource {
 				continue
@@ -182,10 +184,10 @@ func (o *accountResourceType) Entitlements(
 
 		pageToken, err := bag.Marshal()
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
-		return rv, pageToken, annos, nil
+		return rv, &resource2.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	}
 }
 
@@ -219,16 +221,17 @@ func parseSAMLRoleFromEntitlementID(entitlementID string) (string, error) {
 func (o *accountResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Grant, string, annotations.Annotations, error) {
+	attrs resource2.SyncOpAttrs,
+) ([]*v2.Grant, *resource2.SyncOpResults, error) {
+	token := &attrs.PageToken
 	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("error getting aws app settings config")
+		return nil, nil, fmt.Errorf("error getting aws app settings config")
 	}
 	bag := &pagination.Bag{}
 	err = bag.Unmarshal(token.Token)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse page token: %w", err)
 	}
 	if bag.Current() == nil {
 		if !awsConfig.UseGroupMapping {
@@ -254,24 +257,24 @@ func (o *accountResourceType) Grants(
 		rv, oktaResp, err = o.groupGrants(ctx, resource, token, page)
 	}
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	nextPage, annos, err := parseResp(oktaResp)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch bag.Next: %w", err)
 	}
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
-	return rv, pageToken, annos, nil
+	return rv, &resource2.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func (o *accountResourceType) userGrants(ctx context.Context, resource *v2.Resource, token *pagination.Token, page string) ([]*v2.Grant, *okta.Response, error) {
