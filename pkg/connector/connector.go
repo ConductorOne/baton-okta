@@ -21,7 +21,6 @@ import (
 // TODO: use isNotFoundError() since E0000008 is also a not found error
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
-const ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances = 3
 
 type Okta struct {
 	client              *okta.Client
@@ -127,7 +126,6 @@ var (
 	}
 
 	// TODO (santhosh) Add required scopes for secrets sync
-	// TODO(lauren) use different scopes for aws mode?
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
@@ -381,8 +379,6 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	}
-
-	// XXXjag - old okta AWS config parameters have to stay in config, right?!?
 
 	return &Okta{
 		client:              oktaClient,
