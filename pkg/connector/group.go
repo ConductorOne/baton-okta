@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"time"
 
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
@@ -50,22 +49,10 @@ func (o *groupResourceType) List(
 	}
 
 	var rv []*v2.Resource
-	var groups []*okta.Group
-	var respCtx *responseContext
-	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
-		if o.connector.awsConfig.AWSSourceIdentityMode {
-			return rv, nil, nil
-		}
-		groups, respCtx, err = o.listAWSGroups(ctx, token, page)
-		if err != nil {
-			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list app groups: %w", err)
-		}
-	} else {
-		qp := queryParamsExpand(token.Size, page, "stats")
-		groups, respCtx, err = o.listGroups(ctx, token, qp)
-		if err != nil {
-			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
-		}
+	qp := queryParamsExpand(token.Size, page, "stats")
+	groups, respCtx, err := o.listGroups(ctx, token, qp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list groups: %w", err)
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
@@ -101,10 +88,6 @@ func (o *groupResourceType) Entitlements(
 	attrs sdkResource.SyncOpAttrs,
 ) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
-	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
-		return rv, nil, nil
-	}
-
 	rv = append(rv, o.groupEntitlement(ctx, resource))
 
 	return rv, nil, nil
@@ -141,16 +124,10 @@ func (o *groupResourceType) Grants(
 		return nil, nil, err
 	}
 
-	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled && o.connector.awsConfig.AWSSourceIdentityMode {
-		return rv, nil, nil
-	}
-
 	if bag.Current() == nil {
-		if o.connector.awsConfig == nil || !o.connector.awsConfig.Enabled {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeRole.Id,
-			})
-		}
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeRole.Id,
+		})
 		bag.Push(pagination.PageState{
 			ResourceTypeID: resourceTypeUser.Id,
 		})
@@ -326,51 +303,6 @@ func listGroupsHelper(ctx context.Context, client *okta.Client, token *paginatio
 	return groups, reqCtx, nil
 }
 
-func (o *groupResourceType) listAWSGroups(ctx context.Context, token *pagination.Token, page string) ([]*okta.Group, *responseContext, error) {
-	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	groups := make([]*okta.Group, 0)
-	if awsConfig.UseGroupMapping {
-		qp := queryParams(token.Size, page)
-		groups, respCtx, err := listGroupsHelper(ctx, o.connector.client, token, qp)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, group := range groups {
-			_, _, matchesRolePattern, err := parseAccountIDAndRoleFromGroupName(ctx, awsConfig.RoleRegex, group.Profile.Name)
-			if err != nil {
-				return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
-			}
-			if matchesRolePattern {
-				groups = append(groups, group)
-			}
-		}
-		return groups, respCtx, nil
-	}
-
-	qp := queryParamsExpand(token.Size, page, "group")
-	appGroups, respCtx, err := listApplicationGroupAssignments(ctx, o.connector.client, o.connector.awsConfig.OktaAppId, token, qp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for _, appGroup := range appGroups {
-		appGroupSAMLRoles, err := appGroupSAMLRolesWrapper(ctx, appGroup)
-		if err != nil {
-			return nil, nil, err
-		}
-		oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
-		if err != nil {
-			return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch groups from okta: %w", err)
-		}
-		groups = append(groups, oktaGroup)
-		awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
-	}
-	return groups, respCtx, nil
-}
-
 func (o *groupResourceType) GetGroupWithParams(
 	ctx context.Context,
 	groupID string,
@@ -399,37 +331,6 @@ func (o *groupResourceType) GetGroupWithParams(
 	}
 
 	return group, resp, nil
-}
-
-/*
-This filter field uses a regular expression to filter AWS-related groups and extract the accountid and role.
-
-If you use the default AWS role group syntax (aws#[account alias]#[role name]#[account #]), then you can use this Regex string:
-^aws\#\S+\#(?{{role}}[\w\-]+)\#(?{{accountid}}\d+)$
-
-This Regex expression logically equates to:
-find groups that start with AWS, then #, then a string of text, then #, then the AWS role, then #, then the AWS account ID.
-
-You can also use this Regex expression:
-aws_(?{{accountid}}\d+)_(?{{role}}[a-zA-Z0-9+=,.@\-_]+)
-If you don't use a default Regex expression, create on that properly filters your AWS role groups.
-The expression should capture the AWS role name and account ID within two distinct Regex groups named {{role}} and {{accountid}}.
-*/
-func parseAccountIDAndRoleFromGroupName(ctx context.Context, roleRegex string, groupName string) (string, string, bool, error) {
-	// TODO(lauren) move to get app config
-	re, err := regexp.Compile(roleRegex)
-	if err != nil {
-		return "", "", false, fmt.Errorf("error compiling regex '%s': %w", roleRegex, err)
-	}
-	match := re.FindStringSubmatch(groupName)
-	if len(match) != ExpectedGroupNameCaptureGroupsWithGroupFilterForMultipleAWSInstances {
-		return "", "", false, nil
-	}
-	// First element is full string
-	accountId := match[1]
-	role := match[2]
-
-	return accountId, role, true, nil
 }
 
 func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
@@ -660,18 +561,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 
 	var annos annotations.Annotations
 
-	var group *okta.Group
-	var resp *okta.Response
-	var err error
-	if o.connector.awsConfig != nil && o.connector.awsConfig.Enabled {
-		if o.connector.awsConfig.AWSSourceIdentityMode {
-			return nil, annos, nil
-		}
-		group, resp, err = o.getAWSGroup(ctx, resourceId.Resource)
-	} else {
-		group, resp, err = o.GetGroupWithParams(ctx, resourceId.Resource)
-	}
-
+	group, resp, err := o.GetGroupWithParams(ctx, resourceId.Resource)
 	if err != nil {
 		return nil, nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "group not found")
 	}
@@ -687,60 +577,18 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		return nil, annos, err
 	}
 
-	if o.connector.awsConfig == nil || !o.connector.awsConfig.Enabled {
-		groupTrait, err := sdkResource.GetGroupTrait(resource)
-		if err != nil {
-			return nil, annos, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
-		}
-		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
-		if ok && usersCount == 0 {
-			groupAnnos := annotations.Annotations(resource.GetAnnotations())
-			groupAnnos.Update(&v2.SkipGrants{})
-			resource.Annotations = groupAnnos
-		}
+	groupTrait, err := sdkResource.GetGroupTrait(resource)
+	if err != nil {
+		return nil, annos, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
+	}
+	usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+	if ok && usersCount == 0 {
+		groupAnnos := annotations.Annotations(resource.GetAnnotations())
+		groupAnnos.Update(&v2.SkipGrants{})
+		resource.Annotations = groupAnnos
 	}
 
 	return resource, annos, nil
-}
-
-func (o *groupResourceType) getAWSGroup(ctx context.Context, groupId string) (*okta.Group, *okta.Response, error) {
-	awsConfig, err := o.connector.getAWSApplicationConfig(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	if awsConfig.UseGroupMapping {
-		group, resp, err := o.connector.client.Group.GetGroup(ctx, groupId)
-		if err != nil {
-			return nil, nil, handleOktaResponseError(resp, err)
-		}
-
-		_, _, matchesRolePattern, err := parseAccountIDAndRoleFromGroupName(ctx, awsConfig.RoleRegex, group.Profile.Name)
-		if err != nil {
-			return nil, nil, fmt.Errorf("okta-aws-connector: failed to parse account id and role from group name: %w", err)
-		}
-
-		if matchesRolePattern {
-			return group, resp, nil
-		}
-
-		return nil, nil, nil
-	}
-
-	qp := query.NewQueryParams(query.WithExpand("group"))
-	appGroup, resp, err := o.connector.client.Application.GetApplicationGroupAssignment(ctx, o.connector.awsConfig.OktaAppId, groupId, qp)
-	if err != nil {
-		return nil, nil, handleOktaResponseError(resp, err)
-	}
-	appGroupSAMLRoles, err := appGroupSAMLRolesWrapper(ctx, appGroup)
-	if err != nil {
-		return nil, nil, err
-	}
-	oktaGroup, err := embeddedOktaGroupFromAppGroup(appGroup)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-aws-connector: failed to fetch groups from okta: %w", err)
-	}
-	awsConfig.appGroupCache.Store(appGroup.Id, appGroupSAMLRoles)
-	return oktaGroup, resp, nil
 }
 
 func groupBuilder(connector *Okta) *groupResourceType {

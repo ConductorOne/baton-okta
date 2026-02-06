@@ -8,13 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	cfg "github.com/conductorone/baton-okta/pkg/config"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -34,7 +32,6 @@ type Okta struct {
 	ciamConfig          *ciamConfig
 	syncCustomRoles     bool
 	skipSecondaryEmails bool
-	awsConfig           *awsConfig
 	SyncSecrets         bool
 	userRoleCache       sync.Map
 	userFilters         *userFilterConfig
@@ -45,73 +42,10 @@ type ciamConfig struct {
 	EmailDomains []string
 }
 
-type awsConfig struct {
-	Enabled                                               bool
-	OktaAppId                                             string
-	awsAppConfigCacheMutex                                sync.Mutex
-	oktaAWSAppSettings                                    *oktaAWSAppSettings
-	AWSSourceIdentityMode                                 bool
-	AllowGroupToDirectAssignmentConversionForProvisioning bool
-}
-
-/*
-JoinAllRoles: This option enables merging all available roles assigned to a user as follows:
-
-For example, if a user is directly assigned Role1 and Role2 (user to app assignment),
-and the user belongs to group GroupAWS with RoleA and RoleB assigned (group to app assignment), then:
-
-Join all roles OFF: Role1 and Role2 are available upon login to AWS
-Join all roles ON: Role1, Role2, RoleA, and RoleB are available upon login to AWS
-
-UseGroupMapping: Use Group Mapping enables CONNECT OKTA TO MULTIPLE AWS INSTANCES VIA USER GROUPS functionality.
-
-IdentityProviderArnRegex: Uses the "Role Value Pattern" to obtain a regular expression to extract the account id.
-This is only used when UseGroupMapping is not enabled.
-
-Role Value Pattern: This field takes the AWS role and account ID captured within the syntax of your AWS role groups,
-and translates it into the proper syntax AWS requires in Okta’s SAML assertion to allow users to view their accounts and roles when they sign in.
-
-This field should always follow this specific syntax:
-arn:aws:iam::${accountid}:saml-provider/[SAML Provider Name],arn:aws:iam::${accountid}:role/${role}
-*/
-type oktaAWSAppSettings struct {
-	JoinAllRoles                 bool
-	IdentityProviderArn          string
-	RoleRegex                    string
-	UseGroupMapping              bool
-	IdentityProviderArnAccountID string
-	SamlRolesUnionEnabled        bool
-	appGroupCache                sync.Map // group ID to app group cache
-	notAppGroupCache             sync.Map // group IDs that are not app groups
-}
-
 type userFilterConfig struct {
 	includedEmailDomains []string
 	resultsCache         map[string]userFilterResult // user ID to userFilterResult
 	resultsCacheMutex    sync.Mutex
-}
-
-type Config struct {
-	Domain                                                string
-	ApiToken                                              string
-	OktaClientId                                          string
-	OktaPrivateKey                                        string
-	OktaPrivateKeyId                                      string
-	SyncInactiveApps                                      bool
-	OktaProvisioning                                      bool
-	Ciam                                                  bool
-	CiamEmailDomains                                      []string
-	Cache                                                 bool
-	CacheTTI                                              int32
-	CacheTTL                                              int32
-	SyncCustomRoles                                       bool
-	SkipSecondaryEmails                                   bool
-	AWSMode                                               bool
-	AWSOktaAppId                                          string
-	AWSSourceIdentityMode                                 bool
-	AllowGroupToDirectAssignmentConversionForProvisioning bool
-	SyncSecrets                                           bool
-	FilterEmailDomains                                    []string
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -204,14 +138,6 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		}
 	}
 
-	if o.awsConfig.Enabled {
-		resourceSyncer := []connectorbuilder.ResourceSyncerV2{accountBuilder(o), groupBuilder(o)}
-		if !o.awsConfig.AWSSourceIdentityMode {
-			resourceSyncer = append(resourceSyncer, userBuilder(o))
-		}
-		return resourceSyncer
-	}
-
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
 		roleBuilder(o.client, o),
 		userBuilder(o),
@@ -232,30 +158,6 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	}
 
 	return resourceSyncer
-}
-
-func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
-	resourceTypes := []*v2.ResourceType{
-		resourceTypeUser,
-		resourceTypeGroup,
-	}
-	if c.awsConfig != nil && c.awsConfig.Enabled {
-		resourceTypes = append(resourceTypes, resourceTypeAccount)
-	} else {
-		resourceTypes = append(resourceTypes, resourceTypeRole, resourceTypeApp)
-	}
-
-	if c.syncCustomRoles {
-		resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
-	}
-
-	if c.SyncSecrets {
-		resourceTypes = append(resourceTypes, resourceTypeApiToken)
-	}
-
-	return &v2.ResourceTypesServiceListResourceTypesResponse{
-		List: resourceTypes,
-	}, nil
 }
 
 func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
@@ -350,13 +252,6 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 	if respCtx.OktaResponse.StatusCode != http.StatusOK {
 		err := fmt.Errorf("okta-connector: verify returned non-200: '%d'", respCtx.OktaResponse.StatusCode)
 		return nil, err
-	}
-
-	if c.awsConfig != nil && c.awsConfig.Enabled {
-		_, err = c.getAWSApplicationConfig(ctx)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return nil, nil
@@ -466,12 +361,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	}
 
-	awsConfig := &awsConfig{
-		Enabled:               cc.AwsIdentityCenterMode,
-		OktaAppId:             cc.AwsOktaAppId,
-		AWSSourceIdentityMode: cc.AwsSourceIdentityMode,
-		AllowGroupToDirectAssignmentConversionForProvisioning: cc.AwsAllowGroupToDirectAssignmentConversionForProvisioning,
-	}
+	// XXXjag - old okta AWS config parameters have to stay in config, right?!?
 
 	return &Okta{
 		client:              oktaClient,
@@ -486,7 +376,6 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			Enabled:      cc.Ciam,
 			EmailDomains: cc.CiamEmailDomains,
 		},
-		awsConfig: awsConfig,
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 			resultsCache:         make(map[string]userFilterResult),
@@ -503,108 +392,6 @@ func lowerEmailDomains(emailDomains []string) []string {
 	return loweredDomains
 }
 
-func (c *Okta) getAWSApplicationConfig(ctx context.Context) (*oktaAWSAppSettings, error) {
-	if c.awsConfig == nil {
-		return nil, nil
-	}
-	c.awsConfig.awsAppConfigCacheMutex.Lock()
-	defer c.awsConfig.awsAppConfigCacheMutex.Unlock()
-	if c.awsConfig.oktaAWSAppSettings != nil {
-		return c.awsConfig.oktaAWSAppSettings, nil
-	}
-
-	if c.awsConfig.OktaAppId == "" {
-		return nil, fmt.Errorf("okta-connector: no app id set")
-	}
-
-	app, awsAppResp, err := c.client.Application.GetApplication(ctx, c.awsConfig.OktaAppId, okta.NewApplication(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("okta-aws-connector: verify failed to fetch aws app: %w", err)
-	}
-	awsAppRespCtx, err := responseToContext(&pagination.Token{}, awsAppResp)
-	if err != nil {
-		return nil, fmt.Errorf("okta-aws-connector: verify failed to convert get aws app response: %w", err)
-	}
-	if awsAppRespCtx.OktaResponse.StatusCode != http.StatusOK {
-		err := fmt.Errorf("okta-connector: verify returned non-200 for aws app: '%d'", awsAppRespCtx.OktaResponse.StatusCode)
-		return nil, err
-	}
-	oktaApp, err := oktaAppToOktaApplication(ctx, app)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connector: verify failed to convert aws app: %w", err)
-	}
-	if !strings.Contains(oktaApp.Name, "aws") {
-		return nil, fmt.Errorf("okta-aws-connector: okta app '%s' is not an aws app", oktaApp.Name)
-	}
-	if oktaApp.Settings == nil {
-		return nil, fmt.Errorf("okta-aws-connector: settings are not present on okta app")
-	}
-	if oktaApp.Settings.App == nil {
-		return nil, fmt.Errorf("okta-aws-connector: app settings are not present on okta app")
-	}
-	appSettings := *oktaApp.Settings.App
-	useGroupMapping, ok := appSettings["useGroupMapping"]
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'useGroupMapping' app setting is not present on okta app settings")
-	}
-	useGroupMappingBool, ok := useGroupMapping.(bool)
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'useGroupMapping' app setting is not boolean")
-	}
-	groupFilter, ok := appSettings["groupFilter"]
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'groupFilter' app setting is not present on okta app settings")
-	}
-	groupFilterString, ok := groupFilter.(string)
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'groupFilter' app setting is not string")
-	}
-	joinAllRoles, ok := appSettings["joinAllRoles"]
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'joinAllRoles' app setting is not present on okta app settings")
-	}
-	joinAllRolesBool, ok := joinAllRoles.(bool)
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'joinAllRoles' app setting is not boolean")
-	}
-	identityProviderArn, ok := appSettings["identityProviderArn"]
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not present on okta app settings")
-	}
-	identityProviderArnString, ok := identityProviderArn.(string)
-	if !ok {
-		return nil, fmt.Errorf("okta-connector: 'identityProviderArn' app setting is not string")
-	}
-
-	groupFilterRegex := strings.Replace(groupFilterString, `(?{{accountid}}`, `(\d+`, 1)
-	groupFilterRegex = strings.Replace(groupFilterRegex, `(?{{role}}`, `([a-zA-Z0-9+=,.@\\-_]+`, 1)
-
-	// Unescape the groupFilterRegex regex string
-	roleRegex := strings.ReplaceAll(groupFilterRegex, `\\`, `\`)
-
-	// TODO(lauren) only do this if use group mapping not enabled?
-	accountId, err := accountIdFromARN(identityProviderArnString)
-	if err != nil {
-		return nil, err
-	}
-
-	samlRolesUnionEnabled, err := isSamlRolesUnionEnabled(ctx, c.client, c.awsConfig.OktaAppId)
-	if err != nil {
-		return nil, err
-	}
-
-	oktaAWSAppSettings := &oktaAWSAppSettings{
-		JoinAllRoles:                 joinAllRolesBool,
-		IdentityProviderArn:          identityProviderArnString,
-		RoleRegex:                    roleRegex,
-		UseGroupMapping:              useGroupMappingBool,
-		IdentityProviderArnAccountID: accountId,
-		SamlRolesUnionEnabled:        samlRolesUnionEnabled,
-	}
-	c.awsConfig.oktaAWSAppSettings = oktaAWSAppSettings
-	return oktaAWSAppSettings, nil
-}
-
 type AppUserSchema struct {
 	Definitions struct {
 		Base struct {
@@ -615,78 +402,6 @@ type AppUserSchema struct {
 			} `json:"properties"`
 		} `json:"base"`
 	} `json:"definitions"`
-}
-
-func getDefaultAppUserSchema(ctx context.Context, client *okta.Client, appId string) (*AppUserSchema, error) {
-	url := fmt.Sprintf(apiPathDefaultAppSchema, appId)
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var appUserSchema *AppUserSchema
-	_, err = rq.Do(ctx, req, &appUserSchema)
-	if err != nil {
-		return nil, fmt.Errorf("okta-aws-connector: error fetching default application schema: %w", err)
-	}
-	return appUserSchema, nil
-}
-
-func isSamlRolesUnionEnabled(ctx context.Context, client *okta.Client, appId string) (bool, error) {
-	defaultAppSchema, err := getDefaultAppUserSchema(ctx, client, appId)
-	if err != nil {
-		return false, err
-	}
-	if defaultAppSchema.Definitions.Base.Properties.SamlRoles.Union == "ENABLE" {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (a *oktaAWSAppSettings) getAppGroupFromCache(ctx context.Context, groupId string) (*OktaAppGroupWrapper, error) {
-	appGroupCacheVal, ok := a.appGroupCache.Load(groupId)
-	if !ok {
-		return nil, nil
-	}
-	oktaAppGroup, ok := appGroupCacheVal.(*OktaAppGroupWrapper)
-	if !ok {
-		return nil, fmt.Errorf("error converting app group '%s' from cache", groupId)
-	}
-	return oktaAppGroup, nil
-}
-
-func (a *oktaAWSAppSettings) checkIfNotAppGroupFromCache(ctx context.Context, groupId string) (bool, error) {
-	notAppGroupCacheVal, ok := a.notAppGroupCache.Load(groupId)
-	if !ok {
-		return false, nil
-	}
-	notAppGroup, ok := notAppGroupCacheVal.(bool)
-	if !ok {
-		return false, fmt.Errorf("error converting not a app group bool for group '%s' ", groupId)
-	}
-	return notAppGroup, nil
-}
-
-func appGroupSAMLRolesWrapper(ctx context.Context, appGroup *okta.ApplicationGroupAssignment) (*OktaAppGroupWrapper, error) {
-	samlRoles, err := getSAMLRolesFromAppGroupProfile(ctx, appGroup)
-	if err != nil {
-		return nil, err
-	}
-	return &OktaAppGroupWrapper{
-		samlRoles: samlRoles,
-	}, nil
-}
-
-func accountIdFromARN(input string) (string, error) {
-	parsedArn, err := arn.Parse(input)
-	if err != nil {
-		return "", fmt.Errorf("okta-aws-connector: invalid ARN: '%s': %w", input, err)
-	}
-	return parsedArn.AccountID, nil
 }
 
 type userFilterResult struct {

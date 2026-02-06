@@ -18,11 +18,7 @@ type Okta struct {
 	CacheTtl int `mapstructure:"cache-ttl"`
 	SyncCustomRoles bool `mapstructure:"sync-custom-roles"`
 	SkipSecondaryEmails bool `mapstructure:"skip-secondary-emails"`
-	AwsIdentityCenterMode bool `mapstructure:"aws-identity-center-mode"`
-	AwsOktaAppId string `mapstructure:"aws-okta-app-id"`
 	SyncSecrets bool `mapstructure:"sync-secrets"`
-	AwsSourceIdentityMode bool `mapstructure:"aws-source-identity-mode"`
-	AwsAllowGroupToDirectAssignmentConversionForProvisioning bool `mapstructure:"aws-allow-group-to-direct-assignment-conversion-for-provisioning"`
 	FilterEmailDomains []string `mapstructure:"filter-email-domains"`
 }
 
