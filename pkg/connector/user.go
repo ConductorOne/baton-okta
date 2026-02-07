@@ -85,7 +85,7 @@ func (o *userResourceType) List(
 			continue
 		}
 		// for okta v2, we only attempt to filter users by email domains when a list is provided
-		shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+		shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
 		if !shouldInclude {
 			continue
 		}
@@ -550,8 +550,8 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	}
 
 	// for okta v2, we only attempt to filter users by email domains when a list is provided
-	shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
-	if !shouldInclude {
+	// Note: Get() doesn't cache the result since it doesn't have access to session store
+	if !o.connector.shouldIncludeUser(user) {
 		return nil, annos, nil
 	}
 

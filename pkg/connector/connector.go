@@ -13,6 +13,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/session"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -43,8 +45,6 @@ type ciamConfig struct {
 
 type userFilterConfig struct {
 	includedEmailDomains []string
-	resultsCache         map[string]userFilterResult // user ID to userFilterResult
-	resultsCacheMutex    sync.Mutex
 }
 
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
@@ -390,8 +390,6 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		},
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
-			resultsCache:         make(map[string]userFilterResult),
-			resultsCacheMutex:    sync.Mutex{},
 		},
 	}, nil, nil
 }
@@ -416,43 +414,63 @@ type AppUserSchema struct {
 	} `json:"definitions"`
 }
 
-type userFilterResult struct {
-	matchedEmailDomains bool
+var (
+	// Cache namespace prefix for user filter results.
+	userFilterPrefix = sessions.WithPrefix("userFilter")
+)
+
+// getUserFilterFromCache retrieves the user filter result from the session store.
+// Returns (result bool, found bool, error).
+func (o *Okta) getUserFilterFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (bool, bool, error) {
+	result, found, err := session.GetJSON[bool](ctx, ss, userId, userFilterPrefix)
+	if err != nil {
+		return false, false, err
+	} else if !found {
+		return false, false, nil
+	}
+	return result, true, nil
 }
 
-// shouldIncludeUserAndSetCache evaluates and returns if the user meets the filtering criteria,
-// while also writing the result to the user filter cache.
-func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, user *okta.User) bool {
-	// don't bother writing to cache if no email filters are set
+// setUserFilterInCache stores the user filter result in the session store.
+func (o *Okta) setUserFilterInCache(ctx context.Context, ss sessions.SessionStore, userId string, shouldInclude bool) error {
+	return session.SetJSON(ctx, ss, userId, shouldInclude, userFilterPrefix)
+}
+
+// shouldIncludeUser evaluates and returns if the user meets the filtering criteria without caching.
+// This is used in contexts where session store is not available (e.g., Get method).
+func (o *Okta) shouldIncludeUser(user *okta.User) bool {
 	if len(o.userFilters.includedEmailDomains) == 0 {
 		return true
 	}
 
 	userEmails := extractEmailsFromUserProfile(user)
-	shouldInclude := shouldIncludeUserByEmails(userEmails, o.userFilters.includedEmailDomains)
+	return shouldIncludeUserByEmails(userEmails, o.userFilters.includedEmailDomains)
+}
 
-	o.userFilters.resultsCacheMutex.Lock()
-	defer o.userFilters.resultsCacheMutex.Unlock()
-	o.userFilters.resultsCache[user.Id] = userFilterResult{
-		matchedEmailDomains: shouldInclude,
+// shouldIncludeUserAndSetCache evaluates and returns if the user meets the filtering criteria,
+// while also writing the result to the user filter cache.
+func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, ss sessions.SessionStore, user *okta.User) bool {
+	shouldInclude := o.shouldIncludeUser(user)
+
+	// only bother caching if email filters are set
+	if len(o.userFilters.includedEmailDomains) > 0 {
+		_ = o.setUserFilterInCache(ctx, ss, user.Id, shouldInclude)
 	}
 
 	return shouldInclude
 }
 
 // shouldIncludeUserFromCache reads from the user filter cache and returns if the user meets the filtering criteria.
-func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, userId string) (bool, bool) {
+func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (bool, bool) {
 	// don't bother reading from cache if no email filters are set
 	if len(o.userFilters.includedEmailDomains) == 0 {
 		return true, true
 	}
 
-	o.userFilters.resultsCacheMutex.Lock()
-	defer o.userFilters.resultsCacheMutex.Unlock()
-	result, ok := o.userFilters.resultsCache[userId]
-	if !ok {
+	result, found, err := o.getUserFilterFromCache(ctx, ss, userId)
+	if err != nil || !found {
 		return false, false
 	}
 
-	return result.matchedEmailDomains, true
+	return result, true
 }

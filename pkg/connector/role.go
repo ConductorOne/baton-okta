@@ -172,13 +172,13 @@ func (o *roleResourceType) Grants(
 		userId := user.Id
 
 		// check if the user should be included after filtering by email domains
-		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, userId)
+		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, attrs.Session, userId)
 		if !ok {
 			user, _, err := o.connector.client.User.GetUser(ctx, userId)
 			if err != nil {
 				return nil, nil, err
 			}
-			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, user)
+			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
 		}
 		if !shouldInclude {
 			continue

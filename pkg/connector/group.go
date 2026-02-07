@@ -164,7 +164,7 @@ func (o *groupResourceType) Grants(
 			}
 
 			for _, user := range users {
-				shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, user)
+				shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
 				if !shouldInclude {
 					continue
 				}
