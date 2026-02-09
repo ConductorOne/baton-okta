@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
 	cfg "github.com/conductorone/baton-okta/pkg/config"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -16,6 +15,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	mapset "github.com/deckarep/golang-set/v2"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
@@ -34,7 +34,6 @@ type Okta struct {
 	syncCustomRoles     bool
 	skipSecondaryEmails bool
 	SyncSecrets         bool
-	userRoleCache       sync.Map
 	userFilters         *userFilterConfig
 }
 
@@ -417,6 +416,8 @@ type AppUserSchema struct {
 var (
 	// Cache namespace prefix for user filter results.
 	userFilterPrefix = sessions.WithPrefix("userFilter")
+	// Cache namespace prefix for user role assignments.
+	userRolePrefix = sessions.WithPrefix("userRole")
 )
 
 // getUserFilterFromCache retrieves the user filter result from the session store.
@@ -473,4 +474,28 @@ func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, ss sessions.Sessi
 	}
 
 	return result, true
+}
+
+// getUserRolesFromCache retrieves the user's role set from the session store.
+// Returns (roles mapset.Set[string], found bool, error).
+func (o *Okta) getUserRolesFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (mapset.Set[string], bool, error) {
+	roles, found, err := session.GetJSON[[]string](ctx, ss, userId, userRolePrefix)
+	if err != nil {
+		return nil, false, err
+	} else if !found {
+		return nil, false, nil
+	}
+	// Convert slice back to set
+	roleSet := mapset.NewSet[string]()
+	for _, role := range roles {
+		roleSet.Add(role)
+	}
+	return roleSet, true, nil
+}
+
+// setUserRolesInCache stores the user's role set in the session store.
+func (o *Okta) setUserRolesInCache(ctx context.Context, ss sessions.SessionStore, userId string, roles mapset.Set[string]) error {
+	// Convert set to slice for JSON serialization
+	roleSlice := roles.ToSlice()
+	return session.SetJSON(ctx, ss, userId, roleSlice, userRolePrefix)
 }

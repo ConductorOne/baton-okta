@@ -13,6 +13,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -162,7 +163,7 @@ func (o *customRoleResourceType) Grants(
 	for _, user := range usersWithRoleAssignments {
 		userId := user.Id
 
-		userRoles, err := o.getUserRolesFromCache(ctx, userId)
+		userRoles, err := o.getUserRolesFromCache(ctx, attrs.Session, userId)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -183,7 +184,7 @@ func (o *customRoleResourceType) Grants(
 					userRoles.Add(role.Type)
 				}
 			}
-			o.connector.userRoleCache.Store(userId, userRoles)
+			_ = o.connector.setUserRolesInCache(ctx, attrs.Session, userId, userRoles)
 		}
 
 		if userRoles.ContainsOne(resource.Id.GetResource()) {
@@ -228,14 +229,13 @@ func (o *customRoleResourceType) listCustomRoles(
 	return rv, nil
 }
 
-func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, userId string) (mapset.Set[string], error) {
-	appUserRoleCacheVal, ok := o.connector.userRoleCache.Load(userId)
-	if !ok {
-		return nil, nil
+func (o *customRoleResourceType) getUserRolesFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (mapset.Set[string], error) {
+	userRoles, found, err := o.connector.getUserRolesFromCache(ctx, ss, userId)
+	if err != nil {
+		return nil, err
 	}
-	userRoles, ok := appUserRoleCacheVal.(mapset.Set[string])
-	if !ok {
-		return nil, fmt.Errorf("error converting user '%s' roles map from cache", userId)
+	if !found {
+		return nil, nil
 	}
 	return userRoles, nil
 }
