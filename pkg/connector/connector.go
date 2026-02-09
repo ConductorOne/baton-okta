@@ -499,3 +499,43 @@ func (o *Okta) setUserRolesInCache(ctx context.Context, ss sessions.SessionStore
 	roleSlice := roles.ToSlice()
 	return session.SetJSON(ctx, ss, userId, roleSlice, userRolePrefix)
 }
+
+// getUserRolesFromCacheBatch retrieves multiple users' role sets from the session store in a single batch operation.
+// Returns a map of userId -> role set for all found entries.
+func (o *Okta) getUserRolesFromCacheBatch(ctx context.Context, ss sessions.SessionStore, userIds []string) (map[string]mapset.Set[string], error) {
+	if len(userIds) == 0 {
+		return make(map[string]mapset.Set[string]), nil
+	}
+
+	rolesMap, err := session.GetManyJSON[[]string](ctx, ss, userIds, userRolePrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert all slices to sets
+	result := make(map[string]mapset.Set[string], len(rolesMap))
+	for userId, roleSlice := range rolesMap {
+		roleSet := mapset.NewSet[string]()
+		for _, role := range roleSlice {
+			roleSet.Add(role)
+		}
+		result[userId] = roleSet
+	}
+
+	return result, nil
+}
+
+// setUserRolesInCacheBatch stores multiple users' role sets in the session store in a single batch operation.
+func (o *Okta) setUserRolesInCacheBatch(ctx context.Context, ss sessions.SessionStore, userRoles map[string]mapset.Set[string]) error {
+	if len(userRoles) == 0 {
+		return nil
+	}
+
+	// Convert all sets to slices for JSON serialization
+	toCache := make(map[string][]string, len(userRoles))
+	for userId, roleSet := range userRoles {
+		toCache[userId] = roleSet.ToSlice()
+	}
+
+	return session.SetManyJSON(ctx, ss, toCache, userRolePrefix)
+}

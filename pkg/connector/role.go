@@ -168,6 +168,66 @@ func (o *roleResourceType) Grants(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
+	// Step 1: Collect all user IDs upfront
+	userIds := make([]string, 0, len(usersWithRoleAssignments))
+	for _, user := range usersWithRoleAssignments {
+		userIds = append(userIds, user.Id)
+	}
+
+	// Step 2: Batch fetch all cached user roles in one call
+	cachedUserRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, userIds)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to batch fetch user roles from cache: %w", err)
+	}
+
+	// Step 3: Fetch missing roles from API and collect them for batch caching
+	toCache := make(map[string]mapset.Set[string])
+	for _, user := range usersWithRoleAssignments {
+		userId := user.Id
+
+		// Check if roles are already cached
+		if _, found := cachedUserRoles[userId]; found {
+			continue
+		}
+
+		// Fetch roles from API
+		userRoles := mapset.NewSet[string]()
+		roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, role := range roles {
+			if role.Status == roleStatusInactive {
+				continue
+			}
+
+			if role.AssignmentType != "USER" {
+				continue
+			}
+
+			if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
+				continue
+			}
+
+			if role.Type == roleTypeCustom {
+				userRoles.Add(role.Role)
+			} else {
+				userRoles.Add(role.Type)
+			}
+		}
+
+		cachedUserRoles[userId] = userRoles
+		toCache[userId] = userRoles
+	}
+
+	// Step 4: Batch write newly fetched roles
+	if len(toCache) > 0 {
+		if err := o.connector.setUserRolesInCacheBatch(ctx, attrs.Session, toCache); err != nil {
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to batch cache user roles: %w", err)
+		}
+	}
+
+	// Step 5: Process grants with all cached data
 	for _, user := range usersWithRoleAssignments {
 		userId := user.Id
 
@@ -184,39 +244,7 @@ func (o *roleResourceType) Grants(
 			continue
 		}
 
-		userRoles, found, err := o.connector.getUserRolesFromCache(ctx, attrs.Session, userId)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if !found {
-			userRoles = mapset.NewSet[string]()
-			roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
-			if err != nil {
-				return nil, nil, err
-			}
-			for _, role := range roles {
-				if role.Status == roleStatusInactive {
-					continue
-				}
-
-				if role.AssignmentType != "USER" {
-					continue
-				}
-
-				if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
-					continue
-				}
-
-				if role.Type == roleTypeCustom {
-					userRoles.Add(role.Role)
-				} else {
-					userRoles.Add(role.Type)
-				}
-			}
-			_ = o.connector.setUserRolesInCache(ctx, attrs.Session, userId, userRoles)
-		}
-
+		userRoles := cachedUserRoles[userId]
 		if userRoles.ContainsOne(resource.Id.GetResource()) {
 			rv = append(rv, roleGrant(userId, resource))
 		}
