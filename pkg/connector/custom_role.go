@@ -161,16 +161,15 @@ func (o *customRoleResourceType) Grants(
 	}
 
 	// Collect all user IDs upfront, so that we can get all their roles from cache at once.
-	userIds := make([]string, 0, len(usersWithRoleAssignments))
+	userIDs := make([]string, 0, len(usersWithRoleAssignments))
 	for _, user := range usersWithRoleAssignments {
-		userIds = append(userIds, user.Id)
+		userIDs = append(userIDs, user.Id)
 	}
 
 	// Get all cached roles at once (this will only return roles that were found).
-	userRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, userIds)
+	userRoles, err := o.connector.getBatchUserRolesFromCache(ctx, attrs.Session, userIDs)
 	if err != nil {
 		l.Debug("failed to batch fetch user roles from cache", zap.Error(err))
-		err = nil
 
 		userRoles = make(map[string]mapset.Set[string])
 	}
@@ -208,7 +207,7 @@ func (o *customRoleResourceType) Grants(
 
 	// Attempt to add any non-cached roles to the cache now.
 	if len(toCache) > 0 {
-		if err := o.connector.setUserRolesInCacheBatch(ctx, attrs.Session, toCache); err != nil {
+		if err := o.connector.setBatchUserRolesInCache(ctx, attrs.Session, toCache); err != nil {
 			l.Debug("failed to batch set user roles in cache", zap.Error(err))
 			// Continue, either way, the cache is best-effort.
 		}

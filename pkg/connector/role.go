@@ -170,7 +170,7 @@ func (o *roleResourceType) Grants(
 	}
 
 	// Filter users by email domain first to avoid fetching roles for users we'll skip anyway.
-	filteredUserIds := make([]string, 0, len(usersWithRoleAssignments))
+	filteredUserIDs := make([]string, 0, len(usersWithRoleAssignments))
 	for _, user := range usersWithRoleAssignments {
 		userId := user.Id
 
@@ -187,21 +187,20 @@ func (o *roleResourceType) Grants(
 			continue
 		}
 
-		filteredUserIds = append(filteredUserIds, userId)
+		filteredUserIDs = append(filteredUserIDs, userId)
 	}
 
 	// Get all cached roles at once (this will only return roles that were found).
-	userRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, filteredUserIds)
+	userRoles, err := o.connector.getBatchUserRolesFromCache(ctx, attrs.Session, filteredUserIDs)
 	if err != nil {
 		l.Debug("failed to batch fetch user roles from cache", zap.Error(err))
-		err = nil
 
 		userRoles = make(map[string]mapset.Set[string])
 	}
 
 	// Step 3: Fetch missing roles from API and collect for batch caching.
 	toCache := make(map[string]mapset.Set[string])
-	for _, userId := range filteredUserIds {
+	for _, userId := range filteredUserIDs {
 		// If this user's roles are already cached, keep moving.
 		if _, found := userRoles[userId]; found {
 			continue
@@ -238,7 +237,7 @@ func (o *roleResourceType) Grants(
 
 	// Attempt to add any non-cached roles to the cache now.
 	if len(toCache) > 0 {
-		if err := o.connector.setUserRolesInCacheBatch(ctx, attrs.Session, toCache); err != nil {
+		if err := o.connector.setBatchUserRolesInCache(ctx, attrs.Session, toCache); err != nil {
 			l.Debug("failed to batch set user roles in cache", zap.Error(err))
 			// Continue, either way, the cache is best-effort.
 		}

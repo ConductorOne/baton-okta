@@ -471,31 +471,13 @@ func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, ss sessions.Sessi
 	return result, true
 }
 
-// getUserRolesFromCache retrieves a single user's role set from the session store.
-func (o *Okta) getUserRolesFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (mapset.Set[string], bool, error) {
-	roles, found, err := session.GetJSON[[]string](ctx, ss, userId, userRolePrefix)
-	if err != nil {
-		return nil, false, err
-	} else if !found {
-		return nil, false, nil
-	}
-
-	// Convert the slice back to a mapset.Set.
-	return mapset.NewSet[string](roles...), true, nil
-}
-
-// setUserRolesInCache stores a single user's role set in the session store.
-func (o *Okta) setUserRolesInCache(ctx context.Context, ss sessions.SessionStore, userId string, roles mapset.Set[string]) error {
-	return session.SetJSON(ctx, ss, userId, roles.ToSlice(), userRolePrefix)
-}
-
-// getUserRolesFromCacheBatch retrieves multiple users' role sets from the session store in one call.
-func (o *Okta) getUserRolesFromCacheBatch(ctx context.Context, ss sessions.SessionStore, userIds []string) (map[string]mapset.Set[string], error) {
-	if len(userIds) == 0 {
+// getBatchUserRolesFromCache retrieves multiple users' role sets from the session store in one call.
+func (o *Okta) getBatchUserRolesFromCache(ctx context.Context, ss sessions.SessionStore, userIDs []string) (map[string]mapset.Set[string], error) {
+	if len(userIDs) == 0 {
 		return make(map[string]mapset.Set[string]), nil
 	}
 
-	rolesMap, err := session.GetManyJSON[[]string](ctx, ss, userIds, userRolePrefix)
+	rolesMap, err := session.GetManyJSON[[]string](ctx, ss, userIDs, userRolePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +491,7 @@ func (o *Okta) getUserRolesFromCacheBatch(ctx context.Context, ss sessions.Sessi
 	return result, nil
 }
 
-func (o *Okta) setUserRolesInCacheBatch(ctx context.Context, ss sessions.SessionStore, userRoles map[string]mapset.Set[string]) error {
+func (o *Okta) setBatchUserRolesInCache(ctx context.Context, ss sessions.SessionStore, userRoles map[string]mapset.Set[string]) error {
 	if len(userRoles) == 0 {
 		return nil
 	}
