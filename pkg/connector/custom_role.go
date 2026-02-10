@@ -134,6 +134,7 @@ func (o *customRoleResourceType) Grants(
 	resource *v2.Resource,
 	attrs sdkResource.SyncOpAttrs,
 ) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	l := ctxzap.Extract(ctx)
 	token := &attrs.PageToken
 	var rv []*v2.Grant
 
@@ -159,30 +160,30 @@ func (o *customRoleResourceType) Grants(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	// Step 1: Collect all user IDs upfront
+	// Collect all user IDs upfront, so that we can get all their roles from cache at once.
 	userIds := make([]string, 0, len(usersWithRoleAssignments))
 	for _, user := range usersWithRoleAssignments {
 		userIds = append(userIds, user.Id)
 	}
 
-	// Step 2: Batch fetch all cached user roles in one call
-	cachedUserRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, userIds)
+	// Get all cached roles at once (this will only return roles that were found).
+	userRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, userIds)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to batch fetch user roles from cache: %w", err)
 	}
 
-	// Step 3: Fetch missing roles from API and collect them for batch caching
+	// Now, get any remaining user roles (those that aren't in cache)
+	// and keep track of them so that we can try to cache them later.
 	toCache := make(map[string]mapset.Set[string])
 	for _, user := range usersWithRoleAssignments {
 		userId := user.Id
 
-		// Check if roles are already cached
-		if _, found := cachedUserRoles[userId]; found {
+		// If this user's roles are already cached, keep moving.
+		if _, found := userRoles[userId]; found {
 			continue
 		}
 
-		// Fetch roles from API
-		userRoles := mapset.NewSet[string]()
+		newUserRoles := mapset.NewSet[string]()
 		roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
 		if err != nil {
 			return nil, nil, err
@@ -192,30 +193,28 @@ func (o *customRoleResourceType) Grants(
 				continue
 			}
 			if role.Type == roleTypeCustom {
-				userRoles.Add(role.Role)
+				newUserRoles.Add(role.Role)
 			} else {
-				userRoles.Add(role.Type)
+				newUserRoles.Add(role.Type)
 			}
 		}
 
-		cachedUserRoles[userId] = userRoles
-		toCache[userId] = userRoles
+		userRoles[userId] = newUserRoles
+		toCache[userId] = newUserRoles
 	}
 
-	// Step 4: Batch write newly fetched roles
+	// Attempt to add any non-cached roles to the cache now.
 	if len(toCache) > 0 {
 		if err := o.connector.setUserRolesInCacheBatch(ctx, attrs.Session, toCache); err != nil {
-			return nil, nil, fmt.Errorf("okta-connectorv2: failed to batch cache user roles: %w", err)
+			l.Debug("failed to batch cache user roles", zap.Error(err))
+			// Continue, either way, the cache is best-effort.
 		}
 	}
 
-	// Step 5: Process grants with all cached data
-	for _, user := range usersWithRoleAssignments {
-		userId := user.Id
-
-		userRoles := cachedUserRoles[userId]
-		if userRoles.ContainsOne(resource.Id.GetResource()) {
-			rv = append(rv, roleGrant(userId, resource))
+	// Now, evaluate all role grants.
+	for user, roles := range userRoles {
+		if roles.ContainsOne(resource.Id.GetResource()) {
+			rv = append(rv, roleGrant(user, resource))
 		}
 	}
 

@@ -413,15 +413,12 @@ type AppUserSchema struct {
 	} `json:"definitions"`
 }
 
+// Cache namespace prefixes.
 var (
-	// Cache namespace prefix for user filter results.
 	userFilterPrefix = sessions.WithPrefix("userFilter")
-	// Cache namespace prefix for user role assignments.
 	userRolePrefix = sessions.WithPrefix("userRole")
 )
 
-// getUserFilterFromCache retrieves the user filter result from the session store.
-// Returns (result bool, found bool, error).
 func (o *Okta) getUserFilterFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (bool, bool, error) {
 	result, found, err := session.GetJSON[bool](ctx, ss, userId, userFilterPrefix)
 	if err != nil {
@@ -432,13 +429,12 @@ func (o *Okta) getUserFilterFromCache(ctx context.Context, ss sessions.SessionSt
 	return result, true, nil
 }
 
-// setUserFilterInCache stores the user filter result in the session store.
 func (o *Okta) setUserFilterInCache(ctx context.Context, ss sessions.SessionStore, userId string, shouldInclude bool) error {
 	return session.SetJSON(ctx, ss, userId, shouldInclude, userFilterPrefix)
 }
 
-// shouldIncludeUser evaluates and returns if the user meets the filtering criteria without caching.
-// This is used in contexts where session store is not available (e.g., Get method).
+// shouldIncludeUser checks if the user has the right email domain without caching.
+// This should be used when the session store is not available.
 func (o *Okta) shouldIncludeUser(user *okta.User) bool {
 	if len(o.userFilters.includedEmailDomains) == 0 {
 		return true
@@ -448,8 +444,7 @@ func (o *Okta) shouldIncludeUser(user *okta.User) bool {
 	return shouldIncludeUserByEmails(userEmails, o.userFilters.includedEmailDomains)
 }
 
-// shouldIncludeUserAndSetCache evaluates and returns if the user meets the filtering criteria,
-// while also writing the result to the user filter cache.
+// shouldIncludeUserAndSetCache checks if the user has the right email domain while *also* caching the result.
 func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, ss sessions.SessionStore, user *okta.User) bool {
 	shouldInclude := o.shouldIncludeUser(user)
 
@@ -461,7 +456,7 @@ func (o *Okta) shouldIncludeUserAndSetCache(ctx context.Context, ss sessions.Ses
 	return shouldInclude
 }
 
-// shouldIncludeUserFromCache reads from the user filter cache and returns if the user meets the filtering criteria.
+// shouldIncludeUserFromCache checks the cache to see if the user has the right email domain and returns that result (and if found).
 func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (bool, bool) {
 	// don't bother reading from cache if no email filters are set
 	if len(o.userFilters.includedEmailDomains) == 0 {
@@ -476,8 +471,7 @@ func (o *Okta) shouldIncludeUserFromCache(ctx context.Context, ss sessions.Sessi
 	return result, true
 }
 
-// getUserRolesFromCache retrieves the user's role set from the session store.
-// Returns (roles mapset.Set[string], found bool, error).
+// getUserRolesFromCache retrieves a single user's role set from the session store.
 func (o *Okta) getUserRolesFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (mapset.Set[string], bool, error) {
 	roles, found, err := session.GetJSON[[]string](ctx, ss, userId, userRolePrefix)
 	if err != nil {
@@ -485,23 +479,17 @@ func (o *Okta) getUserRolesFromCache(ctx context.Context, ss sessions.SessionSto
 	} else if !found {
 		return nil, false, nil
 	}
-	// Convert slice back to set
-	roleSet := mapset.NewSet[string]()
-	for _, role := range roles {
-		roleSet.Add(role)
-	}
-	return roleSet, true, nil
+
+	// Convert the slice back to a mapset.Set.
+	return mapset.NewSet[string](roles...), true, nil
 }
 
-// setUserRolesInCache stores the user's role set in the session store.
+// setUserRolesInCache stores a single user's role set in the session store.
 func (o *Okta) setUserRolesInCache(ctx context.Context, ss sessions.SessionStore, userId string, roles mapset.Set[string]) error {
-	// Convert set to slice for JSON serialization
-	roleSlice := roles.ToSlice()
-	return session.SetJSON(ctx, ss, userId, roleSlice, userRolePrefix)
+	return session.SetJSON(ctx, ss, userId, roles.ToSlice(), userRolePrefix)
 }
 
-// getUserRolesFromCacheBatch retrieves multiple users' role sets from the session store in a single batch operation.
-// Returns a map of userId -> role set for all found entries.
+// getUserRolesFromCacheBatch retrieves multiple users' role sets from the session store in one call.
 func (o *Okta) getUserRolesFromCacheBatch(ctx context.Context, ss sessions.SessionStore, userIds []string) (map[string]mapset.Set[string], error) {
 	if len(userIds) == 0 {
 		return make(map[string]mapset.Set[string]), nil
@@ -512,26 +500,20 @@ func (o *Okta) getUserRolesFromCacheBatch(ctx context.Context, ss sessions.Sessi
 		return nil, err
 	}
 
-	// Convert all slices to sets
+	// Convert all role sets to mapset.Sets.
 	result := make(map[string]mapset.Set[string], len(rolesMap))
 	for userId, roleSlice := range rolesMap {
-		roleSet := mapset.NewSet[string]()
-		for _, role := range roleSlice {
-			roleSet.Add(role)
-		}
-		result[userId] = roleSet
+		result[userId] = mapset.NewSet[string](roleSlice...)
 	}
 
 	return result, nil
 }
 
-// setUserRolesInCacheBatch stores multiple users' role sets in the session store in a single batch operation.
 func (o *Okta) setUserRolesInCacheBatch(ctx context.Context, ss sessions.SessionStore, userRoles map[string]mapset.Set[string]) error {
 	if len(userRoles) == 0 {
 		return nil
 	}
 
-	// Convert all sets to slices for JSON serialization
 	toCache := make(map[string][]string, len(userRoles))
 	for userId, roleSet := range userRoles {
 		toCache[userId] = roleSet.ToSlice()
