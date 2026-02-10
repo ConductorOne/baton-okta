@@ -169,7 +169,10 @@ func (o *customRoleResourceType) Grants(
 	// Get all cached roles at once (this will only return roles that were found).
 	userRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, userIds)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to batch fetch user roles from cache: %w", err)
+		l.Debug("failed to batch fetch user roles from cache", zap.Error(err))
+		err = nil
+
+		userRoles = make(map[string]mapset.Set[string])
 	}
 
 	// Now, get any remaining user roles (those that aren't in cache)
@@ -206,7 +209,7 @@ func (o *customRoleResourceType) Grants(
 	// Attempt to add any non-cached roles to the cache now.
 	if len(toCache) > 0 {
 		if err := o.connector.setUserRolesInCacheBatch(ctx, attrs.Session, toCache); err != nil {
-			l.Debug("failed to batch cache user roles", zap.Error(err))
+			l.Debug("failed to batch set user roles in cache", zap.Error(err))
 			// Continue, either way, the cache is best-effort.
 		}
 	}

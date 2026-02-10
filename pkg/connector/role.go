@@ -169,24 +169,39 @@ func (o *roleResourceType) Grants(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	// Collect all user IDs upfront, so that we can get all their roles from cache at once.
-	userIds := make([]string, 0, len(usersWithRoleAssignments))
-	for _, user := range usersWithRoleAssignments {
-		userIds = append(userIds, user.Id)
-	}
-
-	// Get all cached roles at once (this will only return roles that were found).
-	userRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, userIds)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to batch fetch user roles from cache: %w", err)
-	}
-
-	// Now, get any remaining user roles (those that aren't in cache)
-	// and keep track of them so that we can try to cache them later.
-	toCache := make(map[string]mapset.Set[string])
+	// Filter users by email domain first to avoid fetching roles for users we'll skip anyway.
+	filteredUserIds := make([]string, 0, len(usersWithRoleAssignments))
 	for _, user := range usersWithRoleAssignments {
 		userId := user.Id
 
+		// Check if the user should be included after filtering by email domains.
+		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, attrs.Session, userId)
+		if !ok {
+			user, _, err := o.connector.client.User.GetUser(ctx, userId)
+			if err != nil {
+				return nil, nil, err
+			}
+			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
+		}
+		if !shouldInclude {
+			continue
+		}
+
+		filteredUserIds = append(filteredUserIds, userId)
+	}
+
+	// Get all cached roles at once (this will only return roles that were found).
+	userRoles, err := o.connector.getUserRolesFromCacheBatch(ctx, attrs.Session, filteredUserIds)
+	if err != nil {
+		l.Debug("failed to batch fetch user roles from cache", zap.Error(err))
+		err = nil
+
+		userRoles = make(map[string]mapset.Set[string])
+	}
+
+	// Step 3: Fetch missing roles from API and collect for batch caching.
+	toCache := make(map[string]mapset.Set[string])
+	for _, userId := range filteredUserIds {
 		// If this user's roles are already cached, keep moving.
 		if _, found := userRoles[userId]; found {
 			continue
@@ -224,31 +239,15 @@ func (o *roleResourceType) Grants(
 	// Attempt to add any non-cached roles to the cache now.
 	if len(toCache) > 0 {
 		if err := o.connector.setUserRolesInCacheBatch(ctx, attrs.Session, toCache); err != nil {
-			l.Debug("failed to batch cache user roles", zap.Error(err))
+			l.Debug("failed to batch set user roles in cache", zap.Error(err))
 			// Continue, either way, the cache is best-effort.
 		}
 	}
 
 	// Now, evaluate all role grants.
-	for _, user := range usersWithRoleAssignments {
-		userId := user.Id
-
-		// check if the user should be included after filtering by email domains
-		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, attrs.Session, userId)
-		if !ok {
-			user, _, err := o.connector.client.User.GetUser(ctx, userId)
-			if err != nil {
-				return nil, nil, err
-			}
-			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
-		}
-		if !shouldInclude {
-			continue
-		}
-
-		userRoles := userRoles[userId]
-		if userRoles.ContainsOne(resource.Id.GetResource()) {
-			rv = append(rv, roleGrant(userId, resource))
+	for user, roles := range userRoles {
+		if roles.ContainsOne(resource.Id.GetResource()) {
+			rv = append(rv, roleGrant(user, resource))
 		}
 	}
 
