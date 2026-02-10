@@ -6,8 +6,10 @@ require (
 	github.com/conductorone/baton-sdk v0.7.16
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.6-conductorone
 	github.com/deckarep/golang-set/v2 v2.7.0
+	github.com/ennyjfrick/ruleguard-logfatal v0.0.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/okta/okta-sdk-golang/v2 v2.20.0
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.1
 	google.golang.org/protobuf v1.36.10
