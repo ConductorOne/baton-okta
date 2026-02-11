@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	cfg "github.com/conductorone/baton-okta/pkg/config"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +34,7 @@ func TestSyncRoles(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -40,16 +42,16 @@ func TestSyncRoles(t *testing.T) {
 
 	r := &roleResourceType{
 		resourceType: resourceTypeRole,
-		client:       cliTest.client,
+		connector:    cliTest,
 	}
 
 	for token != empty {
-		res, tk, _, err := r.List(ctxTest, &v2.ResourceId{}, &pagination.Token{
-			Token: token,
+		res, results, err := r.List(ctxTest, &v2.ResourceId{}, sdkResource.SyncOpAttrs{
+			PageToken: pagination.Token{Token: token},
 		})
 		require.Nil(t, err)
 		require.NotNil(t, res)
-		token = tk
+		token = results.NextPageToken
 	}
 }
 
@@ -58,7 +60,7 @@ func TestUserResourceTypeList(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -68,7 +70,9 @@ func TestUserResourceTypeList(t *testing.T) {
 		resourceType: resourceTypeUser,
 		connector:    cliTest,
 	}
-	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
+	res, _, err := o.List(ctxTest, &v2.ResourceId{}, sdkResource.SyncOpAttrs{
+		PageToken: pagination.Token{},
+	})
 	require.Nil(t, err)
 	require.NotNil(t, res)
 
@@ -87,7 +91,7 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -95,18 +99,18 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 
 	resource := &roleResourceType{
 		resourceType: resourceTypeRole,
-		client:       cliTest.client,
+		connector:    cliTest,
 	}
 	rs, err := getRoleResourceForTesting(ctxTest, "READ_ONLY_ADMIN", "test", "")
 	require.Nil(t, err)
 
 	for token != empty {
-		grants, tk, _, err := resource.Grants(ctxTest, rs, &pagination.Token{
-			Token: token,
+		grants, results, err := resource.Grants(ctxTest, rs, sdkResource.SyncOpAttrs{
+			PageToken: pagination.Token{Token: token},
 		})
 		require.Nil(t, err)
 		require.NotNil(t, grants)
-		token = tk
+		token = results.NextPageToken
 	}
 }
 
@@ -116,7 +120,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -139,7 +143,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	entitlement := getEntitlementForTesting(resource, grantPrincipalType, roleEntitlement)
 	r := &roleResourceType{
 		resourceType: resourceTypeRole,
-		client:       cliTest.client,
+		connector:    cliTest,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -155,7 +159,7 @@ func TestResourcSetRevoke(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -174,6 +178,7 @@ func TestResourcSetRevoke(t *testing.T) {
 	r := &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	// it removes everything associated to custom-role-id
 	_, err = r.Revoke(ctxTest, gr)
@@ -185,7 +190,7 @@ func TestResourceSetsList(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -194,8 +199,11 @@ func TestResourceSetsList(t *testing.T) {
 	o := &resourceSetsResourceType{
 		resourceType: resourceTypeUser,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
-	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
+	res, _, err := o.List(ctxTest, &v2.ResourceId{}, sdkResource.SyncOpAttrs{
+		PageToken: pagination.Token{},
+	})
 	require.Nil(t, err)
 	require.NotNil(t, res)
 }
@@ -205,7 +213,7 @@ func TestResourceSetsBindingsList(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -214,8 +222,12 @@ func TestResourceSetsBindingsList(t *testing.T) {
 	o := &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeUser,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
+		domain:       batonDomain,
 	}
-	res, _, _, err := o.List(ctxTest, &v2.ResourceId{}, &pagination.Token{})
+	res, _, err := o.List(ctxTest, &v2.ResourceId{}, sdkResource.SyncOpAttrs{
+		PageToken: pagination.Token{},
+	})
 	require.Nil(t, err)
 	require.NotNil(t, res)
 }
@@ -225,7 +237,7 @@ func TestResourceSetGrants(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -234,12 +246,15 @@ func TestResourceSetGrants(t *testing.T) {
 	o := &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 
 	rs, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
 	require.Nil(t, err)
 
-	grants, _, _, err := o.Grants(ctxTest, rs, &pagination.Token{})
+	grants, _, err := o.Grants(ctxTest, rs, sdkResource.SyncOpAttrs{
+		PageToken: pagination.Token{},
+	})
 	require.Nil(t, err)
 	require.NotNil(t, grants)
 }
@@ -249,7 +264,7 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -259,12 +274,15 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 
 	rs, err := getResourceSetBindingsResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
 	require.Nil(t, err)
 
-	grants, _, _, err := o.Grants(ctxTest, rs, &pagination.Token{})
+	grants, _, err := o.Grants(ctxTest, rs, sdkResource.SyncOpAttrs{
+		PageToken: pagination.Token{},
+	})
 	require.Nil(t, err)
 	require.NotNil(t, grants)
 }
@@ -274,7 +292,7 @@ func TestListResourceSetsBindings(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -292,7 +310,7 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -317,6 +335,7 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -333,7 +352,7 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 		t.Skip()
 	}
 
-	cliTest, err := getClietForTesting(ctxTest, &Config{
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
 		Domain:   batonDomain,
 		ApiToken: batonApiToken,
 	})
@@ -358,6 +377,7 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
 		client:       cliTest.client,
+		clientV5:     cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -432,35 +452,18 @@ func getEntitlementForTesting(resource *v2.Resource, resourceDisplayName, entitl
 	return ent.NewAssignmentEntitlement(resource, entitlement, options...)
 }
 
-func getClietForTesting(ctx context.Context, cfg *Config) (*Okta, error) {
-	var oktaClient *okta.Client
-	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
+func getClientForTesting(ctx context.Context, oktaCfg *cfg.Okta) (*Okta, error) {
+	opts := &cli.ConnectorOpts{}
+
+	connector, _, err := New(ctx, oktaCfg, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	if cfg.ApiToken != "" && cfg.Domain != "" {
-		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", cfg.Domain)),
-			okta.WithToken(cfg.ApiToken),
-			okta.WithHttpClientPtr(client),
-			okta.WithCache(cfg.Cache),
-			okta.WithCacheTti(cfg.CacheTTI),
-			okta.WithCacheTtl(cfg.CacheTTL),
-		)
-		if err != nil {
-			return nil, err
-		}
+	oktaConnector, ok := connector.(*Okta)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast connector to *Okta")
 	}
 
-	return &Okta{
-		client:           oktaClient,
-		domain:           cfg.Domain,
-		apiToken:         cfg.ApiToken,
-		syncInactiveApps: cfg.SyncInactiveApps,
-		ciamConfig: &ciamConfig{
-			Enabled:      cfg.Ciam,
-			EmailDomains: cfg.CiamEmailDomains,
-		},
-	}, nil
+	return oktaConnector, nil
 }
