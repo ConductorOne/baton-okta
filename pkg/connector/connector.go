@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 
@@ -15,8 +16,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
-	mapset "github.com/deckarep/golang-set/v2"
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
@@ -274,9 +275,8 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-// safeCacheInt32 converts int to int32 with bounds checking.
 func safeCacheInt32(val int) (int32, error) {
-	if val > 2147483647 || val < 0 {
+	if val > math.MaxInt32 || val < 0 {
 		return 0, fmt.Errorf("value %d is out of range for int32", val)
 	}
 	return int32(val), nil
