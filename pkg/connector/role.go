@@ -518,6 +518,8 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 					zap.String("ErrorCode", errOkta.ErrorCode),
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
+
+				return annotations.New(&v2.GrantAlreadyExists{}), nil
 			}
 
 			return nil, fmt.Errorf("okta-connector: %v", errOkta)
