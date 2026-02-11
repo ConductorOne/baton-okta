@@ -551,14 +551,22 @@ func getGroupAppsCount(group *okta.Group) (float64, bool) {
 }
 
 func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
-	return sdkEntitlement.NewAssignmentEntitlement(resource, "member",
+	opts := []sdkEntitlement.EntitlementOption{
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 			Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 		}),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser),
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Group Member", resource.DisplayName)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s group in Okta", resource.DisplayName)),
-	)
+	}
+
+	rawId := &v2.RawId{}
+	annos := annotations.Annotations(resource.GetAnnotations())
+	if ok, err := annos.Pick(rawId); err == nil && ok {
+		opts = append(opts, sdkEntitlement.WithAnnotation(&v2.RawId{Id: rawId.GetId()}))
+	}
+
+	return sdkEntitlement.NewAssignmentEntitlement(resource, "member", opts...)
 }
 
 func groupGrant(resource *v2.Resource, user *okta.User) *v2.Grant {
