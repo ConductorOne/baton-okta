@@ -118,10 +118,6 @@ Available Commands:
 
 Flags:
       --api-token string                                                   The API token for the service account ($BATON_API_TOKEN)
-      --aws-allow-group-to-direct-assignment-conversion-for-provisioning   Whether to allow group to direct assignment conversion when provisioning ($BATON_AWS_ALLOW_GROUP_TO_DIRECT_ASSIGNMENT_CONVERSION_FOR_PROVISIONING)
-      --aws-identity-center-mode                                           Whether to run in AWS Identity center mode or not. In AWS mode, only samlRoles for groups and the users assigned to groups are synced ($BATON_AWS_IDENTITY_CENTER_MODE)
-      --aws-okta-app-id string                                             The Okta app id for the AWS application ($BATON_AWS_OKTA_APP_ID)
-      --aws-source-identity-mode                                           Enable AWS source identity mode. When set, user and group identities are loaded from the source connector .c1z file ($BATON_AWS_SOURCE_IDENTITY_MODE)
       --cache                                                              Enable response cache ($BATON_CACHE) (default true)
       --cache-tti int                                                      Response cache cleanup interval in seconds ($BATON_CACHE_TTI) (default 60)
       --cache-ttl int                                                      Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
