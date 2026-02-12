@@ -511,13 +511,15 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			}
 
 			if errOkta.ErrorCode == alreadyAssignedRole {
-				l.Warn(
+				l.Debug(
 					"okta-connector: The role specified is already assigned to the user",
 					zap.String("principal_id", principal.Id.String()),
 					zap.String("principal_type", principal.Id.ResourceType),
 					zap.String("ErrorCode", errOkta.ErrorCode),
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
+
+				return annotations.New(&v2.GrantAlreadyExists{}), nil
 			}
 
 			return nil, fmt.Errorf("okta-connector: %v", errOkta)
