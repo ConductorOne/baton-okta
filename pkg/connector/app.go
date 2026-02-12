@@ -104,10 +104,19 @@ func (o *appResourceType) Entitlements(
 	token *pagination.Token,
 ) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access",
+
+	opts := []sdkEntitlement.EntitlementOption{
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Access", resource.DisplayName)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName)),
-	))
+	}
+
+	rawId := &v2.RawId{}
+	annos := annotations.Annotations(resource.GetAnnotations())
+	if ok, err := annos.Pick(rawId); err == nil && ok {
+		opts = append(opts, sdkEntitlement.WithAnnotation(&v2.RawId{Id: rawId.GetId()}))
+	}
+
+	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access", opts...))
 
 	return rv, "", nil, nil
 }
