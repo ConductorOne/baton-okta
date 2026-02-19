@@ -35,29 +35,28 @@ func (o *customRoleResourceType) List(
 	attrs sdkResource.SyncOpAttrs,
 ) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
 	token := &attrs.PageToken
-	var nextPageToken string
 	bag, _, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
-	rv, err = o.listCustomRoles(ctx, resourceID, token)
+	rv, nextPageToken, annos, err := o.listCustomRoles(ctx, resourceID, token)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
+		return nil, &sdkResource.SyncOpResults{Annotations: annos}, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
 	}
 
 	err = bag.Next(nextPageToken)
 	if err != nil {
-		return nil, nil, err
+		return nil, &sdkResource.SyncOpResults{Annotations: annos}, err
 	}
 
 	nextPageToken, err = bag.Marshal()
 	if err != nil {
-		return nil, nil, err
+		return nil, &sdkResource.SyncOpResults{Annotations: annos}, err
 	}
 
-	return rv, &sdkResource.SyncOpResults{NextPageToken: nextPageToken}, nil
+	return rv, &sdkResource.SyncOpResults{Annotations: annos, NextPageToken: nextPageToken}, nil
 }
 
 func (o *customRoleResourceType) Entitlements(
@@ -232,29 +231,34 @@ func (o *customRoleResourceType) listCustomRoles(
 	ctx context.Context,
 	_ *v2.ResourceId,
 	token *pagination.Token,
-) ([]*v2.Resource, error) {
+) ([]*v2.Resource, string, annotations.Annotations, error) {
 	_, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id})
 	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	qp := queryParams(token.Size, page)
-	roles, _, err := listOktaIamCustomRoles(ctx, o.connector.client, token, qp)
+	roles, respCtx, err := listOktaIamCustomRoles(ctx, o.connector.client, token, qp)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
+		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", err)
+	}
+
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
+	if err != nil {
+		return nil, "", annos, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	rv := make([]*v2.Resource, 0)
 	for _, role := range roles {
 		resource, err := roleResource(ctx, role, resourceTypeCustomRole)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
+			return nil, "", annos, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 		}
 
 		rv = append(rv, resource)
 	}
 
-	return rv, nil
+	return rv, nextPage, annos, nil
 }
 
 func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
