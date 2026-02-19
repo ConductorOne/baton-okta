@@ -11,6 +11,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
@@ -21,12 +22,13 @@ type ciamResourceBuilder struct {
 	skipSecondaryEmails bool
 }
 
-func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attrs sdkResource.SyncOpAttrs) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	pToken := &attrs.PageToken
 	l := ctxzap.Extract(ctx)
 	bag := &pagination.Bag{}
 	err := bag.Unmarshal(pToken.Token)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	if bag.Current() == nil {
@@ -47,16 +49,16 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 		if current.ResourceID != "" {
 			oktaUser, resp, err := o.client.User.GetUser(ctx, current.ResourceID)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to get user: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to get user: %w", err)
 			}
 			_, annos, err = parseResp(resp)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
 
 			resource, err := userResource(ctx, oktaUser, o.skipSecondaryEmails)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create user resource: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to create user resource: %w", err)
 			}
 			rv = append(rv, resource)
 			bag.Pop()
@@ -66,19 +68,19 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 				// We don't have permissions to fetch role assignments, so return an empty list
 				if errors.Is(err, errMissingRolePermissions) {
 					l.Warn("okta-connectorv2: missing role permissions")
-					return nil, "", nil, nil
+					return nil, nil, nil
 				}
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 			}
 
 			nextPage, respAnnos, err := parseAdminListResp(respCtx.OktaResponse)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 			}
 
 			err = bag.Next(nextPage)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 			}
 
 			annos = respAnnos
@@ -96,7 +98,7 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 		for _, role := range standardRoleTypes {
 			resource, err := roleResource(ctx, role, resourceTypeRole)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 			}
 
 			rv = append(rv, resource)
@@ -106,13 +108,13 @@ func (o *ciamResourceBuilder) List(ctx context.Context, parentResourceID *v2.Res
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
-func (o *ciamResourceBuilder) Entitlements(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (o *ciamResourceBuilder) Entitlements(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	role := standardRoleFromType(resource.Id.GetResource())
 
@@ -127,33 +129,34 @@ func (o *ciamResourceBuilder) Entitlements(ctx context.Context, resource *v2.Res
 
 	rv = append(rv, en)
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
-func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	pToken := &attrs.PageToken
 	var rv []*v2.Grant
 	bag, page, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	adminFlags, respCtx, err := listAdministratorRoleFlags(ctx, o.client, pToken, page)
 	if err != nil {
 		// We don't have permissions to fetch role assignments, so return an empty list
 		if errors.Is(err, errMissingRolePermissions) {
-			return nil, "", nil, nil
+			return nil, nil, nil
 		}
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
 	nextPage, annos, err := parseAdminListResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, administratorRoleFlag := range adminFlags {
@@ -165,10 +168,10 @@ func (o *ciamResourceBuilder) Grants(ctx context.Context, resource *v2.Resource,
 
 	nextPageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, nextPageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: nextPageToken, Annotations: annos}, nil
 }
 
 func (g *ciamResourceBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

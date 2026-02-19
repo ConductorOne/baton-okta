@@ -9,7 +9,6 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -71,41 +70,42 @@ func resourceSetBindingsResource(ctx context.Context, rs *oktav5.ResourceSet, pa
 		sdkResource.WithAppTrait(sdkResource.WithAppProfile(profile)),
 	)
 }
-func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, attrs sdkResource.SyncOpAttrs) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	pToken := &attrs.PageToken
 	var rv []*v2.Resource
 	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	qp := queryParams(pToken.Size, page)
 	resourceSets, respCtx, err := listResourceSets(ctx, rsb.client, pToken, qp)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list resource-sets: %w", err)
 	}
 
-	nextPage, _, err := parseResp(respCtx.OktaResponse)
+	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, resourceSet := range resourceSets {
 		resourceSetCpy := resourceSet
 		roles, _, err := listBindings(ctx, rsb.client, resourceSetCpy.ID, nil)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, role := range roles {
 			resourceSetCpy.ID = getResourceSetBindingID(resourceSet.ID, role.ID)
 			resource, err := resourceSetsBindingsResource(ctx, &resourceSetCpy, nil)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to create resource-set-binding: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to create resource-set-binding: %w", err)
 			}
 
 			rv = append(rv, resource)
@@ -114,17 +114,17 @@ func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentRes
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, nil, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func getResourceSetBindingID(resourceSetID string, roleID string) string {
 	return resourceSetID + ":" + roleID
 }
 
-func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ sdkResource.SyncOpAttrs) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	return []*v2.Entitlement{
 		sdkEntitlement.NewAssignmentEntitlement(
 			resource,
@@ -136,7 +136,7 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding Member", resource.DisplayName)),
 			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set-binding member in Okta", resource.DisplayName)),
 		),
-	}, "", nil, nil
+	}, nil, nil
 }
 
 // listMembersOfBinding. List all Role Resource Set Binding Members
@@ -224,14 +224,15 @@ func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx conte
 	return resp, nil
 }
 
-func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	pToken := &attrs.PageToken
 	var (
 		rv        []*v2.Grant
 		principal *v2.Resource
 	)
 	bag, _, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	resourceIDs := strings.Split(resource.Id.Resource, ":")
@@ -239,7 +240,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	customRoleId := resourceIDs[lastItem]
 	members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	for _, member := range members {
@@ -267,15 +268,15 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 
 	err = bag.Next(bag.PageToken())
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, nil, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken}, nil
 }
 
 func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
