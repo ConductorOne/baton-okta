@@ -1,95 +1,95 @@
 {
-  "@type":  "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
-  "resourceTypeCapabilities":  [
+  "@type": "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
+  "resourceTypeCapabilities": [
     {
-      "resourceType":  {
-        "id":  "app",
-        "displayName":  "App",
-        "traits":  [
+      "resourceType": {
+        "id": "app",
+        "displayName": "App",
+        "traits": [
           "TRAIT_APP"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "app"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "app"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_TARGETED_SYNC",
         "CAPABILITY_PROVISION"
       ],
-      "permissions":  {}
+      "permissions": {}
     },
     {
-      "resourceType":  {
-        "id":  "group",
-        "displayName":  "Group",
-        "traits":  [
+      "resourceType": {
+        "id": "group",
+        "displayName": "Group",
+        "traits": [
           "TRAIT_GROUP"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "group"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "group"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_TARGETED_SYNC",
         "CAPABILITY_PROVISION"
       ],
-      "permissions":  {}
+      "permissions": {}
     },
     {
-      "resourceType":  {
-        "id":  "role",
-        "displayName":  "Role",
-        "traits":  [
+      "resourceType": {
+        "id": "role",
+        "displayName": "Role",
+        "traits": [
           "TRAIT_ROLE"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "role"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "role"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_TARGETED_SYNC",
         "CAPABILITY_PROVISION"
       ],
-      "permissions":  {}
+      "permissions": {}
     },
     {
-      "resourceType":  {
-        "id":  "user",
-        "displayName":  "User",
-        "traits":  [
+      "resourceType": {
+        "id": "user",
+        "displayName": "User",
+        "traits": [
           "TRAIT_USER"
         ],
-        "annotations":  [
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id":  "user"
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "user"
           },
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_TARGETED_SYNC",
         "CAPABILITY_ACCOUNT_PROVISIONING"
       ],
-      "permissions":  {}
+      "permissions": {}
     }
   ],
-  "connectorCapabilities":  [
+  "connectorCapabilities": [
     "CAPABILITY_PROVISION",
     "CAPABILITY_SYNC",
     "CAPABILITY_ACCOUNT_PROVISIONING",
@@ -98,13 +98,13 @@
     "CAPABILITY_EVENT_FEED_V2",
     "CAPABILITY_SERVICE_MODE_TARGETED_SYNC"
   ],
-  "credentialDetails":  {
-    "capabilityAccountProvisioning":  {
-      "supportedCredentialOptions":  [
+  "credentialDetails": {
+    "capabilityAccountProvisioning": {
+      "supportedCredentialOptions": [
         "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD",
         "CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD"
       ],
-      "preferredCredentialOption":  "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD"
+      "preferredCredentialOption": "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD"
     }
   }
 }
