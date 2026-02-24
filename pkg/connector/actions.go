@@ -9,7 +9,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -71,20 +70,14 @@ var enableUser = &v2.BatonActionSchema{
 	},
 }
 
-func (o *Okta) RegisterActionManager(ctx context.Context) (connectorbuilder.CustomActionManager, error) {
-	actionManager := actions.NewActionManager(ctx)
-
-	err := actionManager.RegisterAction(ctx, enableUser.Name, enableUser, o.enableUser)
-	if err != nil {
-		return nil, err
+func (o *Okta) GlobalActions(ctx context.Context, registry actions.ActionRegistry) error {
+	if err := registry.Register(ctx, enableUser, o.enableUser); err != nil {
+		return err
 	}
-
-	err = actionManager.RegisterAction(ctx, disableUser.Name, disableUser, o.disableUser)
-	if err != nil {
-		return nil, err
+	if err := registry.Register(ctx, disableUser, o.disableUser); err != nil {
+		return err
 	}
-
-	return actionManager, nil
+	return nil
 }
 
 // enableUser "unsuspends" the subject Okta account.
