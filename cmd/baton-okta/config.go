@@ -32,6 +32,11 @@ var (
 		"filter-email-domains",
 		field.WithDescription("Only sync users with primary email addresses that match at least one of the provided domains. When unset or empty, all users will be synced."),
 	)
+	skipAppGroups = field.BoolField(
+		"skip-app-groups",
+		field.WithDescription("Skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps)"),
+		field.WithDefaultValue(false),
+	)
 )
 
 var relationships = []field.SchemaFieldRelationship{
@@ -65,4 +70,5 @@ var configuration = field.NewConfiguration([]field.SchemaField{
 	awsSourceIdentityMode,
 	awsAllowGroupToDirectAssignmentConversionForProvisioning,
 	filterEmailDomains,
+	skipAppGroups,
 }, field.WithConstraints(relationships...))
