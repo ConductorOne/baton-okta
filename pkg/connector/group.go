@@ -27,6 +27,7 @@ import (
 const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
 const builtInGroupType = "BUILT_IN"
+const appGroupType = "APP_GROUP"
 const apiPathGetGroupFmt = "/api/v1/groups/%s"
 
 type groupResourceType struct {
@@ -77,7 +78,12 @@ func (o *groupResourceType) List(
 		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
+	l := ctxzap.Extract(ctx)
 	for _, group := range groups {
+		if o.connector.skipAppGroups && group.Type == appGroupType {
+			l.Debug("okta-connectorv2: skipping APP_GROUP type group", zap.String("group_id", group.Id))
+			continue
+		}
 		resource, err := o.groupResource(ctx, group)
 		if err != nil {
 			return nil, "", nil, err

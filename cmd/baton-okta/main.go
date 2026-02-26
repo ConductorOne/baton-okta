@@ -56,6 +56,7 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		AllowGroupToDirectAssignmentConversionForProvisioning: v.GetBool("aws-allow-group-to-direct-assignment-conversion-for-provisioning"),
 		SyncSecrets:        v.GetBool("sync-secrets"),
 		FilterEmailDomains: v.GetStringSlice("filter-email-domains"),
+		SkipAppGroups:      v.GetBool("skip-app-groups"),
 	}
 
 	cb, err := connector.New(ctx, ccfg)
