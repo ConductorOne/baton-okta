@@ -57,34 +57,35 @@ func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEma
 func (o *appResourceType) List(
 	ctx context.Context,
 	resourceID *v2.ResourceId,
-	token *pagination.Token,
-) ([]*v2.Resource, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	var rv []*v2.Resource
 	qp := queryParams(token.Size, page)
 	apps, respCtx, err := listApps(ctx, o.client, o.syncInactiveApps, token, qp)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
 	err = bag.Next(nextPage)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
 	for _, app := range apps {
 		resource, err := appResource(ctx, app)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		rv = append(rv, resource)
@@ -92,38 +93,39 @@ func (o *appResourceType) List(
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func (o *appResourceType) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access",
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Access", resource.DisplayName)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName)),
 	))
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 func (o *appResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	token *pagination.Token,
-) ([]*v2.Grant, string, annotations.Annotations, error) {
+	attrs sdkResource.SyncOpAttrs,
+) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
+	token := &attrs.PageToken
 	var (
 		rv    []*v2.Grant
 		annos annotations.Annotations
 	)
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	switch bag.ResourceID() {
@@ -138,23 +140,23 @@ func (o *appResourceType) Grants(
 	case appGrantGroup:
 		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, token, bag, page)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app group grants: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list app group grants: %w", err)
 		}
 	case appGrantUser:
 		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, token, bag, page)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("okta-connectorv2: failed to list app users grants: %w", err)
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list app users grants: %w", err)
 		}
 	default:
-		return nil, "", nil, fmt.Errorf("okta-connectorv2: unexpected resource for app: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: unexpected resource for app: %w", err)
 	}
 
 	pageToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, pageToken, annos, nil
+	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
 func (o *appResourceType) listAppGroupGrants(
