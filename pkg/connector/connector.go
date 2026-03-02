@@ -31,17 +31,11 @@ type Okta struct {
 	domain              string
 	apiToken            string
 	syncInactiveApps    bool
-	ciamConfig          *ciamConfig
 	syncCustomRoles     bool
 	skipSecondaryEmails bool
 	skipAppGroups       bool
 	SyncSecrets         bool
 	userFilters         *userFilterConfig
-}
-
-type ciamConfig struct {
-	Enabled      bool
-	EmailDomains []string
 }
 
 type userFilterConfig struct {
@@ -125,13 +119,6 @@ var (
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
-	if o.ciamConfig.Enabled {
-		return []connectorbuilder.ResourceSyncerV2{
-			ciamUserBuilder(o),
-			ciamBuilder(o.client, o.skipSecondaryEmails),
-		}
-	}
-
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
 		roleBuilder(o.client, o),
 		userBuilder(o),
@@ -155,24 +142,24 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 }
 
 func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
-       resourceTypes := []*v2.ResourceType{
-               resourceTypeUser,
-               resourceTypeGroup,
-               resourceTypeRole,
-               resourceTypeApp,
-       }
+	resourceTypes := []*v2.ResourceType{
+		resourceTypeUser,
+		resourceTypeGroup,
+		resourceTypeRole,
+		resourceTypeApp,
+	}
 
-       if c.syncCustomRoles {
-               resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
-       }
+	if c.syncCustomRoles {
+		resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
+	}
 
-       if c.SyncSecrets {
-               resourceTypes = append(resourceTypes, resourceTypeApiToken)
-       }
+	if c.SyncSecrets {
+		resourceTypes = append(resourceTypes, resourceTypeApiToken)
+	}
 
-       return &v2.ResourceTypesServiceListResourceTypesResponse{
-               List: resourceTypes,
-       }, nil
+	return &v2.ResourceTypesServiceListResourceTypesResponse{
+		List: resourceTypes,
+	}, nil
 }
 
 func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
@@ -305,7 +292,15 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 
 	var oktaClientV5 *oktav5.APIClient
 
-	if cc.ApiToken != "" && cc.Domain != "" {
+	authMethod := ""
+	if opts != nil {
+		authMethod = opts.SelectedAuthMethod
+	}
+
+	switch authMethod {
+	default:
+		fallthrough
+	case cfg.ApiTokenGroup:
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			okta.WithToken(cc.ApiToken),
@@ -331,12 +326,8 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			return nil, nil, err
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
-	}
-
-	if cc.OktaClientId != "" && cc.OktaPrivateKey != "" && cc.Domain != "" {
-		if cc.OktaProvisioning {
-			scopes = append(scopes, provisioningScopes...)
-		}
+	case cfg.PrivateKeyGroup:
+		scopes = append(scopes, provisioningScopes...)
 
 		if cc.SyncSecrets {
 			scopes = append(scopes, "okta.apiTokens.read")
@@ -385,10 +376,6 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		skipAppGroups:       cc.SkipAppGroups,
 		SyncSecrets:         cc.SyncSecrets,
-		ciamConfig: &ciamConfig{
-			Enabled:      cc.Ciam,
-			EmailDomains: cc.CiamEmailDomains,
-		},
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 		},
@@ -418,7 +405,7 @@ type AppUserSchema struct {
 // Cache namespace prefixes.
 var (
 	userFilterPrefix = sessions.WithPrefix("userFilter")
-	userRolePrefix = sessions.WithPrefix("userRole")
+	userRolePrefix   = sessions.WithPrefix("userRole")
 )
 
 func (o *Okta) getUserFilterFromCache(ctx context.Context, ss sessions.SessionStore, userId string) (bool, bool, error) {

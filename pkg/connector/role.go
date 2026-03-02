@@ -2,12 +2,9 @@ package connector
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"slices"
-	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -22,7 +19,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var errMissingRolePermissions = errors.New("okta-connectorv2: missing role permissions")
 var alreadyAssignedRole = "E0000090"
 
 // Roles that can only be assigned at the org-wide scope.
@@ -259,23 +255,6 @@ func (o *roleResourceType) Grants(
 	return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 }
 
-func userHasRoleAccess(administratorRoleFlags *administratorRoleFlags, resource *v2.Resource) bool {
-	roleName := strings.ReplaceAll(strings.ToLower(resource.Id.GetResource()), "_", "")
-	for _, role := range administratorRoleFlags.RolesFromIndividualAssignments {
-		if strings.ToLower(role) == roleName {
-			return true
-		}
-	}
-
-	for _, role := range administratorRoleFlags.RolesFromGroup {
-		if strings.ToLower(role) == roleName {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (o *roleResourceType) listSystemRoles(
 	ctx context.Context,
 	_ *v2.ResourceId,
@@ -374,69 +353,6 @@ func getOrgSettings(ctx context.Context, client *okta.Client, token *pagination.
 	}
 
 	return orgSettings, respCtx, nil
-}
-
-type administratorRoleFlags struct {
-	UserId                           string   `json:"userId"`
-	SuperAdmin                       bool     `json:"superAdmin"`
-	OrgAdmin                         bool     `json:"orgAdmin"`
-	ReadOnlyAdmin                    bool     `json:"readOnlyAdmin"`
-	MobileAdmin                      bool     `json:"mobileAdmin"`
-	AppAdmin                         bool     `json:"appAdmin"`
-	HelpDeskAdmin                    bool     `json:"helpDeskAdmin"`
-	GroupMembershipAdmin             bool     `json:"groupMembershipAdmin"`
-	ApiAccessManagementAdmin         bool     `json:"apiAccessManagementAdmin"`
-	UserAdmin                        bool     `json:"userAdmin"`
-	ReportAdmin                      bool     `json:"reportAdmin"`
-	ForAllApps                       bool     `json:"forAllApps"`
-	ForAllUserAdminGroups            bool     `json:"forAllUserAdminGroups"`
-	ForAllHelpDeskAdminGroups        bool     `json:"forAllHelpDeskAdminGroups"`
-	ForAllGroupMembershipAdminGroups bool     `json:"forAllGroupMembershipAdminGroups"`
-	RolesFromIndividualAssignments   []string `json:"rolesFromIndividualAssignments"`
-	RolesFromGroup                   []string `json:"rolesFromGroup"`
-}
-
-func listAdministratorRoleFlags(
-	ctx context.Context,
-	client *okta.Client,
-	token *pagination.Token,
-	encodedQueryParams string,
-) ([]*administratorRoleFlags, *responseContext, error) {
-	reqUrl, err := url.Parse(apiPathListAdministrators)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if encodedQueryParams != "" {
-		reqUrl.RawQuery = encodedQueryParams
-	}
-
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var adminFlags []*administratorRoleFlags
-	resp, err := rq.Do(ctx, req, &adminFlags)
-	if err != nil {
-		// If we don't have access to the role endpoint, we should just return nil
-		if resp.StatusCode == http.StatusForbidden {
-			return nil, nil, errMissingRolePermissions
-		}
-
-		return nil, nil, handleOktaResponseError(resp, err)
-	}
-
-	respCtx, err := responseToContext(token, resp)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return adminFlags, respCtx, nil
 }
 
 func standardRoleFromType(roleType string) *okta.Role {

@@ -37,9 +37,8 @@ const (
 )
 
 type userResourceType struct {
-	resourceType     *v2.ResourceType
-	ciamEmailFilters []string
-	connector        *Okta
+	resourceType *v2.ResourceType
+	connector    *Okta
 }
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
@@ -53,10 +52,6 @@ func (o *userResourceType) List(
 ) ([]*v2.Resource, *resource.SyncOpResults, error) {
 	token := &attrs.PageToken
 
-	// If we are in ciam mode, and there are no email filters specified, don't sync users.
-	if o.connector.ciamConfig.Enabled && len(o.ciamEmailFilters) == 0 {
-		return nil, nil, nil
-	}
 	bag, page, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
@@ -81,9 +76,6 @@ func (o *userResourceType) List(
 	}
 
 	for _, user := range users {
-		if o.connector.ciamConfig.Enabled && !shouldIncludeOktaUser(user, o.ciamEmailFilters) {
-			continue
-		}
 		// for okta v2, we only attempt to filter users by email domains when a list is provided
 		shouldInclude := o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
 		if !shouldInclude {
@@ -171,11 +163,6 @@ func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
 	}
 
 	return userEmails
-}
-
-func shouldIncludeOktaUser(u *okta.User, emailDomainFilters []string) bool {
-	userEmails := extractEmailsFromUserProfile(u)
-	return shouldIncludeUserByEmails(userEmails, emailDomainFilters)
 }
 
 func shouldIncludeOktaAppUser(u *okta.AppUser, emailDomainFilters []string) bool {
@@ -266,18 +253,6 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 		return nil, nil, err
 	}
 	return oktaUsers, respCtx, nil
-}
-
-func ciamUserBuilder(connector *Okta) *userResourceType {
-	var loweredFilters []string
-	for _, ef := range connector.ciamConfig.EmailDomains {
-		loweredFilters = append(loweredFilters, strings.ToLower(ef))
-	}
-	return &userResourceType{
-		resourceType:     resourceTypeUser,
-		ciamEmailFilters: loweredFilters,
-		connector:        connector,
-	}
 }
 
 func userBuilder(connector *Okta) *userResourceType {
@@ -524,11 +499,6 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 
 	var annos annotations.Annotations
 
-	// If we are in ciam mode, and there are no email filters specified, don't sync user.
-	if o.connector.ciamConfig.Enabled && len(o.ciamEmailFilters) == 0 {
-		return nil, nil, nil
-	}
-
 	user, respCtx, err := getUser(ctx, o.connector.client, resourceId.Resource)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to find user: %w", err)
@@ -542,10 +512,6 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	}
 
 	if user == nil {
-		return nil, annos, nil
-	}
-
-	if o.connector.ciamConfig.Enabled && !shouldIncludeOktaUser(user, o.ciamEmailFilters) {
 		return nil, annos, nil
 	}
 
