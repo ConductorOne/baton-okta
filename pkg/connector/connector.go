@@ -31,16 +31,10 @@ type Okta struct {
 	domain              string
 	apiToken            string
 	syncInactiveApps    bool
-	ciamConfig          *ciamConfig
 	syncCustomRoles     bool
 	skipSecondaryEmails bool
 	SyncSecrets         bool
 	userFilters         *userFilterConfig
-}
-
-type ciamConfig struct {
-	Enabled      bool
-	EmailDomains []string
 }
 
 type userFilterConfig struct {
@@ -124,13 +118,6 @@ var (
 )
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
-	if o.ciamConfig.Enabled {
-		return []connectorbuilder.ResourceSyncerV2{
-			ciamUserBuilder(o),
-			ciamBuilder(o.client, o.skipSecondaryEmails),
-		}
-	}
-
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
 		roleBuilder(o.client, o),
 		userBuilder(o),
@@ -333,9 +320,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 	}
 
 	if cc.OktaClientId != "" && cc.OktaPrivateKey != "" && cc.Domain != "" {
-		if cc.OktaProvisioning {
-			scopes = append(scopes, provisioningScopes...)
-		}
+		scopes = append(scopes, provisioningScopes...)
 
 		if cc.SyncSecrets {
 			scopes = append(scopes, "okta.apiTokens.read")
@@ -383,10 +368,6 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		syncCustomRoles:     cc.SyncCustomRoles,
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		SyncSecrets:         cc.SyncSecrets,
-		ciamConfig: &ciamConfig{
-			Enabled:      cc.Ciam,
-			EmailDomains: cc.CiamEmailDomains,
-		},
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 		},
