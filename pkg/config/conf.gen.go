@@ -11,8 +11,6 @@ type Okta struct {
 	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
 	SyncInactiveApps bool `mapstructure:"sync-inactive-apps"`
 	OktaProvisioning bool `mapstructure:"okta-provisioning"`
-	Ciam bool `mapstructure:"ciam"`
-	CiamEmailDomains []string `mapstructure:"ciam-email-domains"`
 	Cache bool `mapstructure:"cache"`
 	CacheTti int `mapstructure:"cache-tti"`
 	CacheTtl int `mapstructure:"cache-ttl"`

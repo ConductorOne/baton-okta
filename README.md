@@ -121,8 +121,6 @@ Flags:
       --cache                                                              Enable response cache ($BATON_CACHE) (default true)
       --cache-tti int                                                      Response cache cleanup interval in seconds ($BATON_CACHE_TTI) (default 60)
       --cache-ttl int                                                      Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
-      --ciam                                                               Whether to run in CIAM mode or not. In CIAM mode, only roles and the users assigned to roles are synced ($BATON_CIAM)
-      --ciam-email-domains strings                                         The email domains to use for CIAM mode. Any users that don't have an email address with one of the provided domains will be ignored, unless explicitly granted a role ($BATON_CIAM_EMAIL_DOMAINS)
       --client-id string                                                   The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
       --client-secret string                                               The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
       --domain string                                                      required: The URL for the Okta organization ($BATON_DOMAIN)
