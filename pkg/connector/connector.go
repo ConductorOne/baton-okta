@@ -32,6 +32,7 @@ type Okta struct {
 	ciamConfig          *ciamConfig
 	syncCustomRoles     bool
 	skipSecondaryEmails bool
+	skipAppGroups       bool
 	awsConfig           *awsConfig
 	SyncSecrets         bool
 	userRoleCache       sync.Map
@@ -91,7 +92,7 @@ type userFilterConfig struct {
 
 type Config struct {
 	Domain                                                string
-	ApiToken                                              string
+	ApiToken                                              string //nolint:gosec // Not a credential
 	OktaClientId                                          string
 	OktaPrivateKey                                        string
 	OktaPrivateKeyId                                      string
@@ -104,6 +105,7 @@ type Config struct {
 	CacheTTL                                              int32
 	SyncCustomRoles                                       bool
 	SkipSecondaryEmails                                   bool
+	SkipAppGroups                                         bool
 	AWSMode                                               bool
 	AWSOktaAppId                                          string
 	AWSSourceIdentityMode                                 bool
@@ -461,6 +463,7 @@ func New(ctx context.Context, cfg *Config) (*Okta, error) {
 		syncInactiveApps:    cfg.SyncInactiveApps,
 		syncCustomRoles:     cfg.SyncCustomRoles,
 		skipSecondaryEmails: cfg.SkipSecondaryEmails,
+		skipAppGroups:       cfg.SkipAppGroups,
 		SyncSecrets:         cfg.SyncSecrets,
 		ciamConfig: &ciamConfig{
 			Enabled:      cfg.Ciam,
