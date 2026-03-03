@@ -487,10 +487,11 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	}, nil
 }
 
-func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
+func (o *groupResourceType) groupTrait(_ context.Context, group *okta.Group) (*v2.GroupTrait, error) {
 	profileMap := map[string]interface{}{
 		"description": group.Profile.Description,
 		"name":        group.Profile.Name,
+		"type":        group.Type,
 	}
 
 	if userCount, exists := getGroupUserCount(group); exists {

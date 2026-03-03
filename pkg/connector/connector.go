@@ -91,7 +91,7 @@ type userFilterConfig struct {
 
 type Config struct {
 	Domain                                                string
-	ApiToken                                              string
+	ApiToken                                              string //nolint:gosec // G117: config field for Okta API token; value is not logged or exposed
 	OktaClientId                                          string
 	OktaPrivateKey                                        string
 	OktaPrivateKeyId                                      string
