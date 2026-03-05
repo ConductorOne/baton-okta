@@ -7,20 +7,25 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/structpb"
-
+	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/structpb"
 )
+
+var _ connectorbuilder.ResourceActionProvider = (*groupResourceType)(nil)
+var _ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
 
 const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
@@ -557,6 +562,141 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 	return resource, annos, nil
 }
 
+func ptr[T any](v T) *T {
+	return &v
+}
+
+func (o *groupResourceType) ResourceActions(ctx context.Context, registry actions.ActionRegistry) error {
+	return registry.Register(ctx, &v2.BatonActionSchema{
+		Name: "create",
+		Arguments: []*config.Field{
+			{
+				Name:        "name",
+				DisplayName: "Group Name",
+				Description: "The name of the Okta group to create",
+				Field: &config.Field_StringField{
+					StringField: &config.StringField{
+						Rules: &config.StringRules{
+							MinLen: ptr(uint64(1)),
+							MaxLen: ptr(uint64(255)),
+						},
+					},
+				},
+				IsRequired: true,
+			},
+			{
+				Name:        "description",
+				DisplayName: "Description",
+				Description: "Description of the group",
+				Field:       &config.Field_StringField{},
+				IsRequired:  false,
+			},
+			{
+				Name:        "userMembers",
+				DisplayName: "Initial User Members",
+				Description: "List of user resource IDs to add as initial members",
+				Field: &config.Field_ResourceIdSliceField{
+					ResourceIdSliceField: &config.ResourceIdSliceField{
+						Rules: &config.RepeatedResourceIdRules{
+							AllowedResourceTypeIds: []string{"user"},
+						},
+					},
+				},
+				IsRequired: false,
+			},
+		},
+		ReturnTypes: []*config.Field{
+			{Name: "success", DisplayName: "Success", Field: &config.Field_BoolField{}},
+			{Name: "resource", DisplayName: "Created Group", Field: &config.Field_ResourceField{}},
+		},
+		ActionType: []v2.ActionType{v2.ActionType_ACTION_TYPE_RESOURCE_CREATE},
+	}, o.handleCreateGroupAction)
+}
+
+func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	groupName, err := actions.RequireStringArg(args, "name")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	description, _ := actions.GetStringArg(args, "description")
+
+	newGroup := okta.Group{
+		Profile: &okta.GroupProfile{
+			Name:        groupName,
+			Description: description,
+		},
+	}
+
+	createdGroup, resp, err := o.connector.client.Group.CreateGroup(ctx, newGroup)
+	if err != nil {
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		l.Error("failed to create Okta group", zap.Error(err), zap.String("name", groupName))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create group: %w", err)
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	l.Info("created Okta group", zap.String("groupId", createdGroup.Id), zap.String("name", groupName))
+
+	userMemberIDs, _ := actions.GetResourceIdListArg(args, "userMembers")
+	for _, memberID := range userMemberIDs {
+		memberResp, err := o.connector.client.Group.AddUserToGroup(ctx, createdGroup.Id, memberID.Resource)
+		if err != nil {
+			l.Warn("failed to add initial member to group, skipping",
+				zap.String("userId", memberID.Resource),
+				zap.String("groupId", createdGroup.Id),
+				zap.Error(err),
+			)
+			if memberResp != nil {
+				memberResp.Body.Close()
+			}
+			continue
+		}
+		if memberResp != nil {
+			memberResp.Body.Close()
+		}
+	}
+
+	resource, err := o.groupResource(ctx, createdGroup)
+	if err != nil {
+		l.Error("failed to build group resource after creation", zap.Error(err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: group created but failed to build resource: %w", err)
+	}
+
+	resourceRv, err := actions.NewResourceReturnField("resource", resource)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return actions.NewReturnValues(true, resourceRv), nil, nil
+}
+
+func (o *groupResourceType) Delete(ctx context.Context, resourceId *v2.ResourceId, parentResourceID *v2.ResourceId) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	groupId := resourceId.Resource
+
+	resp, err := o.connector.client.Group.DeleteGroup(ctx, groupId)
+	if err != nil {
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		l.Error("failed to delete Okta group", zap.String("groupId", groupId), zap.Error(err))
+		return nil, handleOktaResponseError(resp, fmt.Errorf("okta-connectorv2: failed to delete group: %w", err))
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	l.Info("deleted Okta group", zap.String("groupId", groupId))
+	return nil, nil
+}
 func groupBuilder(connector *Okta) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
