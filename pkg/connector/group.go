@@ -757,6 +757,141 @@ func ptr[T any](v T) *T {
 }
 
 func (o *groupResourceType) ResourceActions(ctx context.Context, registry actions.ActionRegistry) error {
+	if err := o.registerCreateGroupAction(ctx, registry); err != nil {
+		return err
+	}
+	if err := o.registerModifyGroupAction(ctx, registry); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, registry actions.ActionRegistry) error {
+	return registry.Register(ctx, &v2.BatonActionSchema{
+		Name:        "modify_group",
+		DisplayName: "Modify Group",
+		Description: "Update the name and/or description of an existing Okta group.",
+		Arguments: []*config.Field{
+			{
+				Name:        "group_id",
+				DisplayName: "Group ID",
+				Description: "The Okta group ID to modify.",
+				Field:       &config.Field_StringField{},
+				IsRequired:  true,
+			},
+			{
+				Name:        "name",
+				DisplayName: "Group Name",
+				Description: "The new name for the group.",
+				Field: &config.Field_StringField{
+					StringField: &config.StringField{
+						Rules: &config.StringRules{
+							MinLen: ptr(uint64(1)),
+							MaxLen: ptr(uint64(255)),
+						},
+					},
+				},
+				IsRequired: false,
+			},
+			{
+				Name:        "description",
+				DisplayName: "Description",
+				Description: "The new description for the group.",
+				Field:       &config.Field_StringField{},
+				IsRequired: false,
+			},
+		},
+		ReturnTypes: []*config.Field{
+			{Name: "success", DisplayName: "Success", Field: &config.Field_BoolField{}},
+			{Name: "resource", DisplayName: "Updated Group", Field: &config.Field_ResourceField{}},
+		},
+		ActionType: []v2.ActionType{v2.ActionType_ACTION_TYPE_UNSPECIFIED},
+	}, o.handleModifyGroupAction)
+}
+
+func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	groupId, err := actions.RequireStringArg(args, "group_id")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newName, hasName := actions.GetStringArg(args, "name")
+	newDescription, hasDescription := actions.GetStringArg(args, "description")
+
+	if !hasName && !hasDescription {
+		return nil, nil, fmt.Errorf("okta-connectorv2: at least one of name or description must be provided")
+	}
+
+	// Fetch the current group to get existing values
+	existingGroup, resp, err := o.connector.client.Group.GetGroup(ctx, groupId)
+	if err != nil {
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group %s: %w", groupId, err)
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	// Build updated profile, preserving existing values for fields not provided
+	profile := &okta.GroupProfile{
+		Name:        existingGroup.Profile.Name,
+		Description: existingGroup.Profile.Description,
+	}
+	if hasName {
+		profile.Name = newName
+	}
+	if hasDescription {
+		profile.Description = newDescription
+	}
+
+	// Check if anything actually changed (idempotency)
+	if profile.Name == existingGroup.Profile.Name && profile.Description == existingGroup.Profile.Description {
+		l.Debug("okta-connectorv2: group already has requested values, no update needed", zap.String("groupId", groupId))
+		resource, err := o.groupResource(ctx, existingGroup)
+		if err != nil {
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to build group resource: %w", err)
+		}
+		resourceRv, err := actions.NewResourceReturnField("resource", resource)
+		if err != nil {
+			return nil, nil, err
+		}
+		return actions.NewReturnValues(true, resourceRv), nil, nil
+	}
+
+	updatedGroup, updateResp, err := o.connector.client.Group.UpdateGroup(ctx, groupId, okta.Group{
+		Profile: profile,
+	})
+	if err != nil {
+		if updateResp != nil {
+			defer updateResp.Body.Close()
+		}
+		l.Error("failed to update Okta group", zap.String("groupId", groupId), zap.Error(err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to update group: %w", err)
+	}
+	if updateResp != nil {
+		defer updateResp.Body.Close()
+	}
+
+	l.Info("updated Okta group", zap.String("groupId", updatedGroup.Id), zap.String("name", updatedGroup.Profile.Name))
+
+	resource, err := o.groupResource(ctx, updatedGroup)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: group updated but failed to build resource: %w", err)
+	}
+
+	resourceRv, err := actions.NewResourceReturnField("resource", resource)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return actions.NewReturnValues(true, resourceRv), nil, nil
+}
+
+func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, registry actions.ActionRegistry) error {
 	return registry.Register(ctx, &v2.BatonActionSchema{
 		Name: "create",
 		Arguments: []*config.Field{
