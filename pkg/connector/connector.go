@@ -92,7 +92,7 @@ type userFilterConfig struct {
 
 type Config struct {
 	Domain                                                string
-	ApiToken                                              string //nolint:gosec // Not a credential
+	ApiToken                                              string
 	OktaClientId                                          string
 	OktaPrivateKey                                        string
 	OktaPrivateKeyId                                      string
