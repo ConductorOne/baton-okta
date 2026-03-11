@@ -92,7 +92,7 @@ type userFilterConfig struct {
 
 type Config struct {
 	Domain                                                string
-	ApiToken                                              string //nolint:gosec // Not a credential
+	ApiToken                                              string
 	OktaClientId                                          string
 	OktaPrivateKey                                        string
 	OktaPrivateKeyId                                      string
@@ -324,6 +324,106 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					},
 					Placeholder: "True/False",
 					Order:       5,
+				},
+				"create_in_staged_status": {
+					DisplayName: "Create in Staged Status",
+					Required:    false,
+					Description: "When 'true', the user is created in STAGED status instead of being activated. Staged users can be activated later via Okta workflows.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "True/False",
+					Order:       6,
+				},
+				"department": {
+					DisplayName: "Department",
+					Required:    false,
+					Description: "The department of the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Department",
+					Order:       7,
+				},
+				"title": {
+					DisplayName: "Title",
+					Required:    false,
+					Description: "The job title of the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Title",
+					Order:       8,
+				},
+				"display_name": {
+					DisplayName: "Display Name",
+					Required:    false,
+					Description: "The display name of the user. If not set, Okta will derive it from first and last name.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Display Name",
+					Order:       9,
+				},
+				"user_type": {
+					DisplayName: "User Type",
+					Required:    false,
+					Description: "The user type (e.g., 'Employee', 'Contractor').",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "User Type",
+					Order:       10,
+				},
+				"organization": {
+					DisplayName: "Organization",
+					Required:    false,
+					Description: "The organization of the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Organization",
+					Order:       11,
+				},
+				"manager_id": {
+					DisplayName: "Manager ID",
+					Required:    false,
+					Description: "The Okta user ID of the user's manager.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Manager ID",
+					Order:       12,
+				},
+				"cost_center": {
+					DisplayName: "Cost Center",
+					Required:    false,
+					Description: "The cost center of the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Cost Center",
+					Order:       13,
+				},
+				"division": {
+					DisplayName: "Division",
+					Required:    false,
+					Description: "The division of the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Division",
+					Order:       14,
+				},
+				"employee_number": {
+					DisplayName: "Employee Number",
+					Required:    false,
+					Description: "The employee number of the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Employee Number",
+					Order:       15,
 				},
 			},
 		},
