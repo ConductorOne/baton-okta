@@ -541,6 +541,19 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 	}, nil
 }
 
+// optionalProfileFields maps account creation schema field names to Okta profile attribute names.
+var optionalProfileFields = map[string]string{
+	"department":      "department",
+	"title":           "title",
+	"display_name":    "displayName",
+	"user_type":       "userType",
+	"organization":    "organization",
+	"manager_id":      "managerId",
+	"cost_center":     "costCenter",
+	"division":        "division",
+	"employee_number": "employeeNumber",
+}
+
 func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	pMap := accountInfo.Profile.AsMap()
 	firstName, ok := pMap["first_name"]
@@ -563,33 +576,65 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 		login = email
 	}
 
-	return &okta.UserProfile{
+	profile := &okta.UserProfile{
 		"firstName": firstName,
 		"lastName":  lastName,
 		"email":     email,
 		"login":     login,
-	}, nil
+	}
+
+	for schemaField, oktaField := range optionalProfileFields {
+		if val, ok := pMap[schemaField]; ok {
+			if strVal, isStr := val.(string); isStr && strVal != "" {
+				(*profile)[oktaField] = strVal
+			}
+		}
+	}
+
+	return profile, nil
+}
+
+func parseBoolField(pMap map[string]interface{}, fieldName string) (bool, error) {
+	val := pMap[fieldName]
+	switch v := val.(type) {
+	case bool:
+		return v, nil
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return false, err
+		}
+		return parsed, nil
+	case nil:
+		return false, nil
+	default:
+		return false, fmt.Errorf("okta-connectorv2: unsupported type for %s: %T", fieldName, val)
+	}
 }
 
 func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
+	pMap := accountInfo.Profile.AsMap()
+
+	createStaged, err := parseBoolField(pMap, "create_in_staged_status")
+	if err != nil {
+		return nil, err
+	}
+
+	// If creating in staged status, set Activate to false and return early.
+	// Staged users are not activated on creation regardless of credential options.
+	if createStaged {
+		return &query.Params{
+			Activate: ToPtr(false),
+		}, nil
+	}
+
 	if credentialOptions.GetNoPassword() != nil {
 		return nil, nil
 	}
 
-	pMap := accountInfo.Profile.AsMap()
-	requirePass := pMap["password_change_on_login_required"]
-	requirePasswordChanged := false
-	switch v := requirePass.(type) {
-	case bool:
-		requirePasswordChanged = v
-	case string:
-		parsed, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, err
-		}
-		requirePasswordChanged = parsed
-	case nil:
-		// Do nothing
+	requirePasswordChanged, err := parseBoolField(pMap, "password_change_on_login_required")
+	if err != nil {
+		return nil, err
 	}
 
 	params := &query.Params{}
