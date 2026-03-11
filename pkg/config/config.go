@@ -4,6 +4,12 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/field"
 )
 
+const (
+	// Field group names.
+	ApiTokenGroup = "api-token-group"
+	PrivateKeyGroup = "private-key-group"
+)
+
 var (
 	domain = field.StringField("domain",
 		field.WithDisplayName("Okta domain"),
@@ -13,21 +19,26 @@ var (
 	)
 	apiToken = field.StringField("api-token",
 		field.WithDisplayName("API token"),
+		field.WithRequired(true),
 		field.WithDescription("The API token for the service account"),
 		field.WithPlaceholder("Your Okta API token"),
 		field.WithIsSecret(true),
 	)
 	oktaClientId = field.StringField("okta-client-id",
 		field.WithDisplayName("Okta Client ID"),
+		field.WithRequired(true),
 		field.WithDescription("The Okta Client ID"),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	oktaPrivateKeyId = field.StringField("okta-private-key-id",
 		field.WithDisplayName("Okta Private Key ID"),
+		field.WithRequired(true),
 		field.WithDescription("The Okta Private Key ID"),
 		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	oktaPrivateKey = field.StringField("okta-private-key",
 		field.WithDisplayName("Okta Private Key"),
+		field.WithRequired(true),
 		field.WithDescription("The Okta Private Key. This can be the whole private key or the path to the private key"),
 		field.WithIsSecret(true),
 		field.WithExportTarget(field.ExportTargetCLIOnly),
@@ -57,12 +68,12 @@ var (
 	)
 	syncCustomRoles = field.BoolField("sync-custom-roles",
 		field.WithDisplayName("Sync custom roles"),
-		field.WithDescription("Enable syncing custom roles"),
+		field.WithDescription("Whether to enable syncing custom roles or not"),
 		field.WithDefaultValue(false),
 	)
 	skipSecondaryEmails = field.BoolField("skip-secondary-emails",
 		field.WithDisplayName("Skip secondary emails"),
-		field.WithDescription("Skip syncing secondary emails"),
+		field.WithDescription("Whether to skip syncing secondary emails or not"),
 		field.WithDefaultValue(false),
 	)
 	syncSecrets = field.BoolField("sync-secrets",
@@ -72,20 +83,15 @@ var (
 	)
 	filterEmailDomains = field.StringSliceField("filter-email-domains",
 		field.WithDisplayName("Filter email domains"),
-		field.WithDescription("Only sync users with primary email addresses that match at least one of the provided domains. When unset or empty, all users will be synced."),
+		field.WithDescription("Press Enter to add multiple items."),
+		field.WithPlaceholder("A list of user email domains to include for syncs, e.g. acmeco.com"),
 	)
 	skipAppGroups = field.BoolField("skip-app-groups",
 		field.WithDisplayName("Skip app groups"),
-		field.WithDescription("Skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps)"),
+		field.WithDescription("Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not"),
 		field.WithDefaultValue(false),
 	)
 )
-
-var relationships = []field.SchemaFieldRelationship{
-	field.FieldsDependentOn([]field.SchemaField{oktaPrivateKeyId, oktaPrivateKey}, []field.SchemaField{oktaClientId}),
-	field.FieldsMutuallyExclusive(apiToken, oktaClientId),
-	field.FieldsAtLeastOneUsed(apiToken, oktaClientId),
-}
 
 //go:generate go run ./gen
 var Config = field.NewConfiguration([]field.SchemaField{
@@ -104,8 +110,46 @@ var Config = field.NewConfiguration([]field.SchemaField{
 	filterEmailDomains,
 	skipAppGroups,
 },
-	field.WithConstraints(relationships...),
 	field.WithConnectorDisplayName("Okta"),
 	field.WithIconUrl("/static/app-icons/okta.svg"),
 	field.WithIsDirectory(true),
+	field.WithFieldGroups([]field.SchemaFieldGroup{
+		{
+			Name: ApiTokenGroup,
+			DisplayName: "API Token",
+			HelpText: "Use an API token to authenticate.",
+			Fields:    []field.SchemaField{
+				apiToken,
+				domain,
+				syncInactivateApps,
+				cache,
+				cacheTTI,
+				cacheTTL,
+				syncCustomRoles,
+				skipSecondaryEmails,
+				syncSecrets,
+				filterEmailDomains,
+				skipAppGroups},
+		},
+		{
+			Name: PrivateKeyGroup,
+			DisplayName: "Private Key",
+			HelpText: "Use a private key to authenticate.",
+			Fields: []field.SchemaField{
+				oktaClientId,
+				oktaPrivateKeyId,
+				oktaPrivateKey,
+				domain,
+				syncInactivateApps,
+				cache,
+				cacheTTI,
+				cacheTTL,
+				syncCustomRoles,
+				skipSecondaryEmails,
+				syncSecrets,
+				filterEmailDomains,
+				skipAppGroups},
+			ExportTarget: field.ExportTargetCLIOnly,
+		},
+	}),
 )

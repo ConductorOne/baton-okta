@@ -292,7 +292,15 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 
 	var oktaClientV5 *oktav5.APIClient
 
-	if cc.ApiToken != "" && cc.Domain != "" {
+	authMethod := ""
+	if opts != nil {
+		authMethod = opts.SelectedAuthMethod
+	}
+
+	switch authMethod {
+	default:
+		fallthrough
+	case cfg.ApiTokenGroup:
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			okta.WithToken(cc.ApiToken),
@@ -318,9 +326,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			return nil, nil, err
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
-	}
-
-	if cc.OktaClientId != "" && cc.OktaPrivateKey != "" && cc.Domain != "" {
+	case cfg.PrivateKeyGroup:
 		scopes = append(scopes, provisioningScopes...)
 
 		if cc.SyncSecrets {

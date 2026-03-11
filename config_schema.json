@@ -109,14 +109,13 @@
       "displayName": "API token",
       "description": "The API token for the service account",
       "placeholder": "Your Okta API token",
+      "isRequired": true,
       "isSecret": true,
-      "stringField": {}
-    },
-    {
-      "name": "okta-client-id",
-      "displayName": "Okta Client ID",
-      "description": "The Okta Client ID",
-      "stringField": {}
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
     },
     {
       "name": "sync-inactive-apps",
@@ -129,13 +128,13 @@
     {
       "name": "sync-custom-roles",
       "displayName": "Sync custom roles",
-      "description": "Enable syncing custom roles",
+      "description": "Whether to enable syncing custom roles or not",
       "boolField": {}
     },
     {
       "name": "skip-secondary-emails",
       "displayName": "Skip secondary emails",
-      "description": "Skip syncing secondary emails",
+      "description": "Whether to skip syncing secondary emails or not",
       "boolField": {}
     },
     {
@@ -147,27 +146,38 @@
     {
       "name": "filter-email-domains",
       "displayName": "Filter email domains",
-      "description": "Only sync users with primary email addresses that match at least one of the provided domains. When unset or empty, all users will be synced.",
+      "description": "Press Enter to add multiple items.",
+      "placeholder": "A list of user email domains to include for syncs, e.g. acmeco.com",
       "stringSliceField": {}
-    }
-  ],
-  "constraints": [
-    {
-      "kind": "CONSTRAINT_KIND_MUTUALLY_EXCLUSIVE",
-      "fieldNames": [
-        "api-token",
-        "okta-client-id"
-      ]
     },
     {
-      "kind": "CONSTRAINT_KIND_AT_LEAST_ONE",
-      "fieldNames": [
-        "api-token",
-        "okta-client-id"
-      ]
+      "name": "skip-app-groups",
+      "displayName": "Skip app groups",
+      "description": "Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not",
+      "boolField": {}
     }
   ],
   "displayName": "Okta",
   "iconUrl": "/static/app-icons/okta.svg",
-  "isDirectory": true
+  "isDirectory": true,
+  "fieldGroups": [
+    {
+      "name": "api-token-group",
+      "displayName": "API Token",
+      "helpText": "Use an API token to authenticate.",
+      "fields": [
+        "api-token",
+        "domain",
+        "sync-inactive-apps",
+        "cache",
+        "cache-tti",
+        "cache-ttl",
+        "sync-custom-roles",
+        "skip-secondary-emails",
+        "sync-secrets",
+        "filter-email-domains",
+        "skip-app-groups"
+      ]
+    }
+  ]
 }
