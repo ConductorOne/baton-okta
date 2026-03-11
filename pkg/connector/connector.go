@@ -328,7 +328,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 				"create_in_staged_status": {
 					DisplayName: "Create in Staged Status",
 					Required:    false,
-					Description: "When set to 'true', the user will be created in STAGED status instead of being immediately activated. Staged users can be activated later via Okta workflows or API calls.",
+					Description: "When 'true', the user is created in STAGED status instead of being activated. Staged users can be activated later via Okta workflows.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
