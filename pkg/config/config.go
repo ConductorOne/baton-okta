@@ -20,18 +20,17 @@ var (
 	oktaClientId = field.StringField("okta-client-id",
 		field.WithDisplayName("Okta Client ID"),
 		field.WithDescription("The Okta Client ID"),
-		field.WithHidden(true),
 	)
 	oktaPrivateKeyId = field.StringField("okta-private-key-id",
 		field.WithDisplayName("Okta Private Key ID"),
 		field.WithDescription("The Okta Private Key ID"),
-		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	oktaPrivateKey = field.StringField("okta-private-key",
 		field.WithDisplayName("Okta Private Key"),
 		field.WithDescription("The Okta Private Key. This can be the whole private key or the path to the private key"),
 		field.WithIsSecret(true),
-		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	syncInactivateApps = field.BoolField("sync-inactive-apps",
 		field.WithDisplayName("Sync inactive apps"),
@@ -42,19 +41,19 @@ var (
 		field.WithDisplayName("Enable cache"),
 		field.WithDescription("Enable response cache"),
 		field.WithDefaultValue(true),
-		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	cacheTTI = field.IntField("cache-tti",
 		field.WithDisplayName("Cache TTI"),
 		field.WithDescription("Response cache cleanup interval in seconds"),
 		field.WithDefaultValue(60),
-		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	cacheTTL = field.IntField("cache-ttl",
 		field.WithDisplayName("Cache TTL"),
 		field.WithDescription("Response cache time to live in seconds"),
 		field.WithDefaultValue(300),
-		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	syncCustomRoles = field.BoolField("sync-custom-roles",
 		field.WithDisplayName("Sync custom roles"),

@@ -119,48 +119,11 @@
       "stringField": {}
     },
     {
-      "name": "okta-private-key",
-      "displayName": "Okta Private Key",
-      "description": "The Okta Private Key. This can be the whole private key or the path to the private key",
-      "isSecret": true,
-      "stringField": {}
-    },
-    {
-      "name": "okta-private-key-id",
-      "displayName": "Okta Private Key ID",
-      "description": "The Okta Private Key ID",
-      "stringField": {}
-    },
-    {
       "name": "sync-inactive-apps",
       "displayName": "Sync inactive apps",
       "description": "Whether to sync inactive apps or not",
       "boolField": {
         "defaultValue": true
-      }
-    },
-    {
-      "name": "cache",
-      "displayName": "Enable cache",
-      "description": "Enable response cache",
-      "boolField": {
-        "defaultValue": true
-      }
-    },
-    {
-      "name": "cache-tti",
-      "displayName": "Cache TTI",
-      "description": "Response cache cleanup interval in seconds",
-      "intField": {
-        "defaultValue": "60"
-      }
-    },
-    {
-      "name": "cache-ttl",
-      "displayName": "Cache TTL",
-      "description": "Response cache time to live in seconds",
-      "intField": {
-        "defaultValue": "300"
       }
     },
     {
@@ -189,16 +152,6 @@
     }
   ],
   "constraints": [
-    {
-      "kind": "CONSTRAINT_KIND_DEPENDENT_ON",
-      "fieldNames": [
-        "okta-private-key-id",
-        "okta-private-key"
-      ],
-      "secondaryFieldNames": [
-        "okta-client-id"
-      ]
-    },
     {
       "kind": "CONSTRAINT_KIND_MUTUALLY_EXCLUSIVE",
       "fieldNames": [
