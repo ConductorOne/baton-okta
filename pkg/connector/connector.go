@@ -123,8 +123,15 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.userFilters.includedEmailDomains, o.client),
 	}
+
+	var filterEmailDomains []string
+	if o.userFilters != nil {
+		filterEmailDomains = o.userFilters.includedEmailDomains
+	}
+	resourceSyncer = append(resourceSyncer,
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, filterEmailDomains, o.client),
+	)
 
 	if o.syncCustomRoles {
 		resourceSyncer = append(resourceSyncer,
