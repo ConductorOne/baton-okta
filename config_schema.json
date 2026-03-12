@@ -1,0 +1,183 @@
+{
+  "fields": [
+    {
+      "name": "log-level",
+      "description": "The log level: debug, info, warn, error",
+      "isOps": true,
+      "stringField": {
+        "defaultValue": "info"
+      }
+    },
+    {
+      "name": "log-level-debug-expires-at",
+      "description": "The timestamp indicating when debug-level logging should expire",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "session-store-maximum-size",
+      "description": "The maximum size of the local in-memory session store cache in bytes.",
+      "isOps": true,
+      "intField": {
+        "defaultValue": "15728640"
+      }
+    },
+    {
+      "name": "otel-collector-endpoint",
+      "description": "The endpoint of the OpenTelemetry collector to send observability data to (used for both tracing and logging if specific endpoints are not provided)",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint-tls-cert-path",
+      "description": "Path to a file containing a PEM-encoded certificate to use as a CA for TLS connections to the OpenTelemetry collector",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint-tls-cert",
+      "description": "A PEM-encoded certificate to use as a CA for TLS connections to the OpenTelemetry collector",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint-tls-insecure",
+      "description": "Allow insecure connections to the OpenTelemetry collector",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "otel-tracing-disabled",
+      "description": "Disable OpenTelemetry tracing",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "otel-logging-disabled",
+      "description": "Disable OpenTelemetry logging",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "health-check",
+      "description": "Enable the HTTP health check endpoint",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "health-check-port",
+      "description": "Port for the HTTP health check endpoint",
+      "isOps": true,
+      "intField": {
+        "defaultValue": "8081"
+      }
+    },
+    {
+      "name": "health-check-bind-address",
+      "description": "Bind address for health check server (127.0.0.1 for localhost-only)",
+      "isOps": true,
+      "stringField": {
+        "defaultValue": "127.0.0.1"
+      }
+    },
+    {
+      "name": "http-timeout-seconds",
+      "description": "HTTP client timeout in seconds (max 1800)",
+      "isOps": true,
+      "intField": {
+        "defaultValue": "300",
+        "rules": {
+          "lte": "1800",
+          "gte": "1"
+        }
+      }
+    },
+    {
+      "name": "domain",
+      "displayName": "Okta domain",
+      "description": "The URL for the Okta organization",
+      "placeholder": "e.g. acmeco.okta.com",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "api-token",
+      "displayName": "API token",
+      "description": "The API token for the service account",
+      "placeholder": "Your Okta API token",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "sync-inactive-apps",
+      "displayName": "Sync inactive apps",
+      "description": "Whether to sync inactive apps or not",
+      "boolField": {
+        "defaultValue": true
+      }
+    },
+    {
+      "name": "sync-custom-roles",
+      "displayName": "Sync custom roles",
+      "description": "Whether to enable syncing custom roles or not",
+      "boolField": {}
+    },
+    {
+      "name": "skip-secondary-emails",
+      "displayName": "Skip secondary emails",
+      "description": "Whether to skip syncing secondary emails or not",
+      "boolField": {}
+    },
+    {
+      "name": "sync-secrets",
+      "displayName": "Sync secrets",
+      "description": "Whether to sync secrets or not",
+      "boolField": {}
+    },
+    {
+      "name": "filter-email-domains",
+      "displayName": "Filter email domains",
+      "description": "Press Enter to add multiple items.",
+      "placeholder": "A list of user email domains to include for syncs, e.g. acmeco.com",
+      "stringSliceField": {}
+    },
+    {
+      "name": "skip-app-groups",
+      "displayName": "Skip app groups",
+      "description": "Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not",
+      "boolField": {}
+    }
+  ],
+  "displayName": "Okta",
+  "iconUrl": "/static/app-icons/okta.svg",
+  "isDirectory": true,
+  "fieldGroups": [
+    {
+      "name": "api-token-group",
+      "displayName": "API Token",
+      "helpText": "Use an API token to authenticate.",
+      "fields": [
+        "api-token",
+        "domain",
+        "sync-inactive-apps",
+        "cache",
+        "cache-tti",
+        "cache-ttl",
+        "sync-custom-roles",
+        "skip-secondary-emails",
+        "sync-secrets",
+        "filter-email-domains",
+        "skip-app-groups"
+      ]
+    }
+  ]
+}

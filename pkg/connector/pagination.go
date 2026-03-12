@@ -13,16 +13,6 @@ import (
 
 const defaultLimit = 1000
 
-func parseGetResp(resp *okta.Response) (annotations.Annotations, error) {
-	var annos annotations.Annotations
-	if resp != nil {
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
-	}
-	return annos, nil
-}
-
 func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 	var nextPage string
@@ -38,29 +28,6 @@ func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 			annos.WithRateLimiting(desc)
 		}
 		nextPage = after
-	}
-
-	return nextPage, annos, nil
-}
-
-func parseAdminListResp(resp *okta.Response) (string, annotations.Annotations, error) {
-	var annos annotations.Annotations
-	var nextPage string
-
-	if resp != nil {
-		u, err := url.Parse(resp.NextPage)
-		if err != nil {
-			return "", nil, err
-		}
-
-		// Grab entire query param for next page token, drop limit so we can still set it how we want.
-		nextQp := u.Query()
-		nextQp.Del("limit")
-		nextPage = nextQp.Encode()
-
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
 	}
 
 	return nextPage, annos, nil
