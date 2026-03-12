@@ -18,6 +18,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type appResourceType struct {
@@ -623,10 +624,10 @@ func appUserProfileToMetadata(appUser *okta.AppUser) map[string]interface{} {
 
 	metadata := make(map[string]interface{})
 	for k, v := range profile {
-		metadata[k] = v
+		metadata[k] = toStructpbCompatibleValue(v)
 	}
 
-	// Include scope and status from the app user assignment itself
+	// Include scope and status from the app user assignment itself.
 	if appUser.Scope != "" {
 		metadata["_scope"] = appUser.Scope
 	}
@@ -635,6 +636,12 @@ func appUserProfileToMetadata(appUser *okta.AppUser) map[string]interface{} {
 	}
 	if appUser.ExternalId != "" {
 		metadata["_externalId"] = appUser.ExternalId
+	}
+
+	// Validate that the metadata can be converted to a structpb.Struct
+	// to avoid panics in WithGrantMetadata/NewGrant.
+	if _, err := structpb.NewStruct(metadata); err != nil {
+		return nil
 	}
 
 	return metadata
@@ -658,10 +665,55 @@ func appGroupAssignmentProfileToMetadata(assignment *okta.ApplicationGroupAssign
 
 	metadata := make(map[string]interface{})
 	for k, v := range profile {
-		metadata[k] = v
+		metadata[k] = toStructpbCompatibleValue(v)
+	}
+
+	// Validate that the metadata can be converted to a structpb.Struct
+	// to avoid panics in WithGrantMetadata/NewGrant.
+	if _, err := structpb.NewStruct(metadata); err != nil {
+		return nil
 	}
 
 	return metadata
+}
+
+// toStructpbCompatibleValue converts a value to a type compatible with
+// structpb.NewStruct. structpb supports: nil, bool, int/uint/float (as float64),
+// string, []interface{}, and map[string]interface{}. For unsupported types,
+// we fall back to fmt.Sprintf to produce a string representation.
+func toStructpbCompatibleValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case nil, bool, float64, string:
+		return val
+	case int:
+		return float64(val)
+	case int32:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case uint:
+		return float64(val)
+	case uint32:
+		return float64(val)
+	case uint64:
+		return float64(val)
+	case float32:
+		return float64(val)
+	case []interface{}:
+		result := make([]interface{}, len(val))
+		for i, item := range val {
+			result[i] = toStructpbCompatibleValue(item)
+		}
+		return result
+	case map[string]interface{}:
+		result := make(map[string]interface{})
+		for k, item := range val {
+			result[k] = toStructpbCompatibleValue(item)
+		}
+		return result
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
