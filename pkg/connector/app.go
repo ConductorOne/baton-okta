@@ -18,6 +18,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type appResourceType struct {
@@ -184,13 +185,21 @@ func (o *appResourceType) listAppGroupGrants(
 	for _, applicationGroupAssignment := range applicationGroupAssignments {
 		groupID := applicationGroupAssignment.Id
 		principalID := &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}
-		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
+
+		grantOptions := []sdkGrant.GrantOption{
 			sdkGrant.WithAnnotation(
 				&v2.V1Identifier{
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 				},
 			),
-		))
+		}
+
+		// Include group assignment profile attributes as grant metadata if available
+		if profileMetadata := appGroupAssignmentProfileToMetadata(applicationGroupAssignment); profileMetadata != nil {
+			grantOptions = append(grantOptions, sdkGrant.WithGrantMetadata(profileMetadata))
+		}
+
+		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID, grantOptions...))
 	}
 
 	return rv, annos, bag, nil
@@ -228,13 +237,21 @@ func (o *appResourceType) listAppUsersGrants(
 
 		userID := applicationUser.Id
 		principalID := &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}
-		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
+
+		grantOptions := []sdkGrant.GrantOption{
 			sdkGrant.WithAnnotation(
 				&v2.V1Identifier{
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
 				},
 			),
-		))
+		}
+
+		// Include app user profile attributes as grant metadata if available
+		if profileMetadata := appUserProfileToMetadata(applicationUser); profileMetadata != nil {
+			grantOptions = append(grantOptions, sdkGrant.WithGrantMetadata(profileMetadata))
+		}
+
+		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID, grantOptions...))
 	}
 
 	return rv, annos, bag, nil
@@ -585,6 +602,118 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 	}
 
 	return resource, annos, nil
+}
+
+// appUserProfileToMetadata converts an Okta AppUser's profile into a metadata map
+// suitable for attaching to grants. This includes app-specific attributes like
+// assigned scopes, app roles, and custom profile fields that are set on the user's
+// app assignment in Okta.
+func appUserProfileToMetadata(appUser *okta.AppUser) map[string]interface{} {
+	if appUser == nil || appUser.Profile == nil {
+		return nil
+	}
+
+	profile, ok := appUser.Profile.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	if len(profile) == 0 {
+		return nil
+	}
+
+	metadata := make(map[string]interface{})
+	for k, v := range profile {
+		metadata[k] = toStructpbCompatibleValue(v)
+	}
+
+	// Include scope and status from the app user assignment itself.
+	if appUser.Scope != "" {
+		metadata["_scope"] = appUser.Scope
+	}
+	if appUser.Status != "" {
+		metadata["_status"] = appUser.Status
+	}
+	if appUser.ExternalId != "" {
+		metadata["_externalId"] = appUser.ExternalId
+	}
+
+	// Validate that the metadata can be converted to a structpb.Struct
+	// to avoid panics in WithGrantMetadata/NewGrant.
+	if _, err := structpb.NewStruct(metadata); err != nil {
+		return nil
+	}
+
+	return metadata
+}
+
+// appGroupAssignmentProfileToMetadata converts an Okta ApplicationGroupAssignment's
+// profile into a metadata map suitable for attaching to grants.
+func appGroupAssignmentProfileToMetadata(assignment *okta.ApplicationGroupAssignment) map[string]interface{} {
+	if assignment == nil || assignment.Profile == nil {
+		return nil
+	}
+
+	profile, ok := assignment.Profile.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	if len(profile) == 0 {
+		return nil
+	}
+
+	metadata := make(map[string]interface{})
+	for k, v := range profile {
+		metadata[k] = toStructpbCompatibleValue(v)
+	}
+
+	// Validate that the metadata can be converted to a structpb.Struct
+	// to avoid panics in WithGrantMetadata/NewGrant.
+	if _, err := structpb.NewStruct(metadata); err != nil {
+		return nil
+	}
+
+	return metadata
+}
+
+// toStructpbCompatibleValue converts a value to a type compatible with
+// structpb.NewStruct. structpb supports: nil, bool, int/uint/float (as float64),
+// string, []interface{}, and map[string]interface{}. For unsupported types,
+// we fall back to fmt.Sprintf to produce a string representation.
+func toStructpbCompatibleValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case nil, bool, float64, string:
+		return val
+	case int:
+		return float64(val)
+	case int32:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case uint:
+		return float64(val)
+	case uint32:
+		return float64(val)
+	case uint64:
+		return float64(val)
+	case float32:
+		return float64(val)
+	case []interface{}:
+		result := make([]interface{}, len(val))
+		for i, item := range val {
+			result[i] = toStructpbCompatibleValue(item)
+		}
+		return result
+	case map[string]interface{}:
+		result := make(map[string]interface{})
+		for k, item := range val {
+			result[k] = toStructpbCompatibleValue(item)
+		}
+		return result
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
