@@ -1,95 +1,174 @@
 {
-  "@type": "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
-  "resourceTypeCapabilities": [
+  "@type":  "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
+  "resourceTypeCapabilities":  [
     {
-      "resourceType": {
-        "id": "app",
-        "displayName": "App",
-        "traits": [
-          "TRAIT_APP"
+      "resourceType":  {
+        "id":  "api-token",
+        "displayName":  "API Token",
+        "traits":  [
+          "TRAIT_SECRET"
         ],
-        "annotations": [
+        "annotations":  [
           {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "app"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_TARGETED_SYNC",
-        "CAPABILITY_PROVISION"
-      ],
-      "permissions": {}
-    },
-    {
-      "resourceType": {
-        "id": "group",
-        "displayName": "Group",
-        "traits": [
-          "TRAIT_GROUP"
-        ],
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "group"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_TARGETED_SYNC",
-        "CAPABILITY_PROVISION"
-      ],
-      "permissions": {}
-    },
-    {
-      "resourceType": {
-        "id": "role",
-        "displayName": "Role",
-        "traits": [
-          "TRAIT_ROLE"
-        ],
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "role"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_TARGETED_SYNC",
-        "CAPABILITY_PROVISION"
-      ],
-      "permissions": {}
-    },
-    {
-      "resourceType": {
-        "id": "user",
-        "displayName": "User",
-        "traits": [
-          "TRAIT_USER"
-        ],
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-            "id": "user"
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "api-token"
           },
           {
-            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+            "@type":  "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
           }
         ]
       },
-      "capabilities": [
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "app",
+        "displayName":  "App",
+        "traits":  [
+          "TRAIT_APP"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "app"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "custom-role",
+        "displayName":  "Custom Role",
+        "traits":  [
+          "TRAIT_ROLE"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "custom-role"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "group",
+        "displayName":  "Group",
+        "traits":  [
+          "TRAIT_GROUP"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "group"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "resource-set",
+        "displayName":  "Resource Set",
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "resource-set"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "resourceset-binding",
+        "displayName":  "Resource Set Binding",
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "resourceset-binding"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "role",
+        "displayName":  "Role",
+        "traits":  [
+          "TRAIT_ROLE"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "role"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_TARGETED_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
+        "id":  "user",
+        "displayName":  "User",
+        "traits":  [
+          "TRAIT_USER"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id":  "user"
+          },
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          }
+        ]
+      },
+      "capabilities":  [
         "CAPABILITY_SYNC",
         "CAPABILITY_TARGETED_SYNC",
         "CAPABILITY_ACCOUNT_PROVISIONING"
       ],
-      "permissions": {}
+      "permissions":  {}
     }
   ],
-  "connectorCapabilities": [
+  "connectorCapabilities":  [
     "CAPABILITY_PROVISION",
     "CAPABILITY_SYNC",
     "CAPABILITY_ACCOUNT_PROVISIONING",
@@ -98,13 +177,13 @@
     "CAPABILITY_EVENT_FEED_V2",
     "CAPABILITY_SERVICE_MODE_TARGETED_SYNC"
   ],
-  "credentialDetails": {
-    "capabilityAccountProvisioning": {
-      "supportedCredentialOptions": [
+  "credentialDetails":  {
+    "capabilityAccountProvisioning":  {
+      "supportedCredentialOptions":  [
         "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD",
         "CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD"
       ],
-      "preferredCredentialOption": "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD"
+      "preferredCredentialOption":  "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD"
     }
   }
 }

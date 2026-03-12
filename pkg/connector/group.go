@@ -231,7 +231,7 @@ func (o *groupResourceType) Grants(
 				continue
 			}
 
-			if !o.connector.syncCustomRoles && role.Type == roleTypeCustom {
+			if !o.connector.SyncCustomRoles && role.Type == roleTypeCustom {
 				continue
 			}
 

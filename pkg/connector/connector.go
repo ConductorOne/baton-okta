@@ -31,7 +31,7 @@ type Okta struct {
 	domain              string
 	apiToken            string
 	syncInactiveApps    bool
-	syncCustomRoles     bool
+	SyncCustomRoles     bool
 	skipSecondaryEmails bool
 	skipAppGroups       bool
 	SyncSecrets         bool
@@ -133,7 +133,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, filterEmailDomains, o.client),
 	)
 
-	if o.syncCustomRoles {
+	if o.SyncCustomRoles {
 		resourceSyncer = append(resourceSyncer,
 			customRoleBuilder(o),
 			resourceSetsBuilder(o.domain, o.client, o.clientV5),
@@ -156,7 +156,7 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 		resourceTypeApp,
 	}
 
-	if c.syncCustomRoles {
+	if c.SyncCustomRoles {
 		resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
 	}
 
@@ -379,7 +379,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		domain:              cc.Domain,
 		apiToken:            cc.ApiToken,
 		syncInactiveApps:    cc.SyncInactiveApps,
-		syncCustomRoles:     cc.SyncCustomRoles,
+		SyncCustomRoles:     cc.SyncCustomRoles,
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		skipAppGroups:       cc.SkipAppGroups,
 		SyncSecrets:         cc.SyncSecrets,
