@@ -113,13 +113,18 @@ jobs:
 
           BASE_SHA=$(git merge-base HEAD origin/main 2>/dev/null || echo "")
 
-          # Compare PR's committed metadata with main to detect changes in this PR
+          # Compare PR's committed metadata with main using semantic JSON comparison
+          # (jq -cS normalizes formatting so whitespace-only changes don't trigger docs requirement)
           if [ -n "$BASE_SHA" ]; then
-            if ! git diff --quiet "$BASE_SHA" HEAD -- baton_capabilities.json 2>/dev/null; then
+            BASE_CAPS=$(git show "$BASE_SHA:baton_capabilities.json" 2>/dev/null | jq -cS . 2>/dev/null || echo "")
+            HEAD_CAPS=$(jq -cS . baton_capabilities.json 2>/dev/null || echo "")
+            if [ "$BASE_CAPS" != "$HEAD_CAPS" ]; then
               CAPS_CHANGED=true
             fi
 
-            if ! git diff --quiet "$BASE_SHA" HEAD -- config_schema.json 2>/dev/null; then
+            BASE_CONFIG=$(git show "$BASE_SHA:config_schema.json" 2>/dev/null | jq -cS . 2>/dev/null || echo "")
+            HEAD_CONFIG=$(jq -cS . config_schema.json 2>/dev/null || echo "")
+            if [ "$BASE_CONFIG" != "$HEAD_CONFIG" ]; then
               CONFIG_CHANGED=true
             fi
           fi
