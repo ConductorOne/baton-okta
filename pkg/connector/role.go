@@ -148,7 +148,7 @@ func (o *roleResourceType) Grants(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	qp := queryParams(roleAssignmentsPageSize, page)
+	qp := queryParams(token.Size, page)
 
 	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.connector.client, token, qp)
 	if err != nil {

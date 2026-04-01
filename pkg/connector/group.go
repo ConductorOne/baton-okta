@@ -157,7 +157,7 @@ func (o *groupResourceType) Grants(
 				l.Debug("okta-connectorv2: making list group users call because users_count profile attribute was not present")
 			}
 
-			qp := queryParams(groupUsersPageSize, page)
+			qp := queryParams(token.Size, page)
 
 			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
 			if err != nil {
