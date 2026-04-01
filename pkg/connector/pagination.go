@@ -11,25 +11,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
-const (
-	defaultLimit = 1000
-
-	// roleAssignmentsPageSize limits the number of users fetched per page from
-	// /api/v1/iam/assignees/users during role grants sync (Okta default is 100).
-	// Each user on the page triggers an individual API call to
-	// /api/v1/users/{id}/roles, so a smaller page size reduces the fan-out of
-	// API calls per sync operation. This prevents Lambda execution timeouts when
-	// syncing tenants with many users.
-	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignment/#tag/RoleAssignment/operation/listUsersWithRoleAssignments
-	roleAssignmentsPageSize = 50
-
-	// groupUsersPageSize limits the number of users fetched per page from
-	// /api/v1/groups/{id}/users during group grants sync (Okta default is 1000,
-	// but Okta recommends 200). Large pages can produce responses that cause
-	// unexpected EOF errors on large groups.
-	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/Group/#tag/Group/operation/listGroupUsers
-	groupUsersPageSize = 200
-)
+const defaultLimit = 1000
 
 func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
