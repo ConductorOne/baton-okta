@@ -132,7 +132,7 @@ var (
 		},
 	}
 	ApplicationLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update", "application.lifecycle.activate", "application.lifecycle.deactivate"),
+		EventTypes:  mapset.NewSet[string]("application.lifecycle.create", "application.lifecycle.update", "application.lifecycle.activate", "application.lifecycle.deactivate"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
