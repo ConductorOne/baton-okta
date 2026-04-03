@@ -14,7 +14,7 @@ import (
 
 var (
 	GroupChangeFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("group.lifecycle.create"),
+		EventTypes:  mapset.NewSet[string]("group.lifecycle.create", "group.profile.update"),
 		TargetTypes: mapset.NewSet[string]("UserGroup"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
@@ -132,7 +132,7 @@ var (
 		},
 	}
 	ApplicationLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update"),
+		EventTypes:  mapset.NewSet[string]("app.lifecycle.create", "application.lifecycle.update", "application.lifecycle.activate", "application.lifecycle.deactivate"),
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
@@ -250,7 +250,7 @@ var (
 		},
 	}
 	UserLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("user.lifecycle.create", "user.lifecycle.activate", "user.account.update_profile"),
+		EventTypes:  mapset.NewSet[string]("user.lifecycle.create", "user.lifecycle.activate", "user.lifecycle.deactivate", "user.lifecycle.suspend", "user.lifecycle.unsuspend", "user.lifecycle.reactivate", "user.account.update_profile"),
 		TargetTypes: mapset.NewSet[string]("User"),
 		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["User"]) != 1 {
