@@ -76,13 +76,18 @@ jobs:
           CAPS_STALE=false
           CONFIG_STALE=false
 
-          if ! git diff --quiet -- baton_capabilities.json 2>/dev/null; then
+          # Semantic JSON comparison (tolerant of whitespace/formatting differences)
+          COMMITTED_CAPS=$(git show HEAD:baton_capabilities.json 2>/dev/null | jq -cS . 2>/dev/null || echo "")
+          GENERATED_CAPS=$(jq -cS . baton_capabilities.json 2>/dev/null || echo "")
+          if [ "$COMMITTED_CAPS" != "$GENERATED_CAPS" ]; then
             CAPS_STALE=true
             echo "::warning::baton_capabilities.json differs from binary output"
             git diff -- baton_capabilities.json
           fi
 
-          if ! git diff --quiet -- config_schema.json 2>/dev/null; then
+          COMMITTED_CONFIG=$(git show HEAD:config_schema.json 2>/dev/null | jq -cS . 2>/dev/null || echo "")
+          GENERATED_CONFIG=$(jq -cS . config_schema.json 2>/dev/null || echo "")
+          if [ "$COMMITTED_CONFIG" != "$GENERATED_CONFIG" ]; then
             CONFIG_STALE=true
             echo "::warning::config_schema.json differs from binary output"
             git diff -- config_schema.json
