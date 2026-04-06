@@ -240,7 +240,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	customRoleId := resourceIDs[lastItem]
 	members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, convertNotFoundError(err, "resource set binding not found")
 	}
 
 	for _, member := range members {
