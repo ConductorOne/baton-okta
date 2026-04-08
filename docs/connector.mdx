@@ -42,6 +42,17 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 | enable_user | `user_id` (string, required) | Unsuspends a suspended Okta user account |
 | disable_user     | `user_id` (string, required) | Suspends an active Okta user account |
 
+## Authentication methods
+
+The Okta connector supports two authentication methods:
+
+| Method | Description | Best for |
+| :--- | :--- | :--- |
+| **API Token** | Uses an Okta API token tied to an admin account | Quick setup, broad access |
+| **OAuth 2.0 Private Key** | Uses an Okta OIDC app with client credentials flow | Least-privilege scopes, short-lived tokens, easier credential rotation |
+
+The **OAuth 2.0 Private Key** method is recommended for production environments because it provides scoped access with short-lived tokens rather than a long-lived API token.
+
 ## Gather Okta credentials 
 
 Configuring the connector requires you to pass in credentials generated in Okta. Gather these credentials before you move on.
@@ -181,6 +192,46 @@ Copy and save the new API token.
 
 **That's it!** Next, move on to the connector configuration instructions. 
 
+### (Alternative) Set up an OAuth 2.0 OIDC app
+
+Instead of an API token, you can use an OAuth 2.0 client credentials flow with a private key. This provides scoped, least-privilege access with short-lived tokens.
+
+<Steps>
+<Step>
+In Okta, navigate to **Applications** > **Applications** and click **Create App Integration**.
+</Step>
+<Step>
+Select **API Services** and click **Next**.
+</Step>
+<Step>
+Give the app a name (e.g., "ConductorOne Integration") and click **Save**.
+</Step>
+<Step>
+On the app's **General** tab, note the **Client ID**.
+</Step>
+<Step>
+In the **Client Credentials** section, select **Public key / Private key** as the client authentication method.
+</Step>
+<Step>
+Click **Add Key**, then either generate a new key pair or paste your own public key. Save the private key securely — you'll need it when configuring the connector.
+</Step>
+<Step>
+Note the **Key ID** shown for your key.
+</Step>
+<Step>
+Navigate to the **Okta API Scopes** tab and grant the scopes required for your use case:
+
+   - `okta.users.read` and `okta.groups.read` (required for sync)
+   - `okta.roles.read` and `okta.apps.read` (required for sync)
+   - `okta.users.manage`, `okta.groups.manage`, `okta.roles.manage`, `okta.apps.manage` (required for provisioning)
+</Step>
+<Step>
+Navigate to the **Admin Roles** tab and assign an appropriate admin role to the app (e.g., **Super Administrator** or a custom role with the permissions you need).
+</Step>
+</Steps>
+
+You'll need the **Client ID**, **Private Key**, and **Private Key ID** when configuring the connector.
+
 ## Configure the Okta connector
 
 <Warning>
@@ -222,10 +273,16 @@ Click **Next**.
 Find the **Settings** area of the page and click **Edit**.
 </Step>
 <Step>
+Select your authentication method: **API Token** or **OAuth 2.0 Private Key**.
+</Step>
+<Step>
 Enter your Okta domain (the URL of your Okta instance is `<YOUR DOMAIN>.okta.com`) into the **Okta domain** field.
 </Step>
 <Step>
-Paste your API token into the **API token** field.
+Enter your credentials:
+
+   - For **API Token**: paste your API token into the **API token** field.
+   - For **OAuth 2.0 Private Key**: enter your **Okta Client ID**, **Okta Private Key ID**, and paste the **Okta Private Key** (PEM-encoded).
 </Step>
 <Step>
 **Optional.** If desired, click the checkbox to **Sync custom roles**.
