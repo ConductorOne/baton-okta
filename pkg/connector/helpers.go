@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"syscall"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -121,6 +122,16 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 }
 
 func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, message string) error {
+	// The Okta SDK wraps HTTP client errors in backoff.Permanent (which
+	// preserves the chain via Unwrap), so errors.Is can reach the underlying
+	// syscall.ECONNRESET through: *PermanentError → *url.Error → *net.OpError
+	// → *os.SyscallError → syscall.ECONNRESET.
+	// The Okta SDK treats these as permanent/non-retryable, but we classify
+	// them as Unavailable so IsSyncPreservable preserves the c1z artifact
+	// and the sync can resume on the next attempt.
+	if errors.Is(err, syscall.ECONNRESET) {
+		return status.Error(codes.Unavailable, fmt.Sprintf("connection reset: %v", err))
+	}
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
