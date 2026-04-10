@@ -690,7 +690,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 		defer updateResp.Body.Close()
 	}
 
-	l.Info("updated Okta group", zap.String("groupId", updatedGroup.Id), zap.String("name", updatedGroup.Profile.Name))
+	l.Info("updated Okta group", zap.String("groupId", updatedGroup.Id), zap.String("name", profile.Name))
 
 	resource, err := o.groupResource(ctx, updatedGroup)
 	if err != nil {
@@ -783,17 +783,19 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 
 	l.Info("created Okta group", zap.String("groupId", createdGroup.Id), zap.String("name", groupName))
 
-	userMemberIDs, _ := actions.GetResourceIdListArg(args, "userMembers")
-	for _, memberID := range userMemberIDs {
-		memberResp, err := o.connector.client.Group.AddUserToGroup(ctx, createdGroup.Id, memberID.Resource)
-		if err != nil {
+	userMemberIDs, ok := actions.GetResourceIdListArg(args, "userMembers")
+	if ok {
+		for _, memberID := range userMemberIDs {
+			memberResp, err := o.connector.client.Group.AddUserToGroup(ctx, createdGroup.Id, memberID.Resource)
+			if err != nil {
+				if memberResp != nil {
+					memberResp.Body.Close()
+				}
+				return nil, nil, fmt.Errorf("okta-connectorv2: group %s created but failed to add member %s: %w", createdGroup.Id, memberID.Resource, err)
+			}
 			if memberResp != nil {
 				memberResp.Body.Close()
 			}
-			return nil, nil, fmt.Errorf("okta-connectorv2: group %s created but failed to add member %s: %w", createdGroup.Id, memberID.Resource, err)
-		}
-		if memberResp != nil {
-			memberResp.Body.Close()
 		}
 	}
 
@@ -831,6 +833,7 @@ func (o *groupResourceType) Delete(ctx context.Context, resourceId *v2.ResourceI
 	l.Info("deleted Okta group", zap.String("groupId", groupId))
 	return nil, nil
 }
+
 func groupBuilder(connector *Okta) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
