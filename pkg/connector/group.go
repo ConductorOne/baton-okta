@@ -562,10 +562,6 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 	return resource, annos, nil
 }
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 func (o *groupResourceType) ResourceActions(ctx context.Context, registry actions.ActionRegistry) error {
 	if err := o.registerCreateGroupAction(ctx, registry); err != nil {
 		return err
@@ -596,8 +592,8 @@ func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, regis
 				Field: &config.Field_StringField{
 					StringField: &config.StringField{
 						Rules: &config.StringRules{
-							MinLen: ptr(uint64(1)),
-							MaxLen: ptr(uint64(255)),
+							MinLen: ToPtr(uint64(1)),
+							MaxLen: ToPtr(uint64(255)),
 						},
 					},
 				},
@@ -716,8 +712,8 @@ func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, regis
 				Field: &config.Field_StringField{
 					StringField: &config.StringField{
 						Rules: &config.StringRules{
-							MinLen: ptr(uint64(1)),
-							MaxLen: ptr(uint64(255)),
+							MinLen: ToPtr(uint64(1)),
+							MaxLen: ToPtr(uint64(255)),
 						},
 					},
 				},
