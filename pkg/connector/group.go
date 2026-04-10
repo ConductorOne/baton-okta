@@ -646,6 +646,10 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 		defer resp.Body.Close()
 	}
 
+	if existingGroup.Profile == nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: group %s has no profile", groupId)
+	}
+
 	// Build updated profile, preserving existing values for fields not provided
 	profile := &okta.GroupProfile{
 		Name:        existingGroup.Profile.Name,
@@ -733,7 +737,7 @@ func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, regis
 				Field: &config.Field_ResourceIdSliceField{
 					ResourceIdSliceField: &config.ResourceIdSliceField{
 						Rules: &config.RepeatedResourceIdRules{
-							AllowedResourceTypeIds: []string{"user"},
+							AllowedResourceTypeIds: []string{resourceTypeUser.Id},
 						},
 					},
 				},
@@ -783,15 +787,10 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 	for _, memberID := range userMemberIDs {
 		memberResp, err := o.connector.client.Group.AddUserToGroup(ctx, createdGroup.Id, memberID.Resource)
 		if err != nil {
-			l.Warn("failed to add initial member to group, skipping",
-				zap.String("userId", memberID.Resource),
-				zap.String("groupId", createdGroup.Id),
-				zap.Error(err),
-			)
 			if memberResp != nil {
 				memberResp.Body.Close()
 			}
-			continue
+			return nil, nil, fmt.Errorf("okta-connectorv2: group %s created but failed to add member %s: %w", createdGroup.Id, memberID.Resource, err)
 		}
 		if memberResp != nil {
 			memberResp.Body.Close()
@@ -823,7 +822,7 @@ func (o *groupResourceType) Delete(ctx context.Context, resourceId *v2.ResourceI
 			defer resp.Body.Close()
 		}
 		l.Error("failed to delete Okta group", zap.String("groupId", groupId), zap.Error(err))
-		return nil, handleOktaResponseError(resp, fmt.Errorf("okta-connectorv2: failed to delete group: %w", err))
+		return nil, handleOktaResponseError(resp, err)
 	}
 	if resp != nil {
 		defer resp.Body.Close()
