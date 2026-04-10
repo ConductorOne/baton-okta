@@ -236,7 +236,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 
 	roles, respCtx, err := listBindings(ctx, rs.client, resource.Id.Resource, qp)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, convertNotFoundError(err, "resource set not found")
 	}
 
 	for _, role := range roles {
