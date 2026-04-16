@@ -45,6 +45,8 @@ func (connector *Okta) ListEvents(
 		GroupChangeFilter,
 		ApplicationLifecycleFilter,
 		ApplicationMembershipFilter,
+		ApplicationMembershipRemoveFilter,
+		ApplicationUserChangeFilter,
 		RoleMembershipFilter,
 		UserLifecycleFilter,
 		CreateGrantFilter,

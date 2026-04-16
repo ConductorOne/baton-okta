@@ -203,6 +203,80 @@ var (
 			return nil
 		},
 	}
+	ApplicationMembershipRemoveFilter = EventFilter{
+		EventTypes:  mapset.NewSet[string]("application.user_membership.remove"),
+		TargetTypes: mapset.NewSet[string]("AppInstance", "User"),
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["AppInstance"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
+			}
+			if len(targetMap["User"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			}
+			user := targetMap["User"][0]
+			appInstance := targetMap["AppInstance"][0]
+
+			resource, err := sdkResource.NewResource(appInstance.DisplayName, resourceTypeApp, appInstance.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
+
+			rv.Event = &v2.Event_CreateRevokeEvent{
+				CreateRevokeEvent: &v2.CreateRevokeEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(resource, "access"),
+					Principal:   principal,
+				},
+			}
+
+			l.Debug("okta-event-feed: ApplicationMembershipRemoveFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeApp.Id),
+				zap.String("resource_id", appInstance.Id),
+				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("user_id", user.Id),
+			)
+			return nil
+		},
+	}
+	ApplicationUserChangeFilter = EventFilter{
+		EventTypes:  mapset.NewSet[string]("application.user_membership.update", "application.user_membership.change_username"),
+		TargetTypes: mapset.NewSet[string]("AppInstance", "User"),
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["AppInstance"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
+			}
+			if len(targetMap["User"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			}
+			user := targetMap["User"][0]
+			rv.Event = &v2.Event_ResourceChangeEvent{
+				ResourceChangeEvent: &v2.ResourceChangeEvent{
+					ResourceId: &v2.ResourceId{
+						ResourceType: resourceTypeUser.Id,
+						Resource:     user.Id,
+					},
+				},
+			}
+			l.Debug("okta-event-feed: ApplicationUserChangeFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeUser.Id),
+				zap.String("resource_id", user.Id),
+				zap.String("user_display_name", user.DisplayName),
+			)
+			return nil
+		},
+	}
 	RoleMembershipFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("user.account.privilege.grant"),
 		TargetTypes: mapset.NewSet[string]("ROLE", "User"),
@@ -250,7 +324,15 @@ var (
 		},
 	}
 	UserLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("user.lifecycle.create", "user.lifecycle.activate", "user.account.update_profile"),
+		EventTypes: mapset.NewSet[string](
+			"user.lifecycle.create",
+			"user.lifecycle.activate",
+			"user.lifecycle.suspend",
+			"user.lifecycle.unsuspend",
+			"user.lifecycle.deactivate",
+			"user.lifecycle.reactivate",
+			"user.account.update_profile",
+		),
 		TargetTypes: mapset.NewSet[string]("User"),
 		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["User"]) != 1 {
