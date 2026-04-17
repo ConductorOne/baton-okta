@@ -45,7 +45,13 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 | modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
 
 <Note>
-To delete an Okta group in C1, navigate to the connector's **Resources** tab, select **Groups**, open the individual group resource page, and use the **Delete** option. Group deletion is not available through the Automations tab.
+Group deletion is available via the CLI using the `--delete-resource` flag. To delete a group, run:
+
+```
+baton-okta --api-token $BATON_API_TOKEN --domain $BATON_DOMAIN --delete-resource "<okta-group-id>" --delete-resource-type "group"
+```
+
+Use the raw Okta external ID (e.g. `00g1abc2def3GHI4jk5`), not the C1 resource ID. Group deletion is not available through the C1 UI or the Automations tab.
 </Note>
 
 ## Gather Okta credentials 
@@ -397,6 +403,7 @@ Check that the connector data uploaded correctly. In C1, click **Apps**. On the 
 ### What's next?
 
 If Okta is your company's identity provider (meaning that it is used to SSO into other software), the connector sync will automatically create applications in C1 for all of your SCIMed software. Before you move on, review the [Create applications](/product/admin/applications) page for important information about how to set up connectors for the SCIMed apps.
+
 
 
 
