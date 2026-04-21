@@ -42,7 +42,17 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 | enable_user | `user_id` (string, required) | Unsuspends a suspended Okta user account |
 | disable_user     | `user_id` (string, required) | Suspends an active Okta user account |
 | create | `name` (string, required), `description` (string), `userMembers` (resource ID list) | Creates a new Okta group with optional initial members |
-| modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group |
+| modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
+
+<Note>
+Group deletion is available via the CLI using the `--delete-resource` flag. To delete a group, run:
+
+```
+baton-okta --api-token $BATON_API_TOKEN --domain $BATON_DOMAIN --delete-resource "<okta-group-id>" --delete-resource-type "group"
+```
+
+Use the raw Okta external ID (e.g. `00g1abc2def3GHI4jk5`), not the C1 resource ID. Group deletion is not available through the C1 UI or the Automations tab.
+</Note>
 
 ## Gather Okta credentials 
 
@@ -58,7 +68,10 @@ C1's capabilities depend on the permissions of the API token used to set up the 
 | Provision group membership       |                      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>                                  | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
 | Review application assignment    | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>              | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>                                  | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
 | Provision application assignment |                      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>                                  | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
-| Review admin roles               | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |                                          | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |                                         |
+| Review admin roles               | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |                                          | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
+| Create Okta group (action)       |                      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>                                  | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
+| Modify Okta group (action)       |                      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>                                  | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
+| Delete Okta group                |                      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>                                  | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>          |
 
 To learn more about Okta roles, visit [the Okta documentation on administrator roles and permissions](https://help.okta.com/en/prod/Content/Topics/Security/administrators-admin-comparison.htm). 
 
@@ -390,5 +403,7 @@ Check that the connector data uploaded correctly. In C1, click **Apps**. On the 
 ### What's next?
 
 If Okta is your company's identity provider (meaning that it is used to SSO into other software), the connector sync will automatically create applications in C1 for all of your SCIMed software. Before you move on, review the [Create applications](/product/admin/applications) page for important information about how to set up connectors for the SCIMed apps.
+
+
 
 
