@@ -70,8 +70,8 @@ func GetBoolArg(args *structpb.Struct, key string) (bool, bool) {
 }
 
 // GetResourceIDArg extracts a ResourceId from the args struct by key.
-// The value is expected to be a struct with "resource_type_id" and "resource_id" fields
-// (as stored by ResourceField). Returns the ResourceId and true if found, nil and false otherwise.
+// The value is expected to be a struct with "resourceTypeId" and "resourceId" fields.
+// Returns the ResourceId and true if found, nil and false otherwise.
 func GetResourceIDArg(args *structpb.Struct, key string) (*v2.ResourceId, bool) {
 	if args == nil || args.Fields == nil {
 		return nil, false
@@ -87,23 +87,14 @@ func GetResourceIDArg(args *structpb.Struct, key string) (*v2.ResourceId, bool) 
 		return nil, false
 	}
 
-	// Try to get resource_type_id and resource_id fields
-	resourceTypeID, ok := GetStringArg(structValue.StructValue, "resource_type_id")
+	resourceTypeID, ok := GetStringArg(structValue.StructValue, "resourceTypeId")
 	if !ok {
-		// Also try resource_type as an alternative
-		resourceTypeID, ok = GetStringArg(structValue.StructValue, "resource_type")
-		if !ok {
-			return nil, false
-		}
+		return nil, false
 	}
 
-	resourceID, ok := GetStringArg(structValue.StructValue, "resource_id")
+	resourceID, ok := GetStringArg(structValue.StructValue, "resourceId")
 	if !ok {
-		// Also try resource as an alternative
-		resourceID, ok = GetStringArg(structValue.StructValue, "resource")
-		if !ok {
-			return nil, false
-		}
+		return nil, false
 	}
 
 	return &v2.ResourceId{
@@ -214,23 +205,14 @@ func GetResourceIdListArg(args *structpb.Struct, key string) ([]*v2.ResourceId, 
 		if !ok {
 			return nil, false
 		}
-		// Try to get resource_type_id and resource_id fields
-		resourceTypeID, ok := GetStringArg(structValue.StructValue, "resource_type_id")
+		resourceTypeID, ok := GetStringArg(structValue.StructValue, "resourceTypeId")
 		if !ok {
-			// Also try resource_type as an alternative
-			resourceTypeID, ok = GetStringArg(structValue.StructValue, "resource_type")
-			if !ok {
-				return nil, false
-			}
+			return nil, false
 		}
 
-		resourceID, ok := GetStringArg(structValue.StructValue, "resource_id")
+		resourceID, ok := GetStringArg(structValue.StructValue, "resourceId")
 		if !ok {
-			// Also try resource as an alternative
-			resourceID, ok = GetStringArg(structValue.StructValue, "resource")
-			if !ok {
-				return nil, false
-			}
+			return nil, false
 		}
 		resourceIDs = append(resourceIDs, &v2.ResourceId{
 			ResourceType: resourceTypeID,
