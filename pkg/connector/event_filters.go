@@ -250,7 +250,15 @@ var (
 		},
 	}
 	UserLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet[string]("user.lifecycle.create", "user.lifecycle.activate", "user.account.update_profile"),
+		EventTypes: mapset.NewSet[string](
+			"user.lifecycle.create",
+			"user.lifecycle.activate",
+			"user.account.update_profile",
+			"user.lifecycle.deactivate",
+			"user.lifecycle.suspend",
+			"user.lifecycle.unsuspend",
+			"user.lifecycle.reactivate",
+		),
 		TargetTypes: mapset.NewSet[string]("User"),
 		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["User"]) != 1 {
