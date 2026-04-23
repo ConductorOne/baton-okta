@@ -118,6 +118,40 @@
       }
     },
     {
+      "name": "okta-client-id",
+      "displayName": "Okta Client ID",
+      "description": "The Okta Client ID",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "okta-private-key",
+      "displayName": "Okta Private Key",
+      "description": "The Okta Private Key (PEM-encoded)",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "okta-private-key-id",
+      "displayName": "Okta Private Key ID",
+      "description": "The Okta Private Key ID",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
       "name": "sync-inactive-apps",
       "displayName": "Sync inactive apps",
       "description": "Whether to sync inactive apps or not",
@@ -167,6 +201,26 @@
       "helpText": "Use an API token to authenticate.",
       "fields": [
         "api-token",
+        "domain",
+        "sync-inactive-apps",
+        "cache",
+        "cache-tti",
+        "cache-ttl",
+        "sync-custom-roles",
+        "skip-secondary-emails",
+        "sync-secrets",
+        "filter-email-domains",
+        "skip-app-groups"
+      ]
+    },
+    {
+      "name": "private-key-group",
+      "displayName": "OAuth 2.0 Private Key",
+      "helpText": "Use an OAuth 2.0 client credentials flow with a private key for least-privilege, scoped access.",
+      "fields": [
+        "okta-client-id",
+        "okta-private-key-id",
+        "okta-private-key",
         "domain",
         "sync-inactive-apps",
         "cache",

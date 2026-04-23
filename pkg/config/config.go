@@ -28,20 +28,17 @@ var (
 		field.WithDisplayName("Okta Client ID"),
 		field.WithRequired(true),
 		field.WithDescription("The Okta Client ID"),
-		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	oktaPrivateKeyId = field.StringField("okta-private-key-id",
 		field.WithDisplayName("Okta Private Key ID"),
 		field.WithRequired(true),
 		field.WithDescription("The Okta Private Key ID"),
-		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	oktaPrivateKey = field.StringField("okta-private-key",
 		field.WithDisplayName("Okta Private Key"),
 		field.WithRequired(true),
-		field.WithDescription("The Okta Private Key. This can be the whole private key or the path to the private key"),
+		field.WithDescription("The Okta Private Key (PEM-encoded)"),
 		field.WithIsSecret(true),
-		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	syncInactivateApps = field.BoolField("sync-inactive-apps",
 		field.WithDisplayName("Sync inactive apps"),
@@ -133,8 +130,8 @@ var Config = field.NewConfiguration([]field.SchemaField{
 		},
 		{
 			Name:        PrivateKeyGroup,
-			DisplayName: "Private Key",
-			HelpText:    "Use a private key to authenticate.",
+			DisplayName: "OAuth 2.0 Private Key",
+			HelpText:    "Use an OAuth 2.0 client credentials flow with a private key for least-privilege, scoped access.",
 			Fields: []field.SchemaField{
 				oktaClientId,
 				oktaPrivateKeyId,
@@ -149,7 +146,6 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				syncSecrets,
 				filterEmailDomains,
 				skipAppGroups},
-			ExportTarget: field.ExportTargetCLIOnly,
 		},
 	}),
 )
