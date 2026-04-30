@@ -29,8 +29,10 @@ var _ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
 
 const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
+const groupTypeProfileKey = "type"
 const builtInGroupType = "BUILT_IN"
 const appGroupType = "APP_GROUP"
+const oktaGroupType = "OKTA_GROUP"
 const apiPathGetGroupFmt = "/api/v1/groups/%s"
 
 type groupResourceType struct {
@@ -388,8 +390,9 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
 	profileMap := map[string]interface{}{
-		"description": group.Profile.Description,
-		"name":        group.Profile.Name,
+		"description":       group.Profile.Description,
+		"name":              group.Profile.Name,
+		groupTypeProfileKey: group.Type,
 	}
 
 	if userCount, exists := getGroupUserCount(group); exists {
