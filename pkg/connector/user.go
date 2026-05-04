@@ -120,7 +120,7 @@ func extractEmailsFromUserProfile(user *okta.User) []string {
 	}
 
 	// Check if login field contains an email address
-	if login, ok := oktaProfile["login"].(string); ok && login != "" {
+	if login, ok := oktaProfile[profileFieldLogin].(string); ok && login != "" {
 		if strings.Contains(login, "@") {
 			userEmails = append(userEmails, login)
 		}
@@ -156,7 +156,7 @@ func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
 	}
 
 	// Check if login field contains an email address
-	if login, ok := oktaProfile["login"].(string); ok && login != "" {
+	if login, ok := oktaProfile[profileFieldLogin].(string); ok && login != "" {
 		if strings.Contains(login, "@") {
 			userEmails = append(userEmails, login)
 		}
@@ -306,7 +306,7 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 			if id, ok := profileValue.(string); ok {
 				employeeIDs.Add(id)
 			}
-		case "login":
+		case profileFieldLogin:
 			if login, ok := profileValue.(string); ok {
 				// If possible, calculate shortname alias from login
 				splitLogin := strings.Split(login, "@")
@@ -451,16 +451,16 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 		return nil, fmt.Errorf("okta-connectorv2: missing email in account info")
 	}
 
-	login, ok := pMap["login"]
+	login, ok := pMap[profileFieldLogin]
 	if !ok {
 		login = email
 	}
 
 	return &okta.UserProfile{
-		"firstName": firstName,
-		"lastName":  lastName,
-		"email":     email,
-		"login":     login,
+		"firstName":       firstName,
+		"lastName":        lastName,
+		"email":           email,
+		profileFieldLogin: login,
 	}, nil
 }
 

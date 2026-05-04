@@ -42,9 +42,9 @@ func (rs *resourceSetsResourceType) ResourceType(ctx context.Context) *v2.Resour
 
 func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":          rs.ID,
-		"label":       rs.Label,
-		"description": rs.Description,
+		"id":                    rs.ID,
+		profileFieldLabel:       rs.Label,
+		profileFieldDescription: rs.Description,
 	}
 
 	return sdkResource.NewResource(
@@ -60,9 +60,9 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 
 func resourceSetResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":          *rs.Id,
-		"label":       *rs.Label,
-		"description": *rs.Description,
+		"id":                    *rs.Id,
+		profileFieldLabel:       *rs.Label,
+		profileFieldDescription: *rs.Description,
 	}
 
 	return sdkResource.NewResource(

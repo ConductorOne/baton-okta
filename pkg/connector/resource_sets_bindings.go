@@ -41,9 +41,9 @@ func (rsb *resourceSetsBindingsResourceType) ResourceType(ctx context.Context) *
 
 func resourceSetsBindingsResource(ctx context.Context, rs *ResourceSets, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":          rs.ID,
-		"label":       rs.Label,
-		"description": rs.Description,
+		"id":                    rs.ID,
+		profileFieldLabel:       rs.Label,
+		profileFieldDescription: rs.Description,
 	}
 
 	return sdkResource.NewResource(
@@ -57,9 +57,9 @@ func resourceSetsBindingsResource(ctx context.Context, rs *ResourceSets, parentR
 
 func resourceSetBindingsResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":          rs.GetId(),
-		"label":       rs.GetLabel(),
-		"description": rs.GetDescription(),
+		"id":                    rs.GetId(),
+		profileFieldLabel:       rs.GetLabel(),
+		profileFieldDescription: rs.GetDescription(),
 	}
 
 	return sdkResource.NewResource(
