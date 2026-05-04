@@ -50,7 +50,7 @@ func TestGroupTrait_TypeProfileKey(t *testing.T) {
 				t.Errorf("profile[%q] = %q, want %q", groupTypeProfileKey, got.GetStringValue(), tc.want)
 			}
 
-			for _, key := range []string{"name", "description"} {
+			for _, key := range []string{profileFieldName, profileFieldDescription} {
 				if _, ok := trait.Profile.Fields[key]; !ok {
 					t.Errorf("profile is missing pre-existing %q key", key)
 				}

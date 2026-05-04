@@ -26,8 +26,8 @@ var disableUser = &v2.BatonActionSchema{
 	},
 	ReturnTypes: []*config.Field{
 		{
-			Name:        "success",
-			DisplayName: "Success",
+			Name:        actionResultSuccess,
+			DisplayName: actionResultSuccessDisplay,
 			Field:       &config.Field_BoolField{},
 		},
 		{
@@ -54,8 +54,8 @@ var enableUser = &v2.BatonActionSchema{
 	},
 	ReturnTypes: []*config.Field{
 		{
-			Name:        "success",
-			DisplayName: "Success",
+			Name:        actionResultSuccess,
+			DisplayName: actionResultSuccessDisplay,
 			Field:       &config.Field_BoolField{},
 		},
 		{

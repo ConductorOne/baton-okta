@@ -69,10 +69,10 @@ var (
 		Annotations: v1AnnotationsForResourceType("custom-role", false),
 	}
 	resourceTypeUser = &v2.ResourceType{
-		Id:          "user",
+		Id:          userResourceTypeID,
 		DisplayName: "User",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
-		Annotations: v1AnnotationsForResourceType("user", true),
+		Annotations: v1AnnotationsForResourceType(userResourceTypeID, true),
 	}
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
@@ -216,7 +216,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "Email",
 					Order:       3,
 				},
-				"login": {
+				profileFieldLogin: {
 					DisplayName: "Login",
 					Required:    false,
 					Description: "This login will be used as the login for the user. Email will be used if login is not present.",
