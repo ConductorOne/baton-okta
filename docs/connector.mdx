@@ -25,6 +25,18 @@ sidebarTitle: "Okta"
 The standard roles **Workflows Administrator**, **Access Certifications Administrator**, and **Access Requests Administrator** appear as Custom Roles in C1. Enable **Sync Custom Roles** to see them. The Okta API returns these roles through the same endpoint as custom roles.
 </Note>
 
+<Note>
+Synced groups expose their source type on the resource profile as **`type`**. Today, Okta defines three values:
+
+- **`OKTA_GROUP`** — a group created and managed natively in Okta.
+- **`APP_GROUP`** — a push group created when a SCIM-integrated app mirrors its groups into Okta.
+- **`BUILT_IN`** — a system group provided by Okta (these are also marked immutable).
+
+The connector surfaces whatever value Okta returns, so any future group types Okta introduces will appear here verbatim.
+
+Use this attribute in policies and access profiles to verify that bindings and grants reference the intended kind of group, especially when an Okta-native group and an app push group share the same name.
+</Note>
+
 The Okta connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
 This connector does not support account deprovisioning. You must deprovision accounts directly in Okta.

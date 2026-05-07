@@ -29,8 +29,10 @@ var _ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
 
 const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
+const groupTypeProfileKey = "type"
 const builtInGroupType = "BUILT_IN"
 const appGroupType = "APP_GROUP"
+const oktaGroupType = "OKTA_GROUP"
 const apiPathGetGroupFmt = "/api/v1/groups/%s"
 
 type groupResourceType struct {
@@ -388,8 +390,9 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 
 func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
 	profileMap := map[string]interface{}{
-		"description": group.Profile.Description,
-		"name":        group.Profile.Name,
+		profileFieldDescription: group.Profile.Description,
+		profileFieldName:        group.Profile.Name,
+		groupTypeProfileKey:     group.Type,
 	}
 
 	if userCount, exists := getGroupUserCount(group); exists {
@@ -586,7 +589,7 @@ func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, regis
 				IsRequired:  true,
 			},
 			{
-				Name:        "name",
+				Name:        profileFieldName,
 				DisplayName: "Group Name",
 				Description: "The new name for the group.",
 				Field: &config.Field_StringField{
@@ -600,7 +603,7 @@ func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, regis
 				IsRequired: false,
 			},
 			{
-				Name:        "description",
+				Name:        profileFieldDescription,
 				DisplayName: "Description",
 				Description: "The new description for the group.",
 				Field:       &config.Field_StringField{},
@@ -608,7 +611,7 @@ func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, regis
 			},
 		},
 		ReturnTypes: []*config.Field{
-			{Name: "success", DisplayName: "Success", Field: &config.Field_BoolField{}},
+			{Name: actionResultSuccess, DisplayName: actionResultSuccessDisplay, Field: &config.Field_BoolField{}},
 			{Name: "resource", DisplayName: "Updated Group", Field: &config.Field_ResourceField{}},
 		},
 		ActionType: []v2.ActionType{v2.ActionType_ACTION_TYPE_UNSPECIFIED},
@@ -623,8 +626,8 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 		return nil, nil, err
 	}
 
-	newName, hasName := actions.GetStringArg(args, "name")
-	newDescription, hasDescription := actions.GetStringArg(args, "description")
+	newName, hasName := actions.GetStringArg(args, profileFieldName)
+	newDescription, hasDescription := actions.GetStringArg(args, profileFieldDescription)
 
 	if !hasName && !hasDescription {
 		return nil, nil, fmt.Errorf("okta-connectorv2: at least one of name or description must be provided")
@@ -686,7 +689,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 		defer updateResp.Body.Close()
 	}
 
-	l.Info("updated Okta group", zap.String("groupId", updatedGroup.Id), zap.String("name", profile.Name))
+	l.Info("updated Okta group", zap.String("groupId", updatedGroup.Id), zap.String(profileFieldName, profile.Name))
 
 	resource, err := o.groupResource(ctx, updatedGroup)
 	if err != nil {
@@ -706,7 +709,7 @@ func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, regis
 		Name: "create",
 		Arguments: []*config.Field{
 			{
-				Name:        "name",
+				Name:        profileFieldName,
 				DisplayName: "Group Name",
 				Description: "The name of the Okta group to create",
 				Field: &config.Field_StringField{
@@ -720,7 +723,7 @@ func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, regis
 				IsRequired: true,
 			},
 			{
-				Name:        "description",
+				Name:        profileFieldDescription,
 				DisplayName: "Description",
 				Description: "Description of the group",
 				Field:       &config.Field_StringField{},
@@ -741,7 +744,7 @@ func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, regis
 			},
 		},
 		ReturnTypes: []*config.Field{
-			{Name: "success", DisplayName: "Success", Field: &config.Field_BoolField{}},
+			{Name: actionResultSuccess, DisplayName: actionResultSuccessDisplay, Field: &config.Field_BoolField{}},
 			{Name: "resource", DisplayName: "Created Group", Field: &config.Field_ResourceField{}},
 		},
 		ActionType: []v2.ActionType{v2.ActionType_ACTION_TYPE_RESOURCE_CREATE},
@@ -751,12 +754,12 @@ func (o *groupResourceType) registerCreateGroupAction(ctx context.Context, regis
 func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	groupName, err := actions.RequireStringArg(args, "name")
+	groupName, err := actions.RequireStringArg(args, profileFieldName)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	description, _ := actions.GetStringArg(args, "description")
+	description, _ := actions.GetStringArg(args, profileFieldDescription)
 
 	newGroup := okta.Group{
 		Profile: &okta.GroupProfile{
@@ -770,14 +773,14 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 		if resp != nil {
 			defer resp.Body.Close()
 		}
-		l.Error("failed to create Okta group", zap.Error(err), zap.String("name", groupName))
+		l.Error("failed to create Okta group", zap.Error(err), zap.String(profileFieldName, groupName))
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create group: %w", err)
 	}
 	if resp != nil {
 		defer resp.Body.Close()
 	}
 
-	l.Info("created Okta group", zap.String("groupId", createdGroup.Id), zap.String("name", groupName))
+	l.Info("created Okta group", zap.String("groupId", createdGroup.Id), zap.String(profileFieldName, groupName))
 
 	userMemberIDs, ok := actions.GetResourceIdListArg(args, "userMembers")
 	if ok {

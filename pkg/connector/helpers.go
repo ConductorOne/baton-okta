@@ -167,7 +167,7 @@ func convertNotFoundError(err error, message string) error {
 // The message parameter provides additional context about the action result.
 func createSuccessResponse(message string) *structpb.Struct {
 	fields := map[string]*structpb.Value{
-		"success": structpb.NewBoolValue(true),
+		actionResultSuccess: structpb.NewBoolValue(true),
 	}
 	if message != "" {
 		fields["message"] = structpb.NewStringValue(message)
