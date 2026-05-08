@@ -60,9 +60,7 @@ func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGran
 		annos.Update(&v2.SkipEntitlementsAndGrants{})
 	}
 
-	if perms != nil {
-		annos.Update(perms)
-	}
+	annos.Update(perms)
 
 	return annos
 }

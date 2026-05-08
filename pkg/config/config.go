@@ -37,7 +37,7 @@ var (
 	oktaPrivateKey = field.StringField("okta-private-key",
 		field.WithDisplayName("Okta Private Key"),
 		field.WithRequired(true),
-		field.WithDescription("The Okta Private Key (PEM-encoded)"),
+		field.WithDescription("The Okta Private Key. This can be the whole private key or the path to the private key"),
 		field.WithIsSecret(true),
 	)
 	syncInactivateApps = field.BoolField("sync-inactive-apps",
