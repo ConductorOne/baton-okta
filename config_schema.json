@@ -131,7 +131,7 @@
     {
       "name": "okta-private-key",
       "displayName": "Okta Private Key",
-      "description": "The Okta Private Key. This can be the whole private key or the path to the private key",
+      "description": "The Okta Private Key (PEM-encoded)",
       "isRequired": true,
       "isSecret": true,
       "stringField": {
