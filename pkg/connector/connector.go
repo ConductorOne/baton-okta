@@ -42,7 +42,15 @@ type userFilterConfig struct {
 	includedEmailDomains []string
 }
 
-func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool) annotations.Annotations {
+func capabilityPermissions(perms ...string) *v2.CapabilityPermissions {
+	cp := &v2.CapabilityPermissions{}
+	for _, p := range perms {
+		cp.Permissions = append(cp.Permissions, &v2.CapabilityPermission{Permission: p})
+	}
+	return cp
+}
+
+func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool, perms *v2.CapabilityPermissions) annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Update(&v2.V1Identifier{
 		Id: resourceTypeID,
@@ -52,6 +60,8 @@ func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGran
 		annos.Update(&v2.SkipEntitlementsAndGrants{})
 	}
 
+	annos.Update(perms)
+
 	return annos
 }
 
@@ -60,47 +70,47 @@ var (
 		Id:          "role",
 		DisplayName: "Role",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
-		Annotations: v1AnnotationsForResourceType("role", false),
+		Annotations: v1AnnotationsForResourceType("role", false, capabilityPermissions("okta.roles.read", "okta.roles.manage")),
 	}
 	resourceTypeCustomRole = &v2.ResourceType{
 		Id:          "custom-role",
 		DisplayName: "Custom Role",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
-		Annotations: v1AnnotationsForResourceType("custom-role", false),
+		Annotations: v1AnnotationsForResourceType("custom-role", false, capabilityPermissions("okta.roles.read", "okta.roles.manage")),
 	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          userResourceTypeID,
 		DisplayName: "User",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
-		Annotations: v1AnnotationsForResourceType(userResourceTypeID, true),
+		Annotations: v1AnnotationsForResourceType(userResourceTypeID, true, capabilityPermissions("okta.users.read", "okta.users.manage")),
 	}
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
 		DisplayName: "Group",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
-		Annotations: v1AnnotationsForResourceType("group", false),
+		Annotations: v1AnnotationsForResourceType("group", false, capabilityPermissions("okta.groups.read", "okta.groups.manage")),
 	}
 	resourceTypeApp = &v2.ResourceType{
 		Id:          "app",
 		DisplayName: "App",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_APP},
-		Annotations: v1AnnotationsForResourceType("app", false),
+		Annotations: v1AnnotationsForResourceType("app", false, capabilityPermissions("okta.apps.read", "okta.apps.manage")),
 	}
 	resourceTypeResourceSets = &v2.ResourceType{
 		Id:          "resource-set",
 		DisplayName: "Resource Set",
-		Annotations: v1AnnotationsForResourceType("resource-set", false),
+		Annotations: v1AnnotationsForResourceType("resource-set", false, capabilityPermissions("okta.roles.read", "okta.roles.manage")),
 	}
 	resourceTypeResourceSetsBindings = &v2.ResourceType{
 		Id:          "resourceset-binding",
 		DisplayName: "Resource Set Binding",
-		Annotations: v1AnnotationsForResourceType("resourceset-binding", false),
+		Annotations: v1AnnotationsForResourceType("resourceset-binding", false, capabilityPermissions("okta.roles.read", "okta.roles.manage")),
 	}
 	resourceTypeApiToken = &v2.ResourceType{
 		Id:          "api-token",
 		DisplayName: "API Token",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_SECRET},
-		Annotations: v1AnnotationsForResourceType("api-token", true),
+		Annotations: v1AnnotationsForResourceType("api-token", true, capabilityPermissions("okta.apiTokens.read")),
 	}
 	defaultScopes = []string{
 		"okta.users.read",
