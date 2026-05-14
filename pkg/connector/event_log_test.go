@@ -16,7 +16,7 @@ func TestWrapListEventsError_FullContext(t *testing.T) {
 	// useless "the API returned an unknown error" sentinel from okta-sdk-golang.
 	header := http.Header{}
 	header.Set("X-Okta-Request-Id", "req-abc123")
-	resp := &okta.Response{Response: &http.Response{StatusCode: 502, Header: header}}
+	resp := &okta.Response{Response: &http.Response{StatusCode: http.StatusBadGateway, Header: header}}
 	qp := &query.Params{Since: "2026-05-13T00:00:00Z", After: "0oa1cursor"}
 	inner := errors.New("the API returned an unknown error")
 
@@ -51,7 +51,7 @@ func TestWrapListEventsError_MissingRequestIdAndCursor(t *testing.T) {
 	// Older Okta deployments or gateway-injected error responses sometimes omit the
 	// request-id header; first-page requests have no cursor. Optional fields must be
 	// elided cleanly (no empty key=value pairs).
-	resp := &okta.Response{Response: &http.Response{StatusCode: 500, Header: http.Header{}}}
+	resp := &okta.Response{Response: &http.Response{StatusCode: http.StatusInternalServerError, Header: http.Header{}}}
 	qp := &query.Params{Since: "2026-05-13T00:00:00Z"}
 	inner := errors.New("the API returned an unknown error")
 
