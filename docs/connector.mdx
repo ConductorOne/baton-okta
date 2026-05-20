@@ -240,7 +240,14 @@ On the app's **General** tab, note the **Client ID**.
 In the **Client Credentials** section, select **Public key / Private key** as the client authentication method.
 </Step>
 <Step>
+**Important: ensure DPoP is disabled.** In the same **Client Credentials** edit panel, locate the **Proof of Possession** option and confirm that **"Require Demonstrating Proof of Possession (DPoP) header in token requests"** is **unchecked**. Okta enables this by default for new API Services apps, but the connector does not currently support DPoP — leaving it on will cause every token request to fail with `"The DPoP proof JWT header is missing"`.
+</Step>
+<Step>
 Click **Add Key**, then either generate a new key pair or paste your own public key. Save the private key securely — you'll need it when configuring the connector.
+
+<Note>
+After clicking **Add Key**, click **Done** in the key dialog **and then click Save** in the outer Client Credentials panel. Okta's UI requires both clicks; missing the outer Save silently discards the key and the connector will fail with `"The client does not have a JWKSet configured, but the client_assertion requires one"`.
+</Note>
 </Step>
 <Step>
 Note the **Key ID** shown for your key.
@@ -252,13 +259,35 @@ Navigate to the **Okta API Scopes** tab and grant the scopes required for your u
    - `okta.roles.read` and `okta.apps.read` (required for sync)
    - `okta.users.manage`, `okta.groups.manage`, `okta.roles.manage`, `okta.apps.manage` (required for provisioning)
    - `okta.apiTokens.read` (required when **Sync secrets** is enabled)
+
+<Note>
+After clicking **Grant** for each scope, refresh the page and visually verify that all granted scopes appear under "Granted scopes." Okta's API Services app config can silently discard incomplete saves. If scopes are missing, the connector will fail with `"You are not allowed any of the requested scopes"`.
+</Note>
 </Step>
 <Step>
 Navigate to the **Admin Roles** tab and assign an appropriate admin role to the app (e.g., **Super Administrator** or a custom role with the permissions you need).
+
+<Note>
+Without an admin role assignment, the connector will fail with `"You do not have permission to perform the requested action"` (HTTP 403) on its first API call — even when all OAuth scopes are granted correctly.
+</Note>
 </Step>
 </Steps>
 
 You'll need the **Client ID**, **Private Key**, and **Private Key ID** when configuring the connector.
+
+<Warning>
+**Private key format.** The connector requires the private key in **PKCS#1** PEM format — header line `-----BEGIN RSA PRIVATE KEY-----`.
+
+OpenSSL 3.0+ produces **PKCS#8** by default — header line `-----BEGIN PRIVATE KEY-----` — which the connector will reject with `"RSA private key is of the wrong type"`.
+
+If your private key file starts with `-----BEGIN PRIVATE KEY-----`, convert it to PKCS#1 first:
+
+```bash
+openssl rsa -in your-key.pem -out your-key.pkcs1.pem -traditional
+```
+
+Use the contents of `your-key.pkcs1.pem` when configuring the connector.
+</Warning>
 
 ## Configure the Okta connector
 

@@ -17,15 +17,22 @@ BATON_API_TOKEN=oktaAPIToken BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
 ```
 
-Or auth using a public/private keypair
+Or auth using a public/private keypair (OAuth 2.0 client credentials with `private_key_jwt`):
 
 ```
+BATON_AUTH_METHOD=private-key-group \
 BATON_OKTA_CLIENT_ID=appClientID \
 BATON_OKTA_PRIVATE_KEY='auth.key' \
 BATON_OKTA_PRIVATE_KEY_ID=appKID \
 BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
 ```
+
+Notes for OAuth setup:
+
+- `BATON_AUTH_METHOD=private-key-group` is required when authenticating via OAuth — without it the CLI defaults to the API Token field group and refuses to start with `field api-token of type string is marked as required but it has a zero-value`.
+- The private key must be in **PKCS#1** PEM format (`-----BEGIN RSA PRIVATE KEY-----`). If `openssl genrsa` produced a PKCS#8 key (`-----BEGIN PRIVATE KEY-----`), convert it with `openssl rsa -in key.pem -out key.pkcs1.pem -traditional`.
+- See [`docs/connector.mdx`](docs/connector.mdx) for the complete Okta-side setup, including the required **disable DPoP** and admin-role assignment steps.
 
 ## docker
 
