@@ -474,7 +474,7 @@ spec:
     spec:
       containers:
       - name: baton-okta
-        image: ghcr.io/conductorone/baton-okta:latest
+        image: public.ecr.aws/conductorone/baton-okta:latest
         imagePullPolicy: IfNotPresent
         env:
         - name: BATON_HOST_ID
@@ -502,7 +502,3 @@ Check that the connector data uploaded correctly. In C1, click **Apps**. On the 
 ### What's next?
 
 If Okta is your company's identity provider (meaning that it is used to SSO into other software), the connector sync will automatically create applications in C1 for all of your SCIMed software. Before you move on, review the [Create applications](/product/admin/applications) page for important information about how to set up connectors for the SCIMed apps.
-
-
-
-
