@@ -108,6 +108,9 @@ func (o *appResourceType) Entitlements(
 	rv = append(rv, sdkEntitlement.NewAssignmentEntitlement(resource, "access",
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s App Access", resource.DisplayName)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has access to the %s app in Okta", resource.DisplayName)),
+		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
+			Id: V1MembershipEntitlementID(resource.Id.GetResource()),
+		}),
 	))
 
 	return rv, nil, nil
