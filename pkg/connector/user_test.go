@@ -1,6 +1,55 @@
 package connector
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/okta/okta-sdk-golang/v2/okta"
+)
+
+// FDE-178 / RFC §8.5 gap-R6: user resources must carry a V1Identifier
+// annotation so v1→v2 migration can map them.
+func TestUserResource_HasV1Identifier(t *testing.T) {
+	const userID = "00u1abc2def3GHI4jk5"
+
+	profile := okta.UserProfile{
+		"firstName":   "Test",
+		"lastName":    "User",
+		"email":       "test.user@example.com",
+		"login":       "test.user@example.com",
+		"displayName": "Test User",
+	}
+	user := &okta.User{
+		Id:      userID,
+		Status:  userStatusActive,
+		Profile: &profile,
+	}
+
+	got, err := userResource(context.Background(), user, false)
+	if err != nil {
+		t.Fatalf("userResource returned error: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("userResource returned nil resource")
+	}
+
+	annos := annotations.Annotations(got.GetAnnotations())
+	v1id := &v2.V1Identifier{}
+	found, err := annos.Pick(v1id)
+	if err != nil {
+		t.Fatalf("Pick(V1Identifier) returned error: %v", err)
+	}
+	if !found {
+		t.Fatalf("user resource is missing V1Identifier annotation")
+	}
+
+	want := fmtResourceIdV1(userID)
+	if v1id.GetId() != want {
+		t.Errorf("V1Identifier id = %q, want %q", v1id.GetId(), want)
+	}
+}
 
 func Test_shouldIncludeUserByEmails(t *testing.T) {
 	type args struct {

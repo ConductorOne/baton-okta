@@ -19,6 +19,7 @@ import (
 
 const (
 	V1MembershipEntitlementIDTemplate = "membership:%s"
+	V1RoleEntitlementIDTemplate       = "role:%s"
 	V1GrantIDTemplate                 = "grant:%s:%s"
 )
 
@@ -28,6 +29,13 @@ type responseContext struct {
 
 func V1MembershipEntitlementID(resourceID string) string {
 	return fmt.Sprintf(V1MembershipEntitlementIDTemplate, resourceID)
+}
+
+// V1RoleEntitlementID returns the v1 entitlement id for role assignments.
+// v1 emitted role grants on the Org resource with this id shape; v2 emits
+// them on a Role resource, so we annotate with the v1 form for migration.
+func V1RoleEntitlementID(roleType string) string {
+	return fmt.Sprintf(V1RoleEntitlementIDTemplate, roleType)
 }
 
 func fmtGrantIdV1(entitlementID string, userID string) string {
