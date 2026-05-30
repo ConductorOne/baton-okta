@@ -3,7 +3,7 @@ module github.com/conductorone/baton-okta
 go 1.25.2
 
 require (
-	github.com/conductorone/baton-sdk v0.9.20
+	github.com/conductorone/baton-sdk v0.10.0
 	github.com/conductorone/okta-sdk-golang/v5 v5.0.6-conductorone
 	github.com/deckarep/golang-set/v2 v2.9.0
 	github.com/ennyjfrick/ruleguard-logfatal v0.0.2
@@ -17,7 +17,6 @@ require (
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/aws/aws-lambda-go v1.47.0 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -76,10 +75,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
