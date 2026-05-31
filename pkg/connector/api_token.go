@@ -142,6 +142,8 @@ func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {
 		}),
 		resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
 		resource.WithSecretCreatedAt(*apiToken.Created),
+		resource.WithSecretType(v2.SecretTrait_CREDENTIAL_TYPE_STATIC_SECRET),
+		resource.WithSecretDetail("okta.api_token"),
 	}
 	rv, err := resource.NewSecretResource(
 		apiToken.Name,
