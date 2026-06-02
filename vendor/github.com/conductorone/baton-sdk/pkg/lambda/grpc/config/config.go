@@ -128,7 +128,8 @@ func lambdaTLSConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("new-dpop-client: failed to load system cert pool: %w", err)
 	}
 	if certPath := strings.TrimSpace(os.Getenv(lambdaCACertPathEnv)); certPath != "" {
-		pemBytes, err := os.ReadFile(certPath) //nolint:gosec // Operator-provided CA bundle path for lambda-hosted connector configuration.
+		//nolint:gosec // Operator-provided CA bundle path for lambda-hosted connector configuration.
+		pemBytes, err := os.ReadFile(certPath)
 		if err != nil {
 			return nil, fmt.Errorf("new-dpop-client: failed to read %s: %w", lambdaCACertPathEnv, err)
 		}
@@ -142,10 +143,18 @@ func lambdaTLSConfig() (*tls.Config, error) {
 	}, nil
 }
 
+// lambdaHTTPClientTimeout caps every lambda-config request so a hung endpoint
+// can't stall the caller indefinitely. 30s matches the request budget used by
+// the other RPC clients in this SDK (see pkg/uhttp/transport.go).
+const lambdaHTTPClientTimeout = 30 * time.Second
+
 func lambdaHTTPClient(tlsConfig *tls.Config) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig.Clone()
-	return &http.Client{Transport: transport}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   lambdaHTTPClientTimeout,
+	}
 }
 
 func parseClientID(input string) (string, string, error) {

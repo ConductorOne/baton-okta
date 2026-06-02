@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +22,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/ugrpc"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/maypok86/otter/v2"
+	"github.com/mitchellh/mapstructure"
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -166,10 +170,20 @@ func closeLambdaConnectorGeneration(ctx context.Context, connector types.Connect
 	errCh := make(chan error, 1)
 	if closer, ok := connector.(lambdaConnectorCloserWithContext); ok {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					errCh <- fmt.Errorf("panic in connector Close(ctx): %v\n%s", r, debug.Stack())
+				}
+			}()
 			errCh <- closer.Close(ctx)
 		}()
 	} else if closer, ok := connector.(lambdaConnectorCloser); ok {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					errCh <- fmt.Errorf("panic in connector Close(): %v\n%s", r, debug.Stack())
+				}
+			}()
 			errCh <- closer.Close()
 		}()
 	} else {
@@ -321,13 +335,14 @@ func OptionallyAddLambdaCommand[T field.Configurable](
 				return nil, fmt.Errorf("lambda-run: failed to unmarshal decrypted config: %w", err)
 			}
 
-			effectiveConfig := effectiveLambdaConfig(v, configStruct.AsMap())
+			connectorConfig := configStruct.AsMap()
+			effectiveConfig := effectiveLambdaConfig(v, connectorConfig, connectorSchema)
 			logLevelConfig, err := lambdaLogLevelConfigFromViper(effectiveConfig)
 			if err != nil {
 				return nil, err
 			}
 
-			t, err := MakeGenericConfiguration[T](effectiveConfig, decodeOpts)
+			t, err := makeLambdaConnectorConfiguration[T](v, effectiveConfig, connectorConfig, decodeOpts)
 			if err != nil {
 				return nil, fmt.Errorf("lambda-run: failed to make generic configuration: %w", err)
 			}
@@ -475,12 +490,76 @@ func cloneViperSettings(v *viper.Viper) *viper.Viper {
 	return cloned
 }
 
-func effectiveLambdaConfig(v *viper.Viper, connectorConfig map[string]any) *viper.Viper {
+func effectiveLambdaConfig(v *viper.Viper, connectorConfig map[string]any, connectorSchema field.Configuration) *viper.Viper {
 	effectiveConfig := cloneViperSettings(v)
+	stringMapFields := lambdaStringMapFields(connectorSchema)
 	for key, value := range connectorConfig {
+		if _, ok := stringMapFields[strings.ToLower(key)]; ok {
+			value = lambdaStringMapValueForViper(value)
+		}
 		effectiveConfig.Set(key, value)
 	}
 	return effectiveConfig
+}
+
+func lambdaStringMapFields(connectorSchema field.Configuration) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, schemaField := range connectorSchema.Fields {
+		if schemaField.Variant == field.StringMapVariant {
+			out[strings.ToLower(schemaField.FieldName)] = struct{}{}
+		}
+	}
+	for _, fieldGroup := range connectorSchema.FieldGroups {
+		for _, schemaField := range fieldGroup.Fields {
+			if schemaField.Variant == field.StringMapVariant {
+				out[strings.ToLower(schemaField.FieldName)] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+func lambdaStringMapValueForViper(value any) any {
+	if _, ok := value.(string); ok {
+		return value
+	}
+	// Viper.GetStringMap and GetStringMapString parse JSON strings, while
+	// Viper.Set lowercases nested map[string]any keys.
+	encoded, err := json.Marshal(cast.ToStringMapString(value))
+	if err != nil {
+		return value
+	}
+	return string(encoded)
+}
+
+// Typed configs must decode the raw lambda payload directly. Decoding them from
+// effectiveConfig would send StringMap values through Viper.Set, which lowercases
+// nested map keys.
+func makeLambdaConnectorConfiguration[T field.Configurable](v *viper.Viper, effectiveConfig *viper.Viper, connectorConfig map[string]any, opts ...field.DecodeHookOption) (T, error) {
+	var config T
+	if _, ok := any(config).(*viper.Viper); ok {
+		if t, ok := any(effectiveConfig).(T); ok {
+			return t, nil
+		}
+		return config, fmt.Errorf("cannot convert *viper.Viper to %T", config)
+	}
+
+	t, err := MakeGenericConfiguration[T](v, opts...)
+	if err != nil {
+		return t, err
+	}
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: field.ComposeDecodeHookFunc(opts...),
+		Result:     any(t),
+	})
+	if err != nil {
+		return t, err
+	}
+	if err := decoder.Decode(connectorConfig); err != nil {
+		return t, err
+	}
+	return t, nil
 }
 
 // createSessionCacheConstructor creates a session cache constructor function that uses the provided gRPC client.

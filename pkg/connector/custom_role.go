@@ -75,7 +75,7 @@ func (o *customRoleResourceType) Entitlements(
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
-			Id: V1MembershipEntitlementID(role.Type),
+			Id: V1RoleEntitlementID(role.Type),
 		}),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
 	)

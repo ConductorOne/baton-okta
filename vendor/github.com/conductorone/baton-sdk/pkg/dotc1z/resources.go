@@ -54,14 +54,30 @@ func (r *resourcesTable) Schema() (string, []interface{}) {
 	}
 }
 
-func (r *resourcesTable) Migrations(ctx context.Context, db *goqu.Database) error {
-	return nil
+func (r *resourcesTable) Migrations(ctx context.Context, db *goqu.Database) (bool, error) {
+	return false, nil
 }
 
 func (c *C1File) ListResources(ctx context.Context, request *v2.ResourcesServiceListResourcesRequest) (*v2.ResourcesServiceListResourcesResponse, error) {
 	ctx, span := tracer.Start(ctx, "C1File.ListResources")
 	var err error
 	defer func() { uotel.EndSpanWithError(span, err) }()
+
+	// Trait filter (RFC §B2): pre-resolve resource_type_ids that
+	// carry the requested trait and narrow the resources scan to
+	// just those rows. Collapses C1's two-pass
+	// fetchResourcesWithTraitV2 (one ListResourceTypes + one
+	// per-RT ListResources) into a single Reader call.
+	if request.GetTrait() != v2.ResourceType_TRAIT_UNSPECIFIED {
+		ret, nextPageToken, err := c.listResourcesByTrait(ctx, request)
+		if err != nil {
+			return nil, fmt.Errorf("error listing resources by trait: %w", err)
+		}
+		return v2.ResourcesServiceListResourcesResponse_builder{
+			List:          ret,
+			NextPageToken: nextPageToken,
+		}.Build(), nil
+	}
 
 	ret, nextPageToken, err := listConnectorObjects(ctx, c, resources.Name(), request, func() *v2.Resource { return &v2.Resource{} })
 	if err != nil {
@@ -100,14 +116,6 @@ func (c *C1File) PutResources(ctx context.Context, resourceObjs ...*v2.Resource)
 	defer func() { uotel.EndSpanWithError(span, err) }()
 
 	return c.putResourcesInternal(ctx, bulkPutConnectorObject, resourceObjs...)
-}
-
-func (c *C1File) PutResourcesIfNewer(ctx context.Context, resourceObjs ...*v2.Resource) error {
-	ctx, span := tracer.Start(ctx, "C1File.PutResourcesIfNewer")
-	var err error
-	defer func() { uotel.EndSpanWithError(span, err) }()
-
-	return c.putResourcesInternal(ctx, bulkPutConnectorObjectIfNewer, resourceObjs...)
 }
 
 type resourcePutFunc func(context.Context, *C1File, string, func(m *v2.Resource) (goqu.Record, error), ...*v2.Resource) error

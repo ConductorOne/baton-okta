@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
+	"strings"
 	"syscall"
 
 	"google.golang.org/grpc/codes"
@@ -24,6 +26,9 @@ func wrapTransientNetworkError(err error) error {
 	if errors.Is(err, syscall.ECONNRESET) {
 		return WrapErrors(codes.Unavailable, "connection reset", err)
 	}
+	if isHTTP2ClientConnectionLost(err) {
+		return WrapErrors(codes.Unavailable, "http2 client connection lost", err)
+	}
 
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
@@ -35,9 +40,20 @@ func wrapTransientNetworkError(err error) error {
 		}
 	}
 
+	// Catches net.Error timeout types not wrapped in url.Error
+	// (e.g. tls.handshakeTimeoutError at the RoundTrip level).
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return WrapErrors(codes.DeadlineExceeded, fmt.Sprintf("network timeout: %v", err), err)
+	}
+
 	if errors.Is(err, context.DeadlineExceeded) {
 		return status.Error(codes.DeadlineExceeded, "request timeout")
 	}
 
 	return err
+}
+
+func isHTTP2ClientConnectionLost(err error) bool {
+	return strings.Contains(err.Error(), "http2: client connection lost")
 }

@@ -49,8 +49,8 @@ func (r *entitlementsTable) Schema() (string, []interface{}) {
 	}
 }
 
-func (r *entitlementsTable) Migrations(ctx context.Context, db *goqu.Database) error {
-	return nil
+func (r *entitlementsTable) Migrations(ctx context.Context, db *goqu.Database) (bool, error) {
+	return false, nil
 }
 
 func (c *C1File) ListEntitlements(ctx context.Context, request *v2.EntitlementsServiceListEntitlementsRequest) (*v2.EntitlementsServiceListEntitlementsResponse, error) {
@@ -106,14 +106,6 @@ func (c *C1File) PutEntitlements(ctx context.Context, entitlementObjs ...*v2.Ent
 	defer func() { uotel.EndSpanWithError(span, err) }()
 
 	return c.putEntitlementsInternal(ctx, bulkPutConnectorObject, entitlementObjs...)
-}
-
-func (c *C1File) PutEntitlementsIfNewer(ctx context.Context, entitlementObjs ...*v2.Entitlement) error {
-	ctx, span := tracer.Start(ctx, "C1File.PutEntitlementsIfNewer")
-	var err error
-	defer func() { uotel.EndSpanWithError(span, err) }()
-
-	return c.putEntitlementsInternal(ctx, bulkPutConnectorObjectIfNewer, entitlementObjs...)
 }
 
 type entitlementPutFunc func(context.Context, *C1File, string, func(m *v2.Entitlement) (goqu.Record, error), ...*v2.Entitlement) error

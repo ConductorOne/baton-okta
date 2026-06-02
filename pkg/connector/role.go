@@ -125,7 +125,7 @@ func (o *roleResourceType) Entitlements(
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
-			Id: V1MembershipEntitlementID(role.Type),
+			Id: V1RoleEntitlementID(role.Type),
 		}),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
 	)
@@ -392,7 +392,7 @@ func roleResource(ctx context.Context, role *okta.Role, ctype *v2.ResourceType) 
 		objectID,
 		[]sdkResource.RoleTraitOption{sdkResource.WithRoleProfile(profile)},
 		sdkResource.WithAnnotation(&v2.V1Identifier{
-			Id: fmtResourceIdV1(objectID),
+			Id: V1RoleEntitlementID(objectID),
 		}),
 	)
 }
@@ -402,7 +402,7 @@ func roleGrant(userID string, resource *v2.Resource) *v2.Grant {
 
 	return sdkGrant.NewGrant(resource, "assigned", ur,
 		sdkGrant.WithAnnotation(&v2.V1Identifier{
-			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
+			Id: fmtGrantIdV1(V1RoleEntitlementID(resource.Id.Resource), userID),
 		}),
 	)
 }
@@ -412,7 +412,7 @@ func roleGroupGrant(groupID string, resource *v2.Resource, shouldExpand bool) *v
 
 	grantOpts := []sdkGrant.GrantOption{
 		sdkGrant.WithAnnotation(&v2.V1Identifier{
-			Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
+			Id: fmtGrantIdV1(V1RoleEntitlementID(resource.Id.Resource), groupID),
 		}),
 	}
 
