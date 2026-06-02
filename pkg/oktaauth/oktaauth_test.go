@@ -1,7 +1,6 @@
 package oktaauth
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -12,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -280,7 +280,6 @@ func TestTokenSource_CachesUntilExpiry(t *testing.T) {
 		t.Fatalf("expected 1 token call, got %d", got)
 	}
 
-	// Cross the refresh boundary (expires_in=3600s, buffer=60s).
 	cur = cur.Add(3600*time.Second - 30*time.Second)
 	if _, err := ts.Token(t.Context()); err != nil {
 		t.Fatalf("third Token (post-refresh): %v", err)
@@ -345,7 +344,6 @@ func TestParseRSAPrivateKey(t *testing.T) {
 	}
 }
 
-// fakeTokenSource yields a fixed accessToken without hitting any endpoint.
 type fakeTokenSource struct{ tok *accessToken }
 
 func (f *fakeTokenSource) Token(context.Context) (*accessToken, error) { return f.tok, nil }
@@ -632,8 +630,7 @@ func TestRoundTripper_NoRetryOnNonReplayable(t *testing.T) {
 
 	rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
 	c := &http.Client{Transport: rt}
-	body := bytes.NewBufferString(`{"x":1}`)
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/api/v1/users", body)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/api/v1/users", strings.NewReader(`{"x":1}`))
 	req.GetBody = nil
 	resp, err := c.Do(req)
 	if err != nil {
@@ -790,7 +787,6 @@ func TestTokenSource_NonceStoreIsolation(t *testing.T) {
 	rt := newRoundTripperForTest(t, key, tok, resNS, http.DefaultTransport)
 	c := &http.Client{Transport: rt}
 
-	// First resource call: no resource nonce yet, proof.nonce should be empty.
 	req1, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, resourceSrv.URL+"/x", nil)
 	resp1, err := c.Do(req1)
 	if err != nil {
@@ -804,7 +800,6 @@ func TestTokenSource_NonceStoreIsolation(t *testing.T) {
 		t.Fatalf("resource nonce store = %q, want res-nonce", resNS.GetNonce())
 	}
 
-	// Second resource call: proof must carry res-nonce, NOT tok-nonce.
 	req2, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, resourceSrv.URL+"/x", nil)
 	resp2, err := c.Do(req2)
 	if err != nil {
@@ -869,17 +864,177 @@ func TestTokenSource_Singleflight(t *testing.T) {
 
 	var wg sync.WaitGroup
 	const N = 32
+	tokens := make([]*accessToken, N)
 	for i := 0; i < N; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
-			if _, err := ts.Token(t.Context()); err != nil {
+			tok, err := ts.Token(t.Context())
+			if err != nil {
 				t.Errorf("Token: %v", err)
+				return
 			}
-		}()
+			tokens[i] = tok
+		}(i)
 	}
 	wg.Wait()
 	if got := h.calls.Load(); got != 1 {
 		t.Fatalf("expected 1 token call (singleflight), got %d", got)
 	}
+	for i := 1; i < N; i++ {
+		if tokens[i] != tokens[0] {
+			t.Fatalf("singleflight should hand the same token pointer to all callers; got differs at index %d", i)
+		}
+	}
+}
+
+func TestTokenSource_Singleflight_ErrorPropagation(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+
+	var wg sync.WaitGroup
+	const N = 16
+	errs := make([]error, N)
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = ts.Token(t.Context())
+		}(i)
+	}
+	wg.Wait()
+	for i, e := range errs {
+		if e == nil {
+			t.Fatalf("caller %d expected error, got nil", i)
+		}
+	}
+}
+
+func TestTokenSource_LeaderCancelDoesNotPoisonWaiters(t *testing.T) {
+	key := generateRSAKey(t)
+	hit := make(chan struct{}, 1)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case hit <- struct{}{}:
+		default:
+		}
+		<-release
+		body, _ := json.Marshal(map[string]any{"access_token": "x", "token_type": "DPoP", "expires_in": 3600})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+
+	leaderCtx, cancelLeader := context.WithCancel(t.Context())
+	leaderDone := make(chan error, 1)
+	go func() {
+		_, err := ts.Token(leaderCtx)
+		leaderDone <- err
+	}()
+	<-hit
+
+	waiterDone := make(chan error, 1)
+	go func() {
+		_, err := ts.Token(t.Context())
+		waiterDone <- err
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+	cancelLeader()
+
+	select {
+	case err := <-leaderDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("leader err = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("leader did not return")
+	}
+
+	close(release)
+
+	select {
+	case err := <-waiterDone:
+		if err != nil {
+			t.Fatalf("waiter should succeed despite leader cancel, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter did not return")
+	}
+}
+
+func TestRoundTripper_TokenSchemeChangesBetweenCalls(t *testing.T) {
+	key := generateRSAKey(t)
+	var captured []*http.Request
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		captured = append(captured, r.Clone(r.Context()))
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	switching := &switchingTokenSource{toks: []*accessToken{dpopAccessToken("tok1"), bearerAccessToken("tok2")}}
+	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: "sig"}
+	p, err := dpop.NewProofer(jwk)
+	if err != nil {
+		t.Fatalf("proofer: %v", err)
+	}
+	rt := &dpopRoundTripper{
+		inner:              http.DefaultTransport,
+		proofer:            p,
+		tokenSource:        switching,
+		resourceNonceStore: dpop_oauth2.NewNonceStore(),
+	}
+	c := &http.Client{Transport: rt}
+	for i := 0; i < 2; i++ {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/x", nil)
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatalf("Do[%d]: %v", i, err)
+		}
+		_ = resp.Body.Close()
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := captured[0].Header.Get("Authorization"); got != "DPoP tok1" {
+		t.Fatalf("call 0 Authorization = %q, want DPoP tok1", got)
+	}
+	if got := captured[0].Header.Get("DPoP"); got == "" {
+		t.Fatal("call 0 should have DPoP header")
+	}
+	if got := captured[1].Header.Get("Authorization"); got != "Bearer tok2" {
+		t.Fatalf("call 1 Authorization = %q, want Bearer tok2", got)
+	}
+	if got := captured[1].Header.Get("DPoP"); got != "" {
+		t.Fatalf("call 1 should not have DPoP header, got: %q", got)
+	}
+	if got := captured[1].Header.Get("x-okta-user-agent-extended"); got != "" {
+		t.Fatalf("call 1 should not have telemetry header, got: %q", got)
+	}
+}
+
+type switchingTokenSource struct {
+	mu   sync.Mutex
+	toks []*accessToken
+	idx  int
+}
+
+func (s *switchingTokenSource) Token(context.Context) (*accessToken, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tok := s.toks[s.idx]
+	if s.idx < len(s.toks)-1 {
+		s.idx++
+	}
+	return tok, nil
 }

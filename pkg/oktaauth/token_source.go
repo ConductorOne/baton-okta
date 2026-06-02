@@ -18,24 +18,25 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"golang.org/x/sync/singleflight"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // accessToken carries both the secret material and the Authorization scheme
 // Okta returned, so the round tripper can pick `DPoP` or `Bearer` per the
 // app's actual configuration (Require-DPoP=ON returns DPoP, OFF returns
-// Bearer).
+// Bearer). Fields are immutable after construction.
 type accessToken struct {
 	value  string
 	scheme string
+	// expiry is the absolute moment after which the token is no longer accepted.
 	expiry time.Time
 }
 
 func (t *accessToken) bindsDPoP() bool {
-	return strings.EqualFold(t.scheme, tokenSchemeDPoP)
+	return t != nil && strings.EqualFold(t.scheme, tokenSchemeDPoP)
 }
 
-// tokenGetter is the round tripper's view of the token source. Real source
-// is tokenSource; tests can swap a fake.
 type tokenGetter interface {
 	Token(ctx context.Context) (*accessToken, error)
 }
@@ -70,13 +71,15 @@ func newTokenSource(cfg tokenSourceConfig) *tokenSource {
 }
 
 const (
-	clientAssertionType    = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-	tokenRefreshBuffer     = 60 * time.Second
-	defaultTokenLifetime   = time.Hour
-	clientAssertionExpiry  = 5 * time.Minute
-	tokenSchemeDPoP        = "DPoP"
-	tokenSchemeBearer      = "Bearer"
-	useDPoPNonceErrorCode  = "use_dpop_nonce"
+	clientAssertionType   = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+	tokenRefreshBuffer    = 60 * time.Second
+	defaultTokenLifetime  = time.Hour
+	clientAssertionExpiry = 5 * time.Minute
+	tokenSchemeDPoP       = "DPoP"
+	tokenSchemeBearer     = "Bearer"
+	useDPoPNonceErrorCode = "use_dpop_nonce"
+	refreshTimeout        = 30 * time.Second
+	errorBodyExcerptLimit = 200
 )
 
 func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
@@ -84,13 +87,16 @@ func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
 		return cached, nil
 	}
 
-	// singleflight collapses concurrent refreshes so we don't hammer the
-	// token endpoint when N goroutines see the same expiry at once.
-	v, err, _ := t.group.Do("refresh", func() (any, error) {
+	// DoChan + select means each caller honours its own ctx. The exchange runs
+	// on a detached background ctx so a cancel from any one waiter cannot
+	// abort the refresh the others are waiting on.
+	ch := t.group.DoChan("refresh", func() (any, error) {
 		if cached := t.cachedValid(); cached != nil {
 			return cached, nil
 		}
-		tok, err := t.exchange(ctx)
+		bg, cancel := context.WithTimeout(context.Background(), refreshTimeout)
+		defer cancel()
+		tok, err := t.exchange(bg)
 		if err != nil {
 			return nil, err
 		}
@@ -99,10 +105,15 @@ func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
 		t.mu.Unlock()
 		return tok, nil
 	})
-	if err != nil {
-		return nil, err
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Val.(*accessToken), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-	return v.(*accessToken), nil
 }
 
 func (t *tokenSource) cachedValid() *accessToken {
@@ -124,7 +135,7 @@ func (t *tokenSource) exchange(ctx context.Context) (*accessToken, error) {
 			return nil, err
 		}
 	}
-	return nil, errors.New("oktaauth: token endpoint demanded a fresh nonce twice in a row")
+	return nil, status.Error(codes.Unavailable, "oktaauth: token endpoint demanded a fresh nonce twice in a row")
 }
 
 func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, error) {
@@ -160,7 +171,7 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 
 	resp, err := t.cfg.httpClient.Do(req) //nolint:gosec // same fixed tokenURL as above
 	if err != nil {
-		return nil, false, fmt.Errorf("token request: %w", err)
+		return nil, false, status.Error(codes.Unavailable, fmt.Sprintf("token request: %v", err))
 	}
 	defer resp.Body.Close()
 
@@ -177,11 +188,11 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 		errCode, errDesc := parseTokenError(body)
 		if errCode == useDPoPNonceErrorCode {
 			if resp.Header.Get(dpopNonceHdr) == "" {
-				return nil, false, errors.New("token endpoint asked for a nonce but didn't supply DPoP-Nonce header")
+				return nil, false, status.Error(codes.Unavailable, "token endpoint asked for a nonce but didn't supply DPoP-Nonce header")
 			}
 			return nil, true, errors.New("retry with nonce")
 		}
-		return nil, false, formatTokenError(resp.Status, errCode, errDesc)
+		return nil, false, formatTokenError(resp.StatusCode, resp.Status, errCode, errDesc, body)
 	}
 
 	var raw struct {
@@ -240,8 +251,6 @@ func (t *tokenSource) signClientAssertion() (string, error) {
 	return jwt.Signed(signer).Claims(claims).Serialize()
 }
 
-// parseTokenError extracts the OAuth 2.0 standard error code and description
-// from the JSON body. Falls back to empty strings if the body isn't structured.
 func parseTokenError(body []byte) (string, string) {
 	var raw struct {
 		Error            string `json:"error"`
@@ -253,15 +262,29 @@ func parseTokenError(body []byte) (string, string) {
 	return raw.Error, raw.ErrorDescription
 }
 
-func formatTokenError(status, code, desc string) error {
+func formatTokenError(httpStatusCode int, httpStatus, code, desc string, rawBody []byte) error {
+	var msg string
 	switch {
 	case code != "" && desc != "":
-		return fmt.Errorf("token endpoint %s: %s (%s)", status, code, desc)
+		msg = fmt.Sprintf("token endpoint %s: %s (%s)", httpStatus, code, desc)
 	case code != "":
-		return fmt.Errorf("token endpoint %s: %s", status, code)
+		msg = fmt.Sprintf("token endpoint %s: %s", httpStatus, code)
 	default:
-		return fmt.Errorf("token endpoint %s", status)
+		excerpt := strings.TrimSpace(string(rawBody))
+		if len(excerpt) > errorBodyExcerptLimit {
+			excerpt = excerpt[:errorBodyExcerptLimit] + "..."
+		}
+		if excerpt != "" {
+			msg = fmt.Sprintf("token endpoint %s: %s", httpStatus, excerpt)
+		} else {
+			msg = fmt.Sprintf("token endpoint %s", httpStatus)
+		}
 	}
+	grpcCode := codes.Unauthenticated
+	if httpStatusCode >= 500 {
+		grpcCode = codes.Unavailable
+	}
+	return status.Error(grpcCode, msg)
 }
 
 func normalizeTokenScheme(s string) string {

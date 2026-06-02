@@ -1,6 +1,7 @@
 package oktaauth
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,18 +35,20 @@ func (rt *dpopRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 			rt.resourceNonceStore.SetNonce(nonce)
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
-			return rt.send(req, tok)
+			// Re-fetch the token: the original may have expired during the
+			// round trip, in which case the retry would ship a proof bound
+			// to a token Okta will reject.
+			freshTok, terr := rt.tokenSource.Token(req.Context())
+			if terr != nil {
+				return nil, fmt.Errorf("oktaauth: refresh token before nonce retry: %w", terr)
+			}
+			return rt.send(req, freshTok)
 		}
 	}
 
 	return resp, nil
 }
 
-// send attaches the per-request DPoP proof (when the token is DPoP-bound) and
-// sets the Authorization scheme to match the token's type. A Bearer token
-// flows through without a DPoP header, which is what Okta returns when the
-// app's Require-DPoP toggle is OFF.
-//
 // Resource-server nonces are shared mutable state: a concurrent request can
 // observe a stale nonce, take a 401, and retry once via isReplayable. Don't
 // "fix" the race by serializing requests; the retry path IS the design.
@@ -59,11 +62,14 @@ func (rt *dpopRoundTripper) send(req *http.Request, tok *accessToken) (*http.Res
 		cloned.Body = body
 	}
 
-	scheme := tok.scheme
-	cloned.Header.Set(authorizationHdr, scheme+" "+tok.value)
+	cloned.Header.Set(authorizationHdr, tok.scheme+" "+tok.value)
 
 	if tok.bindsDPoP() {
-		proof, err := rt.proofer.CreateProof(req.Context(), req.Method, htuForProof(req),
+		htu, herr := htuForProof(req)
+		if herr != nil {
+			return nil, fmt.Errorf("oktaauth: build htu: %w", herr)
+		}
+		proof, err := rt.proofer.CreateProof(req.Context(), req.Method, htu,
 			dpop.WithAccessToken(tok.value),
 			dpop.WithNonceFunc(rt.nonceFunc()),
 		)
@@ -93,8 +99,8 @@ func (rt *dpopRoundTripper) nonceFunc() func() (string, error) {
 	}
 }
 
-// htuForProof strips query and fragment, since Okta rejects DPoP proofs whose htu claim contains them.
-func htuForProof(req *http.Request) string {
+// htuForProof: Okta rejects DPoP proofs whose htu claim contains query/fragment.
+func htuForProof(req *http.Request) (string, error) {
 	u := *req.URL
 	u.RawQuery = ""
 	u.Fragment = ""
@@ -104,7 +110,10 @@ func htuForProof(req *http.Request) string {
 	if u.Scheme == "" {
 		u.Scheme = "https"
 	}
-	return u.String()
+	if u.Host == "" {
+		return "", errors.New("request URL has no host")
+	}
+	return u.String(), nil
 }
 
 func isResourceNonceChallenge(resp *http.Response) bool {
