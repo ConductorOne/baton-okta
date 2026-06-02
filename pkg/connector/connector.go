@@ -365,11 +365,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			return nil, nil, fmt.Errorf("baton-okta: build dpop http client: %w", err)
 		}
 
-		// Bearer mode disables each SDK's own auth path so the oktaauth
-		// transport owns the token, DPoP proof, and nonce dance. v5 ships its
-		// own native DPoP implementation in PrivateKey mode that we're
-		// deliberately bypassing; an SDK upgrade that changes Bearer-mode
-		// semantics or auto-routes DPoP needs to re-validate this wiring.
+		// Bearer mode lets the oktaauth transport own auth; bypasses v5's native PrivateKey/DPoP path.
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			okta.WithAuthorizationMode("Bearer"),

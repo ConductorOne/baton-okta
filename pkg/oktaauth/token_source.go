@@ -110,7 +110,11 @@ func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
 		if res.Err != nil {
 			return nil, res.Err
 		}
-		return res.Val.(*accessToken), nil
+		tok, ok := res.Val.(*accessToken)
+		if !ok {
+			return nil, status.Error(codes.Internal, "oktaauth: unexpected value type from singleflight")
+		}
+		return tok, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -171,6 +175,9 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 
 	resp, err := t.cfg.httpClient.Do(req) //nolint:gosec // same fixed tokenURL as above
 	if err != nil {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
 		return nil, false, status.Error(codes.Unavailable, fmt.Sprintf("token request: %v", err))
 	}
 	defer resp.Body.Close()
