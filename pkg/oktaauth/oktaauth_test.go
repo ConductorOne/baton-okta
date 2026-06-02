@@ -26,18 +26,30 @@ import (
 	"github.com/conductorone/dpop/integrations/dpop_oauth2"
 	"github.com/conductorone/dpop/pkg/dpop"
 	"github.com/go-jose/go-jose/v4"
-	"golang.org/x/oauth2"
 )
 
-func generateRSAPEM(t *testing.T) (string, *rsa.PrivateKey) {
+func generateRSAKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("gen rsa: %v", err)
 	}
+	return key
+}
+
+func pemPKCS1(t *testing.T, key *rsa.PrivateKey) string {
+	t.Helper()
 	der := x509.MarshalPKCS1PrivateKey(key)
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: der})
-	return string(pemBytes), key
+	return string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: der}))
+}
+
+func pemPKCS8(t *testing.T, key any) string {
+	t.Helper()
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("pkcs8 marshal: %v", err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
 }
 
 func decodeJWTPayload(t *testing.T, jwt string) map[string]any {
@@ -57,20 +69,20 @@ func decodeJWTPayload(t *testing.T, jwt string) map[string]any {
 	return out
 }
 
-// tokenHandler is a stub /oauth2/v1/token. On the first request it can be
-// configured to return 400 use_dpop_nonce; on the second it returns a token.
+// tokenHandler is a stub /oauth2/v1/token. On the listed call numbers it
+// returns 400 use_dpop_nonce + a DPoP-Nonce header; on others it returns a
+// token (default token_type=DPoP, override via tokenType).
 type tokenHandler struct {
-	t              *testing.T
-	calls          int32
+	calls          atomic.Int32
 	requireNonceOn []int
 	nonce          string
 	tokenType      string
 }
 
 func (h *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	call := atomic.AddInt32(&h.calls, 1)
+	call := int(h.calls.Add(1))
 	for _, n := range h.requireNonceOn {
-		if int(call) == n {
+		if call == n {
 			w.Header().Set("DPoP-Nonce", h.nonce)
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"error":"use_dpop_nonce","error_description":"Authorization server requires nonce in DPoP proof."}`))
@@ -92,7 +104,7 @@ func (h *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-func newTestTokenSource(t *testing.T, server *httptest.Server, key *rsa.PrivateKey) *tokenSource {
+func newTestTokenSource(t *testing.T, server *httptest.Server, key *rsa.PrivateKey, now func() time.Time) *tokenSource {
 	t.Helper()
 	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: "sig"}
 	p, err := dpop.NewProofer(jwk)
@@ -107,22 +119,19 @@ func newTestTokenSource(t *testing.T, server *httptest.Server, key *rsa.PrivateK
 		proofer:    p,
 		nonceStore: dpop_oauth2.NewNonceStore(),
 		httpClient: server.Client(),
-		now:        time.Now,
+		now:        now,
 	})
 }
 
 func TestTokenSource_NonceRetry(t *testing.T) {
-	pemStr, key := generateRSAPEM(t)
-	_ = pemStr
+	key := generateRSAKey(t)
 
-	type observed struct {
-		proofNonce string
-	}
+	type observed struct{ proofNonce string }
 	obs := make([]observed, 0, 2)
 	var mu sync.Mutex
 
 	mux := http.NewServeMux()
-	h := &tokenHandler{t: t, requireNonceOn: []int{1}, nonce: "srv-nonce-1"}
+	h := &tokenHandler{requireNonceOn: []int{1}, nonce: "srv-nonce-1"}
 	mux.Handle("/oauth2/v1/token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proof := r.Header.Get("DPoP")
 		var nonce string
@@ -140,15 +149,15 @@ func TestTokenSource_NonceRetry(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	ts := newTestTokenSource(t, srv, key)
-	tok, err := ts.Token()
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	tok, err := ts.Token(t.Context())
 	if err != nil {
 		t.Fatalf("Token: %v", err)
 	}
-	if tok.AccessToken == "" {
+	if tok.value == "" {
 		t.Fatal("empty access token")
 	}
-	if got := atomic.LoadInt32(&h.calls); got != 2 {
+	if got := h.calls.Load(); got != 2 {
 		t.Fatalf("expected 2 token calls, got %d", got)
 	}
 	mu.Lock()
@@ -161,22 +170,35 @@ func TestTokenSource_NonceRetry(t *testing.T) {
 	}
 }
 
+func TestTokenSource_GivesUpAfterTwoNonceChallenges(t *testing.T) {
+	key := generateRSAKey(t)
+	h := &tokenHandler{requireNonceOn: []int{1, 2}, nonce: "n"}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil {
+		t.Fatal("expected give-up error after two nonce challenges")
+	}
+	if !strings.Contains(err.Error(), "twice") {
+		t.Fatalf("error should mention 'twice', got: %v", err)
+	}
+	if got := h.calls.Load(); got != 2 {
+		t.Fatalf("expected 2 calls before giving up, got %d", got)
+	}
+}
+
 func TestTokenSource_RejectsNonRSA(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("gen ecdsa: %v", err)
 	}
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
-
-	_, err = NewDPoPHTTPClient(context.Background(), Config{
+	_, err = NewDPoPHTTPClient(t.Context(), Config{
 		Domain:        "example.okta.com",
 		ClientID:      "c",
 		PrivateKeyID:  "k",
-		PrivateKeyPEM: string(pemBytes),
+		PrivateKeyPEM: pemPKCS8(t, key),
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for ECDSA key")
@@ -186,50 +208,149 @@ func TestTokenSource_RejectsNonRSA(t *testing.T) {
 	}
 }
 
-func TestTokenSource_RejectsNonDPoPTokenType(t *testing.T) {
-	_, key := generateRSAPEM(t)
-
-	mux := http.NewServeMux()
-	h := &tokenHandler{t: t, tokenType: "Bearer"}
-	mux.Handle("/oauth2/v1/token", h)
-	srv := httptest.NewServer(mux)
+func TestTokenSource_BearerTokenAccepted(t *testing.T) {
+	key := generateRSAKey(t)
+	h := &tokenHandler{tokenType: "Bearer"}
+	srv := httptest.NewServer(h)
 	defer srv.Close()
 
-	ts := newTestTokenSource(t, srv, key)
-	_, err := ts.Token()
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	tok, err := ts.Token(t.Context())
+	if err != nil {
+		t.Fatalf("Bearer token should be accepted, got: %v", err)
+	}
+	if tok.scheme != "Bearer" {
+		t.Fatalf("scheme = %q, want Bearer", tok.scheme)
+	}
+	if tok.bindsDPoP() {
+		t.Fatal("Bearer token must not bind DPoP")
+	}
+}
+
+func TestTokenSource_RejectsUnknownTokenType(t *testing.T) {
+	key := generateRSAKey(t)
+	h := &tokenHandler{tokenType: "MAC"}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "MAC") {
+		t.Fatalf("expected error mentioning MAC, got: %v", err)
+	}
+}
+
+func TestTokenSource_RejectsEmptyAccessToken(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token_type":"DPoP","expires_in":3600,"access_token":""}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "empty access_token") {
+		t.Fatalf("expected empty-access_token error, got: %v", err)
+	}
+}
+
+func TestTokenSource_CachesUntilExpiry(t *testing.T) {
+	key := generateRSAKey(t)
+	h := &tokenHandler{}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	cur := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	now := func() time.Time { return cur }
+	ts := newTestTokenSource(t, srv, key, now)
+
+	tok1, err := ts.Token(t.Context())
+	if err != nil {
+		t.Fatalf("first Token: %v", err)
+	}
+	tok2, err := ts.Token(t.Context())
+	if err != nil {
+		t.Fatalf("second Token: %v", err)
+	}
+	if tok1 != tok2 {
+		t.Fatal("expected cached token reuse, got fresh pointer")
+	}
+	if got := h.calls.Load(); got != 1 {
+		t.Fatalf("expected 1 token call, got %d", got)
+	}
+
+	// Cross the refresh boundary (expires_in=3600s, buffer=60s).
+	cur = cur.Add(3600*time.Second - 30*time.Second)
+	if _, err := ts.Token(t.Context()); err != nil {
+		t.Fatalf("third Token (post-refresh): %v", err)
+	}
+	if got := h.calls.Load(); got != 2 {
+		t.Fatalf("expected 2 token calls after expiry, got %d", got)
+	}
+}
+
+func TestTokenSource_ErrorMessageHidesRawBody(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"bad kid","internal_token":"secretXYZ"}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
 	if err == nil {
-		t.Fatal("expected error for non-DPoP token_type")
+		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "DPoP token_type") {
-		t.Fatalf("unexpected error: %v", err)
+	if strings.Contains(err.Error(), "secretXYZ") {
+		t.Fatalf("error message should not echo raw body, got: %v", err)
 	}
-}
-
-func TestParseRSAPrivateKey_PKCS8(t *testing.T) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("rsa gen: %v", err)
-	}
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatalf("pkcs8: %v", err)
-	}
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
-
-	got, err := parseRSAPrivateKey(string(pemBytes))
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if got == nil {
-		t.Fatal("nil key returned")
+	if !strings.Contains(err.Error(), "invalid_client") || !strings.Contains(err.Error(), "bad kid") {
+		t.Fatalf("error should include code+description, got: %v", err)
 	}
 }
 
-type fakeTokenSource struct{ tok *oauth2.Token }
+func TestParseRSAPrivateKey(t *testing.T) {
+	rsaKey := generateRSAKey(t)
+	ecKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
-func (f *fakeTokenSource) Token() (*oauth2.Token, error) { return f.tok, nil }
+	cases := []struct {
+		name      string
+		pem       string
+		wantErr   string
+		wantOK    bool
+	}{
+		{name: "PKCS1", pem: pemPKCS1(t, rsaKey), wantOK: true},
+		{name: "PKCS8_RSA", pem: pemPKCS8(t, rsaKey), wantOK: true},
+		{name: "PKCS8_ECDSA", pem: pemPKCS8(t, ecKey), wantErr: "Okta DPoP requires RSA"},
+		{name: "empty", pem: "", wantErr: "no PEM block found"},
+		{name: "garbage", pem: "not-a-pem", wantErr: "no PEM block found"},
+		{name: "wrong_type", pem: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte{0}})), wantErr: "unsupported PEM block type"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := parseRSAPrivateKey(c.pem)
+			if c.wantOK {
+				if err != nil || got == nil {
+					t.Fatalf("want ok, got err=%v key=%v", err, got)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+				t.Fatalf("want error containing %q, got: %v", c.wantErr, err)
+			}
+		})
+	}
+}
 
-func newRoundTripperForTest(t *testing.T, key *rsa.PrivateKey, token string, ns *dpop_oauth2.NonceStore, inner http.RoundTripper) *dpopRoundTripper {
+// fakeTokenSource yields a fixed accessToken without hitting any endpoint.
+type fakeTokenSource struct{ tok *accessToken }
+
+func (f *fakeTokenSource) Token(context.Context) (*accessToken, error) { return f.tok, nil }
+
+func newRoundTripperForTest(t *testing.T, key *rsa.PrivateKey, tok *accessToken, ns *dpop_oauth2.NonceStore, inner http.RoundTripper) *dpopRoundTripper {
 	t.Helper()
 	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: "sig"}
 	p, err := dpop.NewProofer(jwk)
@@ -237,16 +358,23 @@ func newRoundTripperForTest(t *testing.T, key *rsa.PrivateKey, token string, ns 
 		t.Fatalf("proofer: %v", err)
 	}
 	return &dpopRoundTripper{
-		inner:        inner,
-		proofer:      p,
-		tokenSource:  &fakeTokenSource{tok: &oauth2.Token{AccessToken: token, TokenType: "DPoP", Expiry: time.Now().Add(time.Hour)}},
-		resourceNonc: ns,
+		inner:              inner,
+		proofer:            p,
+		tokenSource:        &fakeTokenSource{tok: tok},
+		resourceNonceStore: ns,
 	}
 }
 
-func TestRoundTripper_AddsAuthAndProof(t *testing.T) {
-	_, key := generateRSAPEM(t)
+func dpopAccessToken(value string) *accessToken {
+	return &accessToken{value: value, scheme: "DPoP", expiry: time.Now().Add(time.Hour)}
+}
 
+func bearerAccessToken(value string) *accessToken {
+	return &accessToken{value: value, scheme: "Bearer", expiry: time.Now().Add(time.Hour)}
+}
+
+func TestRoundTripper_AddsAuthAndProof(t *testing.T) {
+	key := generateRSAKey(t)
 	var captured *http.Request
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured = r.Clone(r.Context())
@@ -254,7 +382,7 @@ func TestRoundTripper_AddsAuthAndProof(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rt := newRoundTripperForTest(t, key, "tok-A", dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("tok-A"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
 	c := &http.Client{Transport: rt}
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users", nil)
 	resp, err := c.Do(req)
@@ -274,10 +402,66 @@ func TestRoundTripper_AddsAuthAndProof(t *testing.T) {
 	}
 }
 
-func TestRoundTripper_AthClaim(t *testing.T) {
-	_, key := generateRSAPEM(t)
-	token := "tok-B-with-some-bytes" //nolint:gosec // test fixture, not a real credential
+func TestRoundTripper_BearerTokenSkipsDPoP(t *testing.T) {
+	key := generateRSAKey(t)
+	var captured *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Clone(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
 
+	rt := newRoundTripperForTest(t, key, bearerAccessToken("tok-B"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	c := &http.Client{Transport: rt}
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users", nil)
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if got := captured.Header.Get("Authorization"); got != "Bearer tok-B" {
+		t.Fatalf("Authorization = %q, want Bearer tok-B", got)
+	}
+	if got := captured.Header.Get("DPoP"); got != "" {
+		t.Fatalf("DPoP header should be absent for Bearer tokens, got: %q", got)
+	}
+	if got := captured.Header.Get("x-okta-user-agent-extended"); got != "" {
+		t.Fatalf("telemetry header should be absent for Bearer, got: %q", got)
+	}
+}
+
+func TestRoundTripper_ReplacesPreExistingAuthorization(t *testing.T) {
+	key := generateRSAKey(t)
+	var captured *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Clone(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("tok-replace"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	c := &http.Client{Transport: rt}
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users", nil)
+	req.Header.Set("Authorization", "Bearer stale-placeholder")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	vals := captured.Header.Values("Authorization")
+	if len(vals) != 1 {
+		t.Fatalf("expected exactly one Authorization header, got %d: %v", len(vals), vals)
+	}
+	if vals[0] != "DPoP tok-replace" {
+		t.Fatalf("Authorization = %q, want DPoP tok-replace", vals[0])
+	}
+}
+
+func TestRoundTripper_AthClaim(t *testing.T) {
+	key := generateRSAKey(t)
+	token := "tok-with-bytes" //nolint:gosec // test fixture
 	var proof string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proof = r.Header.Get("DPoP")
@@ -285,7 +469,7 @@ func TestRoundTripper_AthClaim(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rt := newRoundTripperForTest(t, key, token, dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	rt := newRoundTripperForTest(t, key, dpopAccessToken(token), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
 	c := &http.Client{Transport: rt}
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users", nil)
 	resp, err := c.Do(req)
@@ -303,48 +487,69 @@ func TestRoundTripper_AthClaim(t *testing.T) {
 	}
 }
 
-func TestRoundTripper_HtuNoQuery(t *testing.T) {
-	_, key := generateRSAPEM(t)
-
-	var proof string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		proof = r.Header.Get("DPoP")
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	rt := newRoundTripperForTest(t, key, "tok-C", dpop_oauth2.NewNonceStore(), http.DefaultTransport)
-	c := &http.Client{Transport: rt}
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users?limit=200&filter=foo", nil)
-	resp, err := c.Do(req)
-	if err != nil {
-		t.Fatalf("Do: %v", err)
+func TestRoundTripper_HtmMatchesMethod(t *testing.T) {
+	key := generateRSAKey(t)
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var proof string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				proof = r.Header.Get("DPoP")
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+			rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+			c := &http.Client{Transport: rt}
+			req, _ := http.NewRequestWithContext(t.Context(), method, srv.URL+"/api/v1/x", nil)
+			resp, err := c.Do(req)
+			if err != nil {
+				t.Fatalf("Do: %v", err)
+			}
+			_ = resp.Body.Close()
+			payload := decodeJWTPayload(t, proof)
+			if got, _ := payload["htm"].(string); got != method {
+				t.Fatalf("htm = %q, want %q", got, method)
+			}
+		})
 	}
-	_ = resp.Body.Close()
+}
 
-	payload := decodeJWTPayload(t, proof)
-	htu, _ := payload["htu"].(string)
-	u, err := url.Parse(htu)
-	if err != nil {
-		t.Fatalf("parse htu: %v", err)
-	}
-	if u.RawQuery != "" || u.Fragment != "" {
-		t.Fatalf("htu should have no query/fragment: %q", htu)
-	}
-	if !strings.HasSuffix(u.Path, "/api/v1/users") {
-		t.Fatalf("htu path wrong: %q", htu)
+func TestRoundTripper_HtuShape(t *testing.T) {
+	key := generateRSAKey(t)
+	for _, suffix := range []string{"/api/v1/users?limit=200&filter=foo", "/api/v1/users#frag", "/"} {
+		t.Run(suffix, func(t *testing.T) {
+			var proof string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				proof = r.Header.Get("DPoP")
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+			rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+			c := &http.Client{Transport: rt}
+			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+suffix, nil)
+			resp, err := c.Do(req)
+			if err != nil {
+				t.Fatalf("Do: %v", err)
+			}
+			_ = resp.Body.Close()
+			payload := decodeJWTPayload(t, proof)
+			htu, _ := payload["htu"].(string)
+			u, err := url.Parse(htu)
+			if err != nil {
+				t.Fatalf("parse htu: %v", err)
+			}
+			if u.RawQuery != "" || u.Fragment != "" {
+				t.Fatalf("htu should have no query/fragment: %q", htu)
+			}
+		})
 	}
 }
 
 func TestRoundTripper_ResourceNonceRetry(t *testing.T) {
-	_, key := generateRSAPEM(t)
-
-	var (
-		calls       int32
-		secondProof string
-	)
+	key := generateRSAKey(t)
+	var calls atomic.Int32
+	var secondProof string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
+		n := calls.Add(1)
 		if n == 1 {
 			w.Header().Set("WWW-Authenticate", `DPoP error="use_dpop_nonce"`)
 			w.Header().Set("DPoP-Nonce", "res-nonce-X")
@@ -357,7 +562,7 @@ func TestRoundTripper_ResourceNonceRetry(t *testing.T) {
 	defer srv.Close()
 
 	ns := dpop_oauth2.NewNonceStore()
-	rt := newRoundTripperForTest(t, key, "tok-D", ns, http.DefaultTransport)
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("tok-D"), ns, http.DefaultTransport)
 	c := &http.Client{Transport: rt}
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/groups", nil)
 	resp, err := c.Do(req)
@@ -366,7 +571,7 @@ func TestRoundTripper_ResourceNonceRetry(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("expected 2 calls, got %d", got)
 	}
 	payload := decodeJWTPayload(t, secondProof)
@@ -378,19 +583,54 @@ func TestRoundTripper_ResourceNonceRetry(t *testing.T) {
 	}
 }
 
-func TestRoundTripper_NoRetryOnNonIdempotent(t *testing.T) {
-	_, key := generateRSAPEM(t)
-
-	var calls int32
+func TestRoundTripper_CapturesNonceOn200(t *testing.T) {
+	key := generateRSAKey(t)
+	var capturedProof string
+	var seq atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		n := seq.Add(1)
+		if n == 1 {
+			w.Header().Set("DPoP-Nonce", "from-200")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		capturedProof = r.Header.Get("DPoP")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	ns := dpop_oauth2.NewNonceStore()
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), ns, http.DefaultTransport)
+	c := &http.Client{Transport: rt}
+	for i := 0; i < 2; i++ {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users", nil)
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatalf("Do[%d]: %v", i, err)
+		}
+		_ = resp.Body.Close()
+	}
+	if ns.GetNonce() != "from-200" {
+		t.Fatalf("nonce store = %q, want from-200", ns.GetNonce())
+	}
+	payload := decodeJWTPayload(t, capturedProof)
+	if got, _ := payload["nonce"].(string); got != "from-200" {
+		t.Fatalf("second proof nonce = %q, want from-200", got)
+	}
+}
+
+func TestRoundTripper_NoRetryOnNonReplayable(t *testing.T) {
+	key := generateRSAKey(t)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
 		w.Header().Set("WWW-Authenticate", `DPoP error="use_dpop_nonce"`)
 		w.Header().Set("DPoP-Nonce", "n")
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer srv.Close()
 
-	rt := newRoundTripperForTest(t, key, "tok-E", dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
 	c := &http.Client{Transport: rt}
 	body := bytes.NewBufferString(`{"x":1}`)
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/api/v1/users", body)
@@ -401,21 +641,20 @@ func TestRoundTripper_NoRetryOnNonIdempotent(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("expected 1 call (no retry on non-rewindable POST), got %d", got)
 	}
 }
 
 func TestRoundTripper_RetryOnRewindablePOST(t *testing.T) {
-	_, key := generateRSAPEM(t)
-
-	var calls int32
+	key := generateRSAKey(t)
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		if string(body) != `{"x":1}` {
-			t.Errorf("body = %q on call %d", string(body), atomic.LoadInt32(&calls)+1)
+			t.Errorf("body = %q on call %d", string(body), calls.Load()+1)
 		}
-		n := atomic.AddInt32(&calls, 1)
+		n := calls.Add(1)
 		if n == 1 {
 			w.Header().Set("WWW-Authenticate", `DPoP error="use_dpop_nonce"`)
 			w.Header().Set("DPoP-Nonce", "n")
@@ -426,7 +665,7 @@ func TestRoundTripper_RetryOnRewindablePOST(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rt := newRoundTripperForTest(t, key, "tok-F", dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
 	c := &http.Client{Transport: rt}
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/api/v1/users", strings.NewReader(`{"x":1}`))
 	resp, err := c.Do(req)
@@ -435,8 +674,174 @@ func TestRoundTripper_RetryOnRewindablePOST(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("expected 2 calls (POST with rewindable body), got %d", got)
+	}
+}
+
+func TestRoundTripper_ReplayableGate(t *testing.T) {
+	cases := []struct {
+		name    string
+		method  string
+		body    io.Reader
+		nilBody bool
+		want    bool
+	}{
+		{name: "GET", method: http.MethodGet, want: true},
+		{name: "HEAD", method: http.MethodHead, want: true},
+		{name: "OPTIONS", method: http.MethodOptions, want: true},
+		{name: "DELETE", method: http.MethodDelete, want: true},
+		{name: "POST_rewindable", method: http.MethodPost, body: strings.NewReader(`{}`), want: true},
+		{name: "POST_no_body", method: http.MethodPost, nilBody: true, want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var req *http.Request
+			if c.nilBody {
+				req, _ = http.NewRequestWithContext(t.Context(), c.method, "https://x/y", nil)
+				req.GetBody = nil
+			} else {
+				req, _ = http.NewRequestWithContext(t.Context(), c.method, "https://x/y", c.body)
+			}
+			if got := isReplayable(req); got != c.want {
+				t.Fatalf("isReplayable(%s) = %v, want %v", c.method, got, c.want)
+			}
+		})
+	}
+}
+
+func TestRoundTripper_JtiUniqueAcrossRetry(t *testing.T) {
+	key := generateRSAKey(t)
+	var proofs []string
+	var mu sync.Mutex
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		proofs = append(proofs, r.Header.Get("DPoP"))
+		mu.Unlock()
+		if calls.Add(1) == 1 {
+			w.Header().Set("WWW-Authenticate", `DPoP error="use_dpop_nonce"`)
+			w.Header().Set("DPoP-Nonce", "n")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("t"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	c := &http.Client{Transport: rt}
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/x", nil)
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(proofs) != 2 {
+		t.Fatalf("expected 2 proofs, got %d", len(proofs))
+	}
+	jti1, _ := decodeJWTPayload(t, proofs[0])["jti"].(string)
+	jti2, _ := decodeJWTPayload(t, proofs[1])["jti"].(string)
+	if jti1 == "" || jti2 == "" {
+		t.Fatalf("jti missing: %q %q", jti1, jti2)
+	}
+	if jti1 == jti2 {
+		t.Fatal("jti must be fresh per proof")
+	}
+}
+
+func TestTokenSource_NonceStoreIsolation(t *testing.T) {
+	// Token endpoint sets nonce-A in the token store on its first response.
+	// Resource endpoint sets nonce-B on its successful response. The next
+	// resource request should carry nonce-B, not nonce-A; the next token
+	// refresh should carry nonce-A, not nonce-B.
+	key := generateRSAKey(t)
+
+	tokenH := &tokenHandler{requireNonceOn: []int{1}, nonce: "tok-nonce"}
+	tokenSrv := httptest.NewServer(tokenH)
+	defer tokenSrv.Close()
+
+	var resourceProofNonce string
+	resourceSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("DPoP-Nonce", "res-nonce")
+		proof := r.Header.Get("DPoP")
+		if proof != "" {
+			if v, ok := decodeJWTPayload(t, proof)["nonce"].(string); ok {
+				resourceProofNonce = v
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer resourceSrv.Close()
+
+	ts := newTestTokenSource(t, tokenSrv, key, time.Now)
+	tok, err := ts.Token(t.Context())
+	if err != nil {
+		t.Fatalf("Token: %v", err)
+	}
+	if ts.cfg.nonceStore.GetNonce() != "tok-nonce" {
+		t.Fatalf("token nonce store = %q, want tok-nonce", ts.cfg.nonceStore.GetNonce())
+	}
+
+	resNS := dpop_oauth2.NewNonceStore()
+	rt := newRoundTripperForTest(t, key, tok, resNS, http.DefaultTransport)
+	c := &http.Client{Transport: rt}
+
+	// First resource call: no resource nonce yet, proof.nonce should be empty.
+	req1, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, resourceSrv.URL+"/x", nil)
+	resp1, err := c.Do(req1)
+	if err != nil {
+		t.Fatalf("Do[1]: %v", err)
+	}
+	_ = resp1.Body.Close()
+	if resourceProofNonce != "" {
+		t.Fatalf("first resource proof nonce should be empty, got %q", resourceProofNonce)
+	}
+	if resNS.GetNonce() != "res-nonce" {
+		t.Fatalf("resource nonce store = %q, want res-nonce", resNS.GetNonce())
+	}
+
+	// Second resource call: proof must carry res-nonce, NOT tok-nonce.
+	req2, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, resourceSrv.URL+"/x", nil)
+	resp2, err := c.Do(req2)
+	if err != nil {
+		t.Fatalf("Do[2]: %v", err)
+	}
+	_ = resp2.Body.Close()
+	if resourceProofNonce != "res-nonce" {
+		t.Fatalf("second resource proof nonce = %q, want res-nonce", resourceProofNonce)
+	}
+	if ts.cfg.nonceStore.GetNonce() == "res-nonce" {
+		t.Fatal("token nonce store leaked resource nonce")
+	}
+}
+
+func TestTokenSource_ClientAssertionExpiry(t *testing.T) {
+	key := generateRSAKey(t)
+	var capturedAssertion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil { //nolint:gosec // test fixture; body size bounded by httptest
+			t.Fatalf("parse form: %v", err)
+		}
+		capturedAssertion = r.PostForm.Get("client_assertion")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"x","token_type":"DPoP","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	fixed := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	ts := newTestTokenSource(t, srv, key, func() time.Time { return fixed })
+	if _, err := ts.Token(t.Context()); err != nil {
+		t.Fatalf("Token: %v", err)
+	}
+	payload := decodeJWTPayload(t, capturedAssertion)
+	iat, _ := payload["iat"].(float64)
+	exp, _ := payload["exp"].(float64)
+	if delta := exp - iat; delta != 300 {
+		t.Fatalf("client assertion exp-iat = %v, want 300", delta)
 	}
 }
 
@@ -452,4 +857,29 @@ func TestNonceStore_Concurrent(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestTokenSource_Singleflight(t *testing.T) {
+	key := generateRSAKey(t)
+	h := &tokenHandler{}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+
+	var wg sync.WaitGroup
+	const N = 32
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := ts.Token(t.Context()); err != nil {
+				t.Errorf("Token: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := h.calls.Load(); got != 1 {
+		t.Fatalf("expected 1 token call (singleflight), got %d", got)
+	}
 }

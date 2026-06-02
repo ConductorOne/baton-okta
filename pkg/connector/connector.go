@@ -26,8 +26,8 @@ import (
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
 
-// dpopBearerPlaceholder activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP token per request.
-const dpopBearerPlaceholder = "dpop-placeholder"
+// oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request. Loud name so a stray leak into logs is obvious.
+const oktaSDKAuthSentinel = "OKTA_DPOP_SENTINEL_DO_NOT_USE_IN_LOGS"
 
 type Okta struct {
 	client              *okta.Client
@@ -365,10 +365,15 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			return nil, nil, fmt.Errorf("baton-okta: build dpop http client: %w", err)
 		}
 
+		// Bearer mode disables each SDK's own auth path so the oktaauth
+		// transport owns the token, DPoP proof, and nonce dance. v5 ships its
+		// own native DPoP implementation in PrivateKey mode that we're
+		// deliberately bypassing; an SDK upgrade that changes Bearer-mode
+		// semantics or auto-routes DPoP needs to re-validate this wiring.
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			okta.WithAuthorizationMode("Bearer"),
-			okta.WithToken(dpopBearerPlaceholder),
+			okta.WithToken(oktaSDKAuthSentinel),
 			okta.WithHttpClientPtr(dpopClient),
 			okta.WithCache(cc.Cache),
 			okta.WithCacheTti(cacheTTI),
@@ -381,7 +386,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		config, err := oktav5.NewConfiguration(
 			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
 			oktav5.WithAuthorizationMode("Bearer"),
-			oktav5.WithToken(dpopBearerPlaceholder),
+			oktav5.WithToken(oktaSDKAuthSentinel),
 			oktav5.WithHttpClientPtr(dpopClient),
 			oktav5.WithCache(cc.Cache),
 			oktav5.WithCacheTti(cacheTTI),

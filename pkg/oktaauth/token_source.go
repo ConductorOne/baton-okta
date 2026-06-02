@@ -17,17 +17,38 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
-	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
 )
 
-// tokenSource issues DPoP-bound access tokens via private_key_jwt. We don't
-// reuse dpop_oauth2.NewTokenSource because it hardcodes EdDSA for the client
+// accessToken carries both the secret material and the Authorization scheme
+// Okta returned, so the round tripper can pick `DPoP` or `Bearer` per the
+// app's actual configuration (Require-DPoP=ON returns DPoP, OFF returns
+// Bearer).
+type accessToken struct {
+	value  string
+	scheme string
+	expiry time.Time
+}
+
+func (t *accessToken) bindsDPoP() bool {
+	return strings.EqualFold(t.scheme, tokenSchemeDPoP)
+}
+
+// tokenGetter is the round tripper's view of the token source. Real source
+// is tokenSource; tests can swap a fake.
+type tokenGetter interface {
+	Token(ctx context.Context) (*accessToken, error)
+}
+
+// tokenSource issues access tokens via private_key_jwt. We don't reuse
+// dpop_oauth2.NewTokenSource because it hardcodes EdDSA for the client
 // assertion and Okta API Services apps use RSA keys.
 type tokenSource struct {
 	cfg tokenSourceConfig
 
 	mu     sync.Mutex
-	cached *oauth2.Token
+	cached *accessToken
+	group  singleflight.Group
 }
 
 type tokenSourceConfig struct {
@@ -49,29 +70,51 @@ func newTokenSource(cfg tokenSourceConfig) *tokenSource {
 }
 
 const (
-	clientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-	tokenRefreshBuffer  = 60 * time.Second
-	tokenTypeDPoP       = "DPoP"
+	clientAssertionType    = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+	tokenRefreshBuffer     = 60 * time.Second
+	defaultTokenLifetime   = time.Hour
+	clientAssertionExpiry  = 5 * time.Minute
+	tokenSchemeDPoP        = "DPoP"
+	tokenSchemeBearer      = "Bearer"
+	useDPoPNonceErrorCode  = "use_dpop_nonce"
 )
 
-func (t *tokenSource) Token() (*oauth2.Token, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	now := t.cfg.now()
-	if t.cached != nil && t.cached.Expiry.After(now.Add(tokenRefreshBuffer)) {
-		return t.cached, nil
+func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
+	if cached := t.cachedValid(); cached != nil {
+		return cached, nil
 	}
 
-	tok, err := t.exchange(context.Background())
+	// singleflight collapses concurrent refreshes so we don't hammer the
+	// token endpoint when N goroutines see the same expiry at once.
+	v, err, _ := t.group.Do("refresh", func() (any, error) {
+		if cached := t.cachedValid(); cached != nil {
+			return cached, nil
+		}
+		tok, err := t.exchange(ctx)
+		if err != nil {
+			return nil, err
+		}
+		t.mu.Lock()
+		t.cached = tok
+		t.mu.Unlock()
+		return tok, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	t.cached = tok
-	return tok, nil
+	return v.(*accessToken), nil
 }
 
-func (t *tokenSource) exchange(ctx context.Context) (*oauth2.Token, error) {
+func (t *tokenSource) cachedValid() *accessToken {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.cached != nil && t.cached.expiry.After(t.cfg.now().Add(tokenRefreshBuffer)) {
+		return t.cached
+	}
+	return nil
+}
+
+func (t *tokenSource) exchange(ctx context.Context) (*accessToken, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		tok, retry, err := t.tryExchange(ctx)
 		if err == nil {
@@ -81,10 +124,10 @@ func (t *tokenSource) exchange(ctx context.Context) (*oauth2.Token, error) {
 			return nil, err
 		}
 	}
-	return nil, errors.New("oktaauth: token endpoint requested nonce retry twice")
+	return nil, errors.New("oktaauth: token endpoint demanded a fresh nonce twice in a row")
 }
 
-func (t *tokenSource) tryExchange(ctx context.Context) (*oauth2.Token, bool, error) {
+func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, error) {
 	assertion, err := t.signClientAssertion()
 	if err != nil {
 		return nil, false, fmt.Errorf("sign client assertion: %w", err)
@@ -106,6 +149,7 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*oauth2.Token, bool, err
 		form.Set("scope", strings.Join(t.cfg.scopes, " "))
 	}
 
+	//nolint:gosec // tokenURL fixed at construction from operator-provided Okta domain
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.cfg.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, false, fmt.Errorf("build token request: %w", err)
@@ -114,7 +158,7 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*oauth2.Token, bool, err
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set(dpopHdr, proof)
 
-	resp, err := t.cfg.httpClient.Do(req)
+	resp, err := t.cfg.httpClient.Do(req) //nolint:gosec // same fixed tokenURL as above
 	if err != nil {
 		return nil, false, fmt.Errorf("token request: %w", err)
 	}
@@ -130,10 +174,14 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*oauth2.Token, bool, err
 	}
 
 	if resp.StatusCode >= 400 {
-		if isUseDPoPNonce(body) && resp.Header.Get(dpopNonceHdr) != "" {
-			return nil, true, fmt.Errorf("token endpoint requested dpop nonce")
+		errCode, errDesc := parseTokenError(body)
+		if errCode == useDPoPNonceErrorCode {
+			if resp.Header.Get(dpopNonceHdr) == "" {
+				return nil, false, errors.New("token endpoint asked for a nonce but didn't supply DPoP-Nonce header")
+			}
+			return nil, true, errors.New("retry with nonce")
 		}
-		return nil, false, fmt.Errorf("token endpoint %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return nil, false, formatTokenError(resp.Status, errCode, errDesc)
 	}
 
 	var raw struct {
@@ -148,18 +196,19 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*oauth2.Token, bool, err
 	if raw.AccessToken == "" {
 		return nil, false, errors.New("token endpoint returned empty access_token")
 	}
-	if !strings.EqualFold(raw.TokenType, tokenTypeDPoP) {
-		return nil, false, fmt.Errorf("expected DPoP token_type, got %q", raw.TokenType)
+	scheme := normalizeTokenScheme(raw.TokenType)
+	if scheme == "" {
+		return nil, false, fmt.Errorf("unsupported token_type %q (expected DPoP or Bearer)", raw.TokenType)
 	}
 
 	expiresIn := raw.ExpiresIn
 	if expiresIn <= 0 {
-		expiresIn = 3600
+		expiresIn = int64(defaultTokenLifetime / time.Second)
 	}
-	return &oauth2.Token{
-		AccessToken: raw.AccessToken,
-		TokenType:   raw.TokenType,
-		Expiry:      t.cfg.now().Add(time.Duration(expiresIn) * time.Second),
+	return &accessToken{
+		value:  raw.AccessToken,
+		scheme: scheme,
+		expiry: t.cfg.now().Add(time.Duration(expiresIn) * time.Second),
 	}, false, nil
 }
 
@@ -176,7 +225,7 @@ func (t *tokenSource) signClientAssertion() (string, error) {
 		Subject:  t.cfg.clientID,
 		Audience: jwt.Audience{t.cfg.tokenURL},
 		IssuedAt: jwt.NewNumericDate(now),
-		Expiry:   jwt.NewNumericDate(now.Add(5 * time.Minute)),
+		Expiry:   jwt.NewNumericDate(now.Add(clientAssertionExpiry)),
 		ID:       uuid.NewString(),
 	}
 
@@ -191,6 +240,36 @@ func (t *tokenSource) signClientAssertion() (string, error) {
 	return jwt.Signed(signer).Claims(claims).Serialize()
 }
 
-func isUseDPoPNonce(body []byte) bool {
-	return strings.Contains(string(body), "use_dpop_nonce")
+// parseTokenError extracts the OAuth 2.0 standard error code and description
+// from the JSON body. Falls back to empty strings if the body isn't structured.
+func parseTokenError(body []byte) (string, string) {
+	var raw struct {
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return "", ""
+	}
+	return raw.Error, raw.ErrorDescription
+}
+
+func formatTokenError(status, code, desc string) error {
+	switch {
+	case code != "" && desc != "":
+		return fmt.Errorf("token endpoint %s: %s (%s)", status, code, desc)
+	case code != "":
+		return fmt.Errorf("token endpoint %s: %s", status, code)
+	default:
+		return fmt.Errorf("token endpoint %s", status)
+	}
+}
+
+func normalizeTokenScheme(s string) string {
+	switch strings.ToLower(s) {
+	case "dpop":
+		return tokenSchemeDPoP
+	case "bearer":
+		return tokenSchemeBearer
+	}
+	return ""
 }

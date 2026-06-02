@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	tokenPath         = "/oauth2/v1/token" //nolint:gosec // not a credential; the OAuth 2.0 token endpoint path
-	dpopTelemetryUA   = "isDPoP:true"
-	authorizationHdr  = "Authorization"
-	dpopHdr           = "DPoP"
-	dpopNonceHdr      = "DPoP-Nonce"
-	wwwAuthenticateHr = "WWW-Authenticate"
-	userAgentExtHdr   = "x-okta-user-agent-extended"
+	tokenPath          = "/oauth2/v1/token" //nolint:gosec // not a credential; the OAuth 2.0 token endpoint path
+	dpopTelemetryUA    = "isDPoP:true"
+	authorizationHdr   = "Authorization"
+	dpopHdr            = "DPoP"
+	dpopNonceHdr       = "DPoP-Nonce"
+	wwwAuthenticateHdr = "WWW-Authenticate"
+	userAgentExtHdr    = "x-okta-user-agent-extended"
 )
 
 type Config struct {
@@ -88,10 +88,10 @@ func NewDPoPHTTPClient(ctx context.Context, cfg Config, baseClient *http.Client)
 	})
 
 	rt := &dpopRoundTripper{
-		inner:        inner,
-		proofer:      proofer,
-		tokenSource:  ts,
-		resourceNonc: resourceNonceStore,
+		inner:              inner,
+		proofer:            proofer,
+		tokenSource:        ts,
+		resourceNonceStore: resourceNonceStore,
 	}
 
 	out := &http.Client{Transport: rt}
