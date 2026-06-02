@@ -225,7 +225,6 @@ func TestParseRSAPrivateKey_PKCS8(t *testing.T) {
 	}
 }
 
-// fakeTokenSource hands out a fixed token without hitting any endpoint.
 type fakeTokenSource struct{ tok *oauth2.Token }
 
 func (f *fakeTokenSource) Token() (*oauth2.Token, error) { return f.tok, nil }

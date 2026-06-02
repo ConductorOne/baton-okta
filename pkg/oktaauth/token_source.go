@@ -20,11 +20,9 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// tokenSource issues DPoP-bound access tokens via OAuth 2.0 client_credentials
-// with RFC 7523 private_key_jwt. We implement this ourselves instead of using
-// dpop_oauth2.NewTokenSource because that helper hardcodes EdDSA for the
-// client-assertion signer; Okta API Services apps are configured with RSA
-// keys.
+// tokenSource issues DPoP-bound access tokens via private_key_jwt. We don't
+// reuse dpop_oauth2.NewTokenSource because it hardcodes EdDSA for the client
+// assertion and Okta API Services apps use RSA keys.
 type tokenSource struct {
 	cfg tokenSourceConfig
 

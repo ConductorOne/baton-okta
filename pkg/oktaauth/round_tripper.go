@@ -11,11 +11,9 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// dpopRoundTripper rewrites the Authorization header to use the live DPoP
-// access token and attaches a freshly-signed DPoP proof JWT per request. It
-// also captures DPoP-Nonce response headers from resource endpoints so the
-// next proof carries the server-supplied nonce, and retries once on a 401
-// use_dpop_nonce challenge for idempotent requests.
+// dpopRoundTripper attaches a per-request DPoP proof, rewrites the Authorization
+// header to the live access token, and retries once on a 401 use_dpop_nonce
+// challenge for idempotent requests.
 type dpopRoundTripper struct {
 	inner        http.RoundTripper
 	proofer      *dpop.Proofer
@@ -86,8 +84,7 @@ func (rt *dpopRoundTripper) nonceFunc() func() (string, error) {
 	}
 }
 
-// canonicalHTU strips query and fragment from the request URL. Okta rejects
-// DPoP proofs whose htu claim contains a query string.
+// canonicalHTU: Okta rejects DPoP proofs whose htu claim contains a query string.
 func canonicalHTU(req *http.Request) string {
 	u := *req.URL
 	u.RawQuery = ""

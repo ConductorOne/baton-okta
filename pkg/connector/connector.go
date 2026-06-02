@@ -26,9 +26,7 @@ import (
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
 
-// dpopBearerPlaceholder is fed to the Okta SDKs in Bearer auth mode so their
-// internal auth path activates. The oktaauth RoundTripper overwrites the real
-// Authorization header per request with the live DPoP-bound access token.
+// dpopBearerPlaceholder activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP token per request.
 const dpopBearerPlaceholder = "dpop-placeholder"
 
 type Okta struct {

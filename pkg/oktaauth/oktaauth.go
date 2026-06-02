@@ -38,13 +38,6 @@ type Config struct {
 	Scopes        []string
 }
 
-// NewDPoPHTTPClient returns an *http.Client whose Transport adds a DPoP proof
-// JWT to every outbound request and rewrites the Authorization header to use
-// the live DPoP-bound access token. The returned client is safe to share
-// across both v2 and v5 Okta SDK instances configured in Bearer auth mode.
-//
-// baseClient supplies the underlying Transport (uhttp logging, retries, etc.).
-// If nil, http.DefaultTransport is used.
 func NewDPoPHTTPClient(ctx context.Context, cfg Config, baseClient *http.Client) (*http.Client, error) {
 	if cfg.Domain == "" {
 		return nil, errors.New("oktaauth: Domain is required")
