@@ -79,11 +79,13 @@ const (
 	tokenSchemeBearer         = "Bearer"
 	useDPoPNonceErrorCode     = "use_dpop_nonce"
 	invalidDPoPProofErrorCode = "invalid_dpop_proof"
+	invalidClientErrorCode    = "invalid_client"
 	refreshTimeout            = 30 * time.Second
 	errorBodyExcerptLimit     = 200
 	headerControlChars        = "\r\n\x00"
 	proxyStripHintRequest     = " (if behind a proxy, verify the DPoP request header isn't being stripped)"
 	proxyStripHintResponse    = " (if behind a proxy, verify it doesn't strip the DPoP-Nonce response header)"
+	invalidClientHint         = " (verify okta-client-id and that the configured PEM matches the public key uploaded to Okta)"
 )
 
 func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
@@ -294,8 +296,11 @@ func formatTokenError(httpStatusCode int, httpStatus, code, desc string, rawBody
 			msg = fmt.Sprintf("token endpoint %s", httpStatus)
 		}
 	}
-	if code == invalidDPoPProofErrorCode {
+	switch code {
+	case invalidDPoPProofErrorCode:
 		msg += proxyStripHintRequest
+	case invalidClientErrorCode:
+		msg += invalidClientHint
 	}
 	grpcCode := codes.Unauthenticated
 	if httpStatusCode >= 500 || httpStatusCode == http.StatusTooManyRequests {

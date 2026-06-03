@@ -201,6 +201,7 @@ func TestTokenSource_RejectsNonRSA(t *testing.T) {
 		ClientID:      "c",
 		PrivateKeyID:  "k",
 		PrivateKeyPEM: pemPKCS8(t, key),
+		Scopes:        []string{"okta.users.read"},
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for ECDSA key")
@@ -1098,6 +1099,75 @@ func TestTokenSource_AcceptsStringExpiresIn(t *testing.T) {
 	}
 	if tok.expiry.IsZero() {
 		t.Fatal("expiry should be set")
+	}
+}
+
+func TestNewDPoPHTTPClient_RejectsEmptyScopes(t *testing.T) {
+	_, err := NewDPoPHTTPClient(t.Context(), Config{
+		Domain:        "example.okta.com",
+		ClientID:      "c",
+		PrivateKeyID:  "k",
+		PrivateKeyPEM: pemPKCS1(t, generateRSAKey(t)),
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "Scopes") {
+		t.Fatalf("expected error mentioning Scopes, got: %v", err)
+	}
+}
+
+func TestTokenSource_InvalidClientIncludesKeyRotationHint(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"invalid_client","error_description":"Client authentication failed"}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "okta-client-id") || !strings.Contains(err.Error(), "PEM") {
+		t.Fatalf("error should hint at client-id/PEM rotation, got: %v", err)
+	}
+}
+
+func TestRoundTripper_ExactlyOneAuthAndDPoPHeader(t *testing.T) {
+	key := generateRSAKey(t)
+	var captured *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Clone(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	rt := newRoundTripperForTest(t, key, dpopAccessToken("tok-X"), dpop_oauth2.NewNonceStore(), http.DefaultTransport)
+	c := &http.Client{Transport: rt}
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/users", nil)
+	req.Header.Add("Authorization", "Bearer stale-1")
+	req.Header.Add("Authorization", "Bearer stale-2")
+	req.Header.Add("DPoP", "stale-proof-1")
+	req.Header.Add("DPoP", "stale-proof-2")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	authVals := captured.Header.Values("Authorization")
+	if len(authVals) != 1 {
+		t.Fatalf("expected exactly one Authorization header, got %d: %v", len(authVals), authVals)
+	}
+	if authVals[0] != "DPoP tok-X" {
+		t.Fatalf("Authorization = %q", authVals[0])
+	}
+	dpopVals := captured.Header.Values("DPoP")
+	if len(dpopVals) != 1 {
+		t.Fatalf("expected exactly one DPoP header, got %d: %v", len(dpopVals), dpopVals)
+	}
+	if strings.HasPrefix(dpopVals[0], "stale-proof") {
+		t.Fatalf("DPoP header was not replaced: %q", dpopVals[0])
 	}
 }
 

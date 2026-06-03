@@ -51,6 +51,9 @@ func NewDPoPHTTPClient(ctx context.Context, cfg Config, baseClient *http.Client)
 	if cfg.PrivateKeyPEM == "" {
 		return nil, errors.New("oktaauth: PrivateKeyPEM is required")
 	}
+	if len(cfg.Scopes) == 0 {
+		return nil, errors.New("oktaauth: Scopes must be non-empty")
+	}
 
 	rsaKey, err := parseRSAPrivateKey(cfg.PrivateKeyPEM)
 	if err != nil {
