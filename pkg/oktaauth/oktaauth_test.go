@@ -26,6 +26,8 @@ import (
 	"github.com/conductorone/dpop/integrations/dpop_oauth2"
 	"github.com/conductorone/dpop/pkg/dpop"
 	"github.com/go-jose/go-jose/v4"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func generateRSAKey(t *testing.T) *rsa.PrivateKey {
@@ -1037,4 +1039,83 @@ func (s *switchingTokenSource) Token(context.Context) (*accessToken, error) {
 		s.idx++
 	}
 	return tok, nil
+}
+
+func TestTokenSource_429MapsToUnavailable(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"too_many_requests","error_description":"rate limit exceeded"}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected status error, got: %v", err)
+	}
+	if st.Code() != codes.Unavailable {
+		t.Fatalf("429 should map to Unavailable, got %v", st.Code())
+	}
+}
+
+func TestTokenSource_InvalidDPoPProofIncludesProxyHint(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_dpop_proof","error_description":"The DPoP proof JWT header is missing"}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "proxy") {
+		t.Fatalf("error should hint at proxy, got: %v", err)
+	}
+}
+
+func TestTokenSource_AcceptsStringExpiresIn(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"x","token_type":"DPoP","expires_in":"3600"}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	tok, err := ts.Token(t.Context())
+	if err != nil {
+		t.Fatalf("string expires_in should be accepted, got: %v", err)
+	}
+	if tok.expiry.IsZero() {
+		t.Fatal("expiry should be set")
+	}
+}
+
+func TestTokenSource_RejectsControlCharsInAccessToken(t *testing.T) {
+	key := generateRSAKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"bad\ntoken","token_type":"DPoP","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	ts := newTestTokenSource(t, srv, key, time.Now)
+	_, err := ts.Token(t.Context())
+	if err == nil {
+		t.Fatal("expected error for control-char in token")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unauthenticated {
+		t.Fatalf("expected codes.Unauthenticated, got: %v", err)
+	}
 }

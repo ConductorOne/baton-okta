@@ -71,15 +71,19 @@ func newTokenSource(cfg tokenSourceConfig) *tokenSource {
 }
 
 const (
-	clientAssertionType   = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-	tokenRefreshBuffer    = 60 * time.Second
-	defaultTokenLifetime  = time.Hour
-	clientAssertionExpiry = 5 * time.Minute
-	tokenSchemeDPoP       = "DPoP"
-	tokenSchemeBearer     = "Bearer"
-	useDPoPNonceErrorCode = "use_dpop_nonce"
-	refreshTimeout        = 30 * time.Second
-	errorBodyExcerptLimit = 200
+	clientAssertionType       = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+	tokenRefreshBuffer        = 60 * time.Second
+	defaultTokenLifetime      = time.Hour
+	clientAssertionExpiry     = 5 * time.Minute
+	tokenSchemeDPoP           = "DPoP"
+	tokenSchemeBearer         = "Bearer"
+	useDPoPNonceErrorCode     = "use_dpop_nonce"
+	invalidDPoPProofErrorCode = "invalid_dpop_proof"
+	refreshTimeout            = 30 * time.Second
+	errorBodyExcerptLimit     = 200
+	headerControlChars        = "\r\n\x00"
+	proxyStripHintRequest     = " (if behind a proxy, verify the DPoP request header isn't being stripped)"
+	proxyStripHintResponse    = " (if behind a proxy, verify it doesn't strip the DPoP-Nonce response header)"
 )
 
 func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
@@ -139,7 +143,7 @@ func (t *tokenSource) exchange(ctx context.Context) (*accessToken, error) {
 			return nil, err
 		}
 	}
-	return nil, status.Error(codes.Unavailable, "oktaauth: token endpoint demanded a fresh nonce twice in a row")
+	return nil, status.Error(codes.Unavailable, "oktaauth: token endpoint demanded a fresh nonce twice in a row"+proxyStripHintResponse)
 }
 
 func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, error) {
@@ -203,10 +207,10 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 	}
 
 	var raw struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int64  `json:"expires_in"`
-		Scope       string `json:"scope"`
+		AccessToken string      `json:"access_token"`
+		TokenType   string      `json:"token_type"`
+		ExpiresIn   json.Number `json:"expires_in"`
+		Scope       string      `json:"scope"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, false, fmt.Errorf("decode token response: %w", err)
@@ -214,12 +218,15 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 	if raw.AccessToken == "" {
 		return nil, false, errors.New("token endpoint returned empty access_token")
 	}
+	if strings.ContainsAny(raw.AccessToken, headerControlChars) {
+		return nil, false, status.Error(codes.Unauthenticated, "token endpoint returned malformed access_token (contains control characters)")
+	}
 	scheme := normalizeTokenScheme(raw.TokenType)
 	if scheme == "" {
 		return nil, false, fmt.Errorf("unsupported token_type %q (expected DPoP or Bearer)", raw.TokenType)
 	}
 
-	expiresIn := raw.ExpiresIn
+	expiresIn, _ := raw.ExpiresIn.Int64()
 	if expiresIn <= 0 {
 		expiresIn = int64(defaultTokenLifetime / time.Second)
 	}
@@ -287,8 +294,11 @@ func formatTokenError(httpStatusCode int, httpStatus, code, desc string, rawBody
 			msg = fmt.Sprintf("token endpoint %s", httpStatus)
 		}
 	}
+	if code == invalidDPoPProofErrorCode {
+		msg += proxyStripHintRequest
+	}
 	grpcCode := codes.Unauthenticated
-	if httpStatusCode >= 500 {
+	if httpStatusCode >= 500 || httpStatusCode == http.StatusTooManyRequests {
 		grpcCode = codes.Unavailable
 	}
 	return status.Error(grpcCode, msg)
