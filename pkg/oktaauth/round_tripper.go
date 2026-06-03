@@ -47,9 +47,7 @@ func (rt *dpopRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	return resp, nil
 }
 
-// Resource-server nonces are shared mutable state: a concurrent request can
-// observe a stale nonce, take a 401, and retry once via isReplayable. Don't
-// "fix" the race by serializing requests; the retry path IS the design.
+// Concurrent requests can fail with a 401. The retry handles it. Don't add a lock.
 func (rt *dpopRoundTripper) send(req *http.Request, tok *accessToken) (*http.Response, error) {
 	cloned := req.Clone(req.Context())
 	if req.GetBody != nil {
