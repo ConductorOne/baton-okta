@@ -26,8 +26,8 @@ import (
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
 
-// oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request. Loud name so a stray leak into logs is obvious.
-const oktaSDKAuthSentinel = "OKTA_DPOP_SENTINEL_DO_NOT_USE_IN_LOGS"
+// oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request.
+const oktaSDKAuthSentinel = "dpop-managed"
 
 type Okta struct {
 	client              *okta.Client
