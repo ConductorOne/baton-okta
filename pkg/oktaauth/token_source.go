@@ -22,10 +22,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// accessToken carries both the secret material and the Authorization scheme
-// Okta returned, so the round tripper can pick `DPoP` or `Bearer` per the
-// app's actual configuration (Require-DPoP=ON returns DPoP, OFF returns
-// Bearer). Fields are immutable after construction.
+// accessToken pairs the token value with the scheme Okta returned (DPoP when
+// the app requires it, Bearer when it doesn't). Fields immutable after construction.
 type accessToken struct {
 	value  string
 	scheme string
@@ -42,8 +40,7 @@ type tokenGetter interface {
 }
 
 // tokenSource issues access tokens via private_key_jwt. We don't reuse
-// dpop_oauth2.NewTokenSource because it hardcodes EdDSA for the client
-// assertion and Okta API Services apps use RSA keys.
+// dpop_oauth2.NewTokenSource because it hardcodes EdDSA; Okta uses RSA.
 type tokenSource struct {
 	cfg tokenSourceConfig
 
@@ -93,9 +90,8 @@ func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
 		return cached, nil
 	}
 
-	// DoChan + select means each caller honours its own ctx. The exchange runs
-	// on a detached background ctx so a cancel from any one waiter cannot
-	// abort the refresh the others are waiting on.
+	// DoChan + select: each caller honours its own ctx, but the exchange runs
+	// on a detached ctx so one waiter's cancel can't poison the others.
 	ch := t.group.DoChan("refresh", func() (any, error) {
 		if cached := t.cachedValid(); cached != nil {
 			return cached, nil

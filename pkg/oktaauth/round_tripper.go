@@ -35,9 +35,7 @@ func (rt *dpopRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 			rt.resourceNonceStore.SetNonce(nonce)
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
-			// Re-fetch the token: the original may have expired during the
-			// round trip, in which case the retry would ship a proof bound
-			// to a token Okta will reject.
+			// Refresh: the original token may have expired mid-roundtrip; a stale ath would be rejected.
 			freshTok, terr := rt.tokenSource.Token(req.Context())
 			if terr != nil {
 				return nil, fmt.Errorf("oktaauth: refresh token before nonce retry: %w", terr)

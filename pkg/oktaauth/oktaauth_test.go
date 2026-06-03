@@ -71,9 +71,8 @@ func decodeJWTPayload(t *testing.T, jwt string) map[string]any {
 	return out
 }
 
-// tokenHandler is a stub /oauth2/v1/token. On the listed call numbers it
-// returns 400 use_dpop_nonce + a DPoP-Nonce header; on others it returns a
-// token (default token_type=DPoP, override via tokenType).
+// tokenHandler is a stub /oauth2/v1/token: returns 400 use_dpop_nonce on the
+// listed call numbers, otherwise a token (default token_type=DPoP).
 type tokenHandler struct {
 	calls          atomic.Int32
 	requireNonceOn []int
@@ -754,10 +753,7 @@ func TestRoundTripper_JtiUniqueAcrossRetry(t *testing.T) {
 }
 
 func TestTokenSource_NonceStoreIsolation(t *testing.T) {
-	// Token endpoint sets nonce-A in the token store on its first response.
-	// Resource endpoint sets nonce-B on its successful response. The next
-	// resource request should carry nonce-B, not nonce-A; the next token
-	// refresh should carry nonce-A, not nonce-B.
+	// Verifies token-endpoint and resource-server nonces stay in separate stores.
 	key := generateRSAKey(t)
 
 	tokenH := &tokenHandler{requireNonceOn: []int{1}, nonce: "tok-nonce"}
