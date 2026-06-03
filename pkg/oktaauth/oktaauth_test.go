@@ -11,7 +11,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -951,10 +950,12 @@ func TestTokenSource_LeaderCancelDoesNotPoisonWaiters(t *testing.T) {
 
 	select {
 	case err := <-leaderDone:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("leader err = %v, want context.Canceled", err)
+		if st, ok := status.FromError(err); !ok || st.Code() != codes.Canceled {
+			close(release)
+			t.Fatalf("leader err = %v, want codes.Canceled", err)
 		}
 	case <-time.After(2 * time.Second):
+		close(release)
 		t.Fatal("leader did not return")
 	}
 

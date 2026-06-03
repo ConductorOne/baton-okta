@@ -83,6 +83,7 @@ const (
 	proxyStripHintRequest     = " (if behind a proxy, verify the DPoP request header isn't being stripped)"
 	proxyStripHintResponse    = " (if behind a proxy, verify it doesn't strip the DPoP-Nonce response header)"
 	invalidClientHint         = " (verify okta-client-id and that the configured PEM matches the public key uploaded to Okta)"
+	clockSkewHint             = " (also check the system clock is synced; Okta tolerates only ~5min of skew)"
 )
 
 func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
@@ -118,7 +119,11 @@ func (t *tokenSource) Token(ctx context.Context) (*accessToken, error) {
 		}
 		return tok, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		grpcCode := codes.Canceled
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			grpcCode = codes.DeadlineExceeded
+		}
+		return nil, status.Error(grpcCode, fmt.Sprintf("oktaauth: token request: %v", ctx.Err()))
 	}
 }
 
@@ -224,10 +229,10 @@ func (t *tokenSource) decodeTokenResponse(body []byte) (*accessToken, error) {
 		Scope       string      `json:"scope"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("decode token response: %w", err)
+		return nil, status.Error(codes.Internal, fmt.Sprintf("decode token response: %v", err))
 	}
 	if raw.AccessToken == "" {
-		return nil, errors.New("token endpoint returned empty access_token")
+		return nil, status.Error(codes.Unauthenticated, "token endpoint returned empty access_token")
 	}
 	if strings.ContainsAny(raw.AccessToken, headerControlChars) {
 		return nil, status.Error(codes.Unauthenticated, "token endpoint returned malformed access_token (contains control characters)")
@@ -306,9 +311,9 @@ func formatTokenError(httpStatusCode int, httpStatus, code, desc string, rawBody
 	}
 	switch code {
 	case invalidDPoPProofErrorCode:
-		msg += proxyStripHintRequest
+		msg += proxyStripHintRequest + clockSkewHint
 	case invalidClientErrorCode:
-		msg += invalidClientHint
+		msg += invalidClientHint + clockSkewHint
 	}
 	grpcCode := codes.Unauthenticated
 	if httpStatusCode >= 500 || httpStatusCode == http.StatusTooManyRequests {
