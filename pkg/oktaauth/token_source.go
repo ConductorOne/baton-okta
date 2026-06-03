@@ -145,37 +145,11 @@ func (t *tokenSource) exchange(ctx context.Context) (*accessToken, error) {
 }
 
 func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, error) {
-	assertion, err := t.signClientAssertion()
+	req, err := t.buildTokenRequest(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("sign client assertion: %w", err)
+		return nil, false, err
 	}
-
-	proof, err := t.cfg.proofer.CreateProof(ctx, http.MethodPost, t.cfg.tokenURL,
-		dpop.WithNonceFunc(t.nonceFunc()),
-		dpop.WithProofNowFunc(t.cfg.now),
-	)
-	if err != nil {
-		return nil, false, fmt.Errorf("create dpop proof: %w", err)
-	}
-
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("client_assertion_type", clientAssertionType)
-	form.Set("client_assertion", assertion)
-	if len(t.cfg.scopes) > 0 {
-		form.Set("scope", strings.Join(t.cfg.scopes, " "))
-	}
-
-	//nolint:gosec // tokenURL fixed at construction from operator-provided Okta domain
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.cfg.tokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, false, fmt.Errorf("build token request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set(dpopHdr, proof)
-
-	resp, err := t.cfg.httpClient.Do(req) //nolint:gosec // same fixed tokenURL as above
+	resp, err := t.cfg.httpClient.Do(req) //nolint:gosec // tokenURL fixed at construction
 	if err != nil {
 		if resp != nil {
 			_ = resp.Body.Close()
@@ -194,16 +168,55 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 	}
 
 	if resp.StatusCode >= 400 {
-		errCode, errDesc := parseTokenError(body)
-		if errCode == useDPoPNonceErrorCode {
-			if resp.Header.Get(dpopNonceHdr) == "" {
-				return nil, false, status.Error(codes.Unavailable, "token endpoint asked for a nonce but didn't supply DPoP-Nonce header")
-			}
-			return nil, true, errors.New("retry with nonce")
-		}
-		return nil, false, formatTokenError(resp.StatusCode, resp.Status, errCode, errDesc, body)
+		retry, err := handleTokenErrorResponse(resp, body)
+		return nil, retry, err
 	}
+	tok, err := t.decodeTokenResponse(body)
+	return tok, false, err
+}
 
+func (t *tokenSource) buildTokenRequest(ctx context.Context) (*http.Request, error) {
+	assertion, err := t.signClientAssertion()
+	if err != nil {
+		return nil, fmt.Errorf("sign client assertion: %w", err)
+	}
+	proof, err := t.cfg.proofer.CreateProof(ctx, http.MethodPost, t.cfg.tokenURL,
+		dpop.WithNonceFunc(t.nonceFunc()),
+		dpop.WithProofNowFunc(t.cfg.now),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create dpop proof: %w", err)
+	}
+	form := url.Values{}
+	form.Set("grant_type", "client_credentials")
+	form.Set("client_assertion_type", clientAssertionType)
+	form.Set("client_assertion", assertion)
+	if len(t.cfg.scopes) > 0 {
+		form.Set("scope", strings.Join(t.cfg.scopes, " "))
+	}
+	//nolint:gosec // tokenURL fixed at construction from operator-provided Okta domain
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.cfg.tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("build token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set(dpopHdr, proof)
+	return req, nil
+}
+
+func handleTokenErrorResponse(resp *http.Response, body []byte) (bool, error) {
+	errCode, errDesc := parseTokenError(body)
+	if errCode == useDPoPNonceErrorCode {
+		if resp.Header.Get(dpopNonceHdr) == "" {
+			return false, status.Error(codes.Unavailable, "token endpoint asked for a nonce but didn't supply DPoP-Nonce header")
+		}
+		return true, errors.New("retry with nonce")
+	}
+	return false, formatTokenError(resp.StatusCode, resp.Status, errCode, errDesc, body)
+}
+
+func (t *tokenSource) decodeTokenResponse(body []byte) (*accessToken, error) {
 	var raw struct {
 		AccessToken string      `json:"access_token"`
 		TokenType   string      `json:"token_type"`
@@ -211,19 +224,18 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 		Scope       string      `json:"scope"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, false, fmt.Errorf("decode token response: %w", err)
+		return nil, fmt.Errorf("decode token response: %w", err)
 	}
 	if raw.AccessToken == "" {
-		return nil, false, errors.New("token endpoint returned empty access_token")
+		return nil, errors.New("token endpoint returned empty access_token")
 	}
 	if strings.ContainsAny(raw.AccessToken, headerControlChars) {
-		return nil, false, status.Error(codes.Unauthenticated, "token endpoint returned malformed access_token (contains control characters)")
+		return nil, status.Error(codes.Unauthenticated, "token endpoint returned malformed access_token (contains control characters)")
 	}
 	scheme := normalizeTokenScheme(raw.TokenType)
 	if scheme == "" {
-		return nil, false, fmt.Errorf("unsupported token_type %q (expected DPoP or Bearer)", raw.TokenType)
+		return nil, fmt.Errorf("unsupported token_type %q (expected DPoP or Bearer)", raw.TokenType)
 	}
-
 	expiresIn, _ := raw.ExpiresIn.Int64()
 	if expiresIn <= 0 {
 		expiresIn = int64(defaultTokenLifetime / time.Second)
@@ -232,7 +244,7 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 		value:  raw.AccessToken,
 		scheme: scheme,
 		expiry: t.cfg.now().Add(time.Duration(expiresIn) * time.Second),
-	}, false, nil
+	}, nil
 }
 
 func (t *tokenSource) nonceFunc() func() (string, error) {
