@@ -10,6 +10,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -68,7 +69,7 @@ func (connector *Okta) ListEvents(
 
 	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, wrapListEventsError(qp, resp, err)
 	}
 
 	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
@@ -101,4 +102,27 @@ func (connector *Okta) ListEvents(
 	}
 
 	return rv, streamState, annos, nil
+}
+
+// wrapListEventsError annotates errors from the Okta /api/v1/logs endpoint with HTTP
+// status, X-Okta-Request-Id, and the query window. The vendored okta-sdk-golang's
+// *okta.Error formatter returns the literal string "the API returned an unknown error"
+// whenever neither ErrorDescription nor ErrorSummary is populated (HTML 5xx pages,
+// gateway timeouts, non-JSON bodies), so without this enrichment the failures are
+// undiagnosable from traces alone.
+func wrapListEventsError(qp *query.Params, resp *okta.Response, err error) error {
+	parts := []string{"okta-connectorv2: ListEvents failed"}
+	if resp != nil && resp.Response != nil {
+		parts = append(parts, fmt.Sprintf("status=%d", resp.StatusCode))
+		if rid := resp.Header.Get("X-Okta-Request-Id"); rid != "" {
+			parts = append(parts, fmt.Sprintf("request_id=%s", rid))
+		}
+	}
+	if qp != nil && qp.Since != "" {
+		parts = append(parts, fmt.Sprintf("since=%s", qp.Since))
+	}
+	if qp != nil && qp.After != "" {
+		parts = append(parts, fmt.Sprintf("after=%s", qp.After))
+	}
+	return fmt.Errorf("%s: %w", strings.Join(parts, " "), err)
 }
