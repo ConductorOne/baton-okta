@@ -329,6 +329,33 @@ func oktaAppToOktaApplication(ctx context.Context, app okta.App) (*okta.Applicat
 	return &oktaApp, nil
 }
 
+// nhiExcludedSignOnModes are the Okta app sign-on modes that are not non-human
+// identity app-registrations: BOOKMARK apps are link launchers and the SWA
+// family are human-facing password-fill apps, neither of which holds machine
+// credentials. Values match the okta-sdk-golang/v2 app constructors
+// (bookmarkApplication.go, swaApplication.go, autoLoginApplication.go,
+// basicAuthApplication.go, securePasswordStoreApplication.go).
+var nhiExcludedSignOnModes = map[string]struct{}{
+	"BOOKMARK":              {},
+	"BROWSER_PLUGIN":        {},
+	"AUTO_LOGIN":            {},
+	"BASIC_AUTH":            {},
+	"SECURE_PASSWORD_STORE": {},
+}
+
+// nhiAppDetail returns the RFC §2.8 axis-2 detail (<platform>.<object>.<purpose>,
+// dotted lowercase) for an app sign-on mode, and whether the app is an NHI
+// app-registration at all. BOOKMARK and SWA apps are excluded.
+func nhiAppDetail(signOnMode string) (string, bool) {
+	if _, excluded := nhiExcludedSignOnModes[signOnMode]; excluded {
+		return "", false
+	}
+	if signOnMode == "" {
+		return "okta.app", true
+	}
+	return "okta.app." + strings.ToLower(signOnMode), true
+}
+
 func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, error) {
 	appProfile := map[string]interface{}{
 		"status": app.Status,
@@ -336,10 +363,16 @@ func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, erro
 	var appTraitOpts []sdkResource.AppTraitOption
 	appTraitOpts = append(appTraitOpts, sdkResource.WithAppProfile(appProfile))
 
-	return sdkResource.NewAppResource(app.Label, resourceTypeApp, app.Id, appTraitOpts,
+	resourceOpts := []sdkResource.ResourceOption{
 		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(app.Id)}),
 		sdkResource.WithAnnotation(&v2.RawId{Id: app.Id}),
-	)
+	}
+	if detail, ok := nhiAppDetail(app.SignOnMode); ok {
+		resourceOpts = append(resourceOpts,
+			sdkResource.WithNHIType(v2.NonHumanIdentityTrait_NHI_TYPE_APP_REGISTRATION, detail))
+	}
+
+	return sdkResource.NewAppResource(app.Label, resourceTypeApp, app.Id, appTraitOpts, resourceOpts...)
 }
 
 func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {

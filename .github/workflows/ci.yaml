@@ -23,6 +23,23 @@ jobs:
         uses: actions/checkout@v4
       - name: Build baton-okta
         run: go build ./cmd/baton-okta
+      - name: Install baton CLI from baton-sdk (conductorone/baton is archived)
+        # conductorone/baton is archived and its releases/latest is frozen at
+        # v0.4.5, which cannot resolve the NonHumanIdentityTrait proto this
+        # connector now emits. Pre-install the modern CLI from baton-sdk so the
+        # shared get-baton action's "already installed" early-exit skips the
+        # archived download.
+        run: |
+          set -euxo pipefail
+          BATON_VERSION=v0.11.0
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          if [ "${ARCH}" = "x86_64" ]; then ARCH="amd64"; fi
+          FILENAME="baton-${BATON_VERSION}-${OS}-${ARCH}.tar.gz"
+          curl -fsSL -O "https://github.com/conductorone/baton-sdk/releases/download/${BATON_VERSION}/${FILENAME}"
+          tar xzf "${FILENAME}"
+          mv baton /usr/local/bin/baton
+          baton --version
       - name: Test grant/revoke
         uses: ConductorOne/github-workflows/actions/sync-test@v2
         with:
