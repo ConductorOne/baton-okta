@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	cfg "github.com/conductorone/baton-okta/pkg/config"
+	"github.com/conductorone/baton-okta/pkg/oktaauth"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/cli"
@@ -24,6 +25,9 @@ import (
 // TODO: use isNotFoundError() since E0000008 is also a not found error
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
+
+// oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request.
+const oktaSDKAuthSentinel = "dpop-managed"
 
 type Okta struct {
 	client              *okta.Client
@@ -350,13 +354,23 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
+		dpopClient, err := oktaauth.NewDPoPHTTPClient(ctx, oktaauth.Config{
+			Domain:        cc.Domain,
+			ClientID:      cc.OktaClientId,
+			PrivateKeyPEM: cc.OktaPrivateKey,
+			PrivateKeyID:  cc.OktaPrivateKeyId,
+			Scopes:        scopes,
+		}, client)
+		if err != nil {
+			return nil, nil, fmt.Errorf("baton-okta: build dpop http client: %w", err)
+		}
+
+		// Bearer mode lets the oktaauth transport own auth; bypasses v5's native PrivateKey/DPoP path.
 		_, oktaClient, err = okta.NewClient(ctx,
 			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
-			okta.WithAuthorizationMode("PrivateKey"),
-			okta.WithClientId(cc.OktaClientId),
-			okta.WithScopes(scopes),
-			okta.WithPrivateKey(cc.OktaPrivateKey),
-			okta.WithPrivateKeyId(cc.OktaPrivateKeyId),
+			okta.WithAuthorizationMode("Bearer"),
+			okta.WithToken(oktaSDKAuthSentinel),
+			okta.WithHttpClientPtr(dpopClient),
 			okta.WithCache(cc.Cache),
 			okta.WithCacheTti(cacheTTI),
 			okta.WithCacheTtl(cacheTTL),
@@ -367,11 +381,9 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 
 		config, err := oktav5.NewConfiguration(
 			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
-			oktav5.WithAuthorizationMode("PrivateKey"),
-			oktav5.WithClientId(cc.OktaClientId),
-			oktav5.WithScopes(scopes),
-			oktav5.WithPrivateKey(cc.OktaPrivateKey),
-			oktav5.WithPrivateKeyId(cc.OktaPrivateKeyId),
+			oktav5.WithAuthorizationMode("Bearer"),
+			oktav5.WithToken(oktaSDKAuthSentinel),
+			oktav5.WithHttpClientPtr(dpopClient),
 			oktav5.WithCache(cc.Cache),
 			oktav5.WithCacheTti(cacheTTI),
 			oktav5.WithCacheTtl(cacheTTL),
