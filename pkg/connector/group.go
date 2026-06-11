@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -27,7 +26,6 @@ import (
 var _ connectorbuilder.ResourceActionProvider = (*groupResourceType)(nil)
 var _ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
 
-const membershipUpdatedField = "lastMembershipUpdated"
 const usersCountProfileKey = "users_count"
 const groupTypeProfileKey = "type"
 const builtInGroupType = "BUILT_IN"
@@ -105,22 +103,6 @@ func (o *groupResourceType) Entitlements(
 	return rv, nil, nil
 }
 
-func (o *groupResourceType) etagMd(group *okta.Group) (*v2.ETagMetadata, error) {
-	if group.LastMembershipUpdated != nil {
-		data, err := structpb.NewStruct(map[string]interface{}{
-			membershipUpdatedField: group.LastMembershipUpdated.Format(time.RFC3339Nano),
-		})
-		if err != nil {
-			return nil, err
-		}
-		return &v2.ETagMetadata{
-			Metadata: data,
-		}, nil
-	}
-
-	return nil, nil
-}
-
 func (o *groupResourceType) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -196,13 +178,6 @@ func (o *groupResourceType) Grants(
 		pageToken, err := bag.Marshal()
 		if err != nil {
 			return nil, nil, err
-		}
-
-		if pageToken == "" {
-			etag := &v2.ETag{
-				Value: time.Now().UTC().Format(time.RFC3339Nano),
-			}
-			annos.Update(etag)
 		}
 
 		return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
@@ -371,12 +346,6 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 		Id: fmtResourceIdV1(group.Id),
 	})
 	annos.Update(&v2.RawId{Id: group.Id})
-
-	etagMd, err := o.etagMd(group)
-	if err != nil {
-		return nil, err
-	}
-	annos.Update(etagMd)
 
 	if group.Type == builtInGroupType {
 		annos.Update(&v2.EntitlementImmutable{})
