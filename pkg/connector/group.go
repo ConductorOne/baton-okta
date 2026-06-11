@@ -198,13 +198,6 @@ func (o *groupResourceType) Grants(
 			return nil, nil, err
 		}
 
-		if pageToken == "" {
-			etag := &v2.ETag{
-				Value: time.Now().UTC().Format(time.RFC3339Nano),
-			}
-			annos.Update(etag)
-		}
-
 		return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	case resourceTypeRole.Id:
 		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
@@ -293,6 +286,13 @@ func (o *groupResourceType) Grants(
 			return nil, nil, err
 		}
 
+		if pageToken == "" {
+			etag := &v2.ETag{
+				Value: time.Now().UTC().Format(time.RFC3339Nano),
+			}
+			annos.Update(etag)
+		}
+
 		return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	default:
 		return nil, nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", bag.ResourceTypeID())
@@ -376,7 +376,9 @@ func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group
 	if err != nil {
 		return nil, err
 	}
-	annos.Update(etagMd)
+	if etagMd != nil {
+		annos.Update(etagMd)
+	}
 
 	if group.Type == builtInGroupType {
 		annos.Update(&v2.EntitlementImmutable{})
@@ -607,7 +609,7 @@ func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, regis
 				DisplayName: "Description",
 				Description: "The new description for the group.",
 				Field:       &config.Field_StringField{},
-				IsRequired: false,
+				IsRequired:  false,
 			},
 		},
 		ReturnTypes: []*config.Field{

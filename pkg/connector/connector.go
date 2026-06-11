@@ -187,7 +187,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 
 	var annos annotations.Annotations
 	annos.Update(&v2.ExternalLink{
-		Url: c.domain,
+		Url: fmt.Sprintf("https://%s", c.domain),
 	})
 
 	return &v2.ConnectorMetadata{

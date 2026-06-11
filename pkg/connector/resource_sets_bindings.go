@@ -132,7 +132,7 @@ func (rsb *resourceSetsBindingsResourceType) Entitlements(_ context.Context, res
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
-			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
+			sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
 			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding Member", resource.DisplayName)),
 			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set-binding member in Okta", resource.DisplayName)),
 		),
@@ -226,16 +226,17 @@ func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx conte
 
 func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
 	pToken := &attrs.PageToken
-	var (
-		rv        []*v2.Grant
-		principal *v2.Resource
-	)
+	var rv []*v2.Grant
 	bag, _, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
 	resourceIDs := strings.Split(resource.Id.Resource, ":")
+	if len(resourceIDs) != resourceMaxLength {
+		return nil, nil, fmt.Errorf("okta-connectorv2: invalid resource set binding id: %s", resource.Id.Resource)
+	}
+
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
 	members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId, nil)
@@ -244,6 +245,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	}
 
 	for _, member := range members {
+		var principal *v2.Resource
 		memberHref := strings.Split(member.Links.Self.Href, "/")
 		resourceType := memberHref[len(memberHref)-resourceMaxLength]
 		resourceId := memberHref[len(memberHref)-lastItem]
@@ -260,7 +262,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 
 		gr := sdkGrant.NewGrant(resource, entitlementName, principal,
 			sdkGrant.WithAnnotation(&v2.V1Identifier{
-				Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+				Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resourceId),
 			}),
 		)
 		rv = append(rv, gr)
@@ -389,6 +391,10 @@ func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId
 	l.Debug("getting resource set binding", zap.String("resource_set_binding_id", resourceId.Resource))
 
 	resourceIDs := strings.Split(resourceId.Resource, ":")
+	if len(resourceIDs) != resourceMaxLength {
+		return nil, nil, fmt.Errorf("okta-connectorv2: invalid resource set binding id: %s", resourceId.Resource)
+	}
+
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
 

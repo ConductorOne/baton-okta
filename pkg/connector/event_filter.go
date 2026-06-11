@@ -98,6 +98,10 @@ func (filter *EventFilter) Handle(l *zap.Logger, event *oktaSDK.LogEvent) (*v2.E
 		targetMap[target.Type] = append(targetMap[target.Type], target)
 	}
 
+	if event.Published == nil {
+		return nil, fmt.Errorf("okta-connectorv2: event %s has no published timestamp", event.Uuid)
+	}
+
 	rv := &v2.Event{
 		Id:         event.Uuid,
 		OccurredAt: timestamppb.New(*event.Published),

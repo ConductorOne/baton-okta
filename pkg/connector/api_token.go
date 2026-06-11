@@ -128,27 +128,42 @@ func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceI
 }
 
 func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {
+	tokenId, ok := apiToken.GetIdOk()
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: api token %q has no id", apiToken.GetName())
+	}
+
 	options := []resource.SecretTraitOption{
-		resource.WithSecretExpiresAt(*apiToken.ExpiresAt),
-		resource.WithSecretIdentityID(&v2.ResourceId{
-			ResourceType:  resourceTypeUser.Id,
-			Resource:      *apiToken.UserId,
-			BatonResource: false,
-		}),
-		resource.WithSecretCreatedByID(&v2.ResourceId{
-			ResourceType:  resourceTypeUser.Id,
-			Resource:      *apiToken.UserId,
-			BatonResource: false,
-		}),
-		resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
-		resource.WithSecretCreatedAt(*apiToken.Created),
 		resource.WithSecretType(v2.SecretTrait_CREDENTIAL_TYPE_STATIC_SECRET),
 		resource.WithSecretDetail("okta.api_token"),
+	}
+	if expiresAt, ok := apiToken.GetExpiresAtOk(); ok {
+		options = append(options, resource.WithSecretExpiresAt(*expiresAt))
+	}
+	if userId, ok := apiToken.GetUserIdOk(); ok {
+		options = append(options,
+			resource.WithSecretIdentityID(&v2.ResourceId{
+				ResourceType:  resourceTypeUser.Id,
+				Resource:      *userId,
+				BatonResource: false,
+			}),
+			resource.WithSecretCreatedByID(&v2.ResourceId{
+				ResourceType:  resourceTypeUser.Id,
+				Resource:      *userId,
+				BatonResource: false,
+			}),
+		)
+	}
+	if lastUpdated, ok := apiToken.GetLastUpdatedOk(); ok {
+		options = append(options, resource.WithSecretLastUsedAt(*lastUpdated))
+	}
+	if created, ok := apiToken.GetCreatedOk(); ok {
+		options = append(options, resource.WithSecretCreatedAt(*created))
 	}
 	rv, err := resource.NewSecretResource(
 		apiToken.Name,
 		resourceTypeApiToken,
-		*apiToken.Id,
+		*tokenId,
 		options,
 	)
 	if err != nil {

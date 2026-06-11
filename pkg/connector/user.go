@@ -213,14 +213,14 @@ func userName(user *okta.User) (string, string) {
 }
 
 func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
+	if qp == nil {
+		qp = &query.Params{}
+	}
 	if qp.Search == "" {
 		qp.Search = "status pr" // ListUsers doesn't get deactivated users by default. this should fetch them all
 	}
 
-	uri := usersUrl
-	if qp != nil {
-		uri += qp.String()
-	}
+	uri := usersUrl + qp.String()
 
 	reqUrl, err := url.Parse(uri)
 	if err != nil {
@@ -420,7 +420,7 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 		return nil, errors.New("unsupported credential options")
 	}
 
-	length := min(8, credentialOptions.GetRandomPassword().GetLength())
+	length := max(8, credentialOptions.GetRandomPassword().GetLength())
 	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.LocalCredentialOptions_RandomPassword{
 		Length: length,
 	})

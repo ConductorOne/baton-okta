@@ -60,15 +60,15 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 
 func resourceSetResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":                    *rs.Id,
-		profileFieldLabel:       *rs.Label,
-		profileFieldDescription: *rs.Description,
+		"id":                    rs.GetId(),
+		profileFieldLabel:       rs.GetLabel(),
+		profileFieldDescription: rs.GetDescription(),
 	}
 
 	return sdkResource.NewResource(
-		*rs.Label,
+		rs.GetLabel(),
 		resourceTypeResourceSets,
-		*rs.Id,
+		rs.GetId(),
 		sdkResource.WithParentResourceID(parentResourceID),
 		sdkResource.WithAppTrait(
 			sdkResource.WithAppProfile(profile),
@@ -157,7 +157,7 @@ func (rs *resourceSetsResourceType) Entitlements(_ context.Context, resource *v2
 			sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 				Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 			}),
-			sdkEntitlement.WithGrantableTo(resourceTypeResourceSets),
+			sdkEntitlement.WithGrantableTo(resourceTypeCustomRole),
 			sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Resource Set Binding", resource.DisplayName)),
 			sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s resource-set in Okta", resource.DisplayName)),
 		),
@@ -170,11 +170,15 @@ func listBindings(
 	ctx context.Context,
 	client *okta.Client,
 	resourceSetId string,
-	_ *query.Params,
+	qp *query.Params,
 ) ([]Role, *okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if qp != nil {
+		apiPath += qp.String()
 	}
 
 	var resourceSetsBindings *ResourceSetsBindingsAPIData
@@ -243,7 +247,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 		principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: role.ID}}
 		gr := sdkGrant.NewGrant(resource, bindingEntitlement, principal,
 			sdkGrant.WithAnnotation(&v2.V1Identifier{
-				Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), resource.Id.Resource),
+				Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), role.ID),
 			}),
 		)
 		rv = append(rv, gr)

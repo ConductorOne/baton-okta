@@ -159,10 +159,25 @@ func (o *customRoleResourceType) Grants(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
-	// Collect all user IDs upfront, so that we can get all their roles from cache at once.
+	// Filter users by email domain first to avoid fetching roles for users we'll skip anyway.
 	userIDs := make([]string, 0, len(usersWithRoleAssignments))
 	for _, user := range usersWithRoleAssignments {
-		userIDs = append(userIDs, user.Id)
+		userId := user.Id
+
+		// Check if the user should be included after filtering by email domains.
+		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, attrs.Session, userId)
+		if !ok {
+			user, _, err := o.connector.client.User.GetUser(ctx, userId)
+			if err != nil {
+				return nil, nil, err
+			}
+			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
+		}
+		if !shouldInclude {
+			continue
+		}
+
+		userIDs = append(userIDs, userId)
 	}
 
 	// Get all cached roles at once (this will only return roles that were found).
@@ -176,9 +191,7 @@ func (o *customRoleResourceType) Grants(
 	// Now, get any remaining user roles (those that aren't in cache)
 	// and keep track of them so that we can try to cache them later.
 	toCache := make(map[string]mapset.Set[string])
-	for _, user := range usersWithRoleAssignments {
-		userId := user.Id
-
+	for _, userId := range userIDs {
 		// If this user's roles are already cached, keep moving.
 		if _, found := userRoles[userId]; found {
 			continue

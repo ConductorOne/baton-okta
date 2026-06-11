@@ -428,13 +428,13 @@ func roleGroupGrant(groupID string, resource *v2.Resource, shouldExpand bool) *v
 
 func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
-	if principal.Id.ResourceType != resourceTypeUser.Id {
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
 			"okta-connector: only users or groups can be granted role membership",
 			zap.String("principal_type", principal.Id.ResourceType),
 			zap.String("principal_id", principal.Id.Resource),
 		)
-		return nil, fmt.Errorf("okta-connector: only users or groups can be granted repo membership")
+		return nil, fmt.Errorf("okta-connector: only users or groups can be granted role membership")
 	}
 
 	roleId := entitlement.Resource.Id.Resource
@@ -506,6 +506,8 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 					zap.String("ErrorCode", errOkta.ErrorCode),
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
+
+				return annotations.New(&v2.GrantAlreadyExists{}), nil
 			}
 
 			return nil, fmt.Errorf("okta-connector: %v", errOkta)
@@ -531,7 +533,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	entitlement := grant.Entitlement
 	principal := grant.Principal
 	roleId := ""
-	if principal.Id.ResourceType != resourceTypeUser.Id {
+	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
 			"okta-connector: only users or groups can have role membership revoked",
 			zap.String("principal_type", principal.Id.ResourceType),
