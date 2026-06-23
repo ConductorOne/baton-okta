@@ -509,7 +509,7 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 		case string:
 			parsed, err := strconv.ParseBool(v)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
 			}
 			requirePasswordChanged = parsed
 		case nil:
