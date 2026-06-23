@@ -7,6 +7,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/okta/okta-sdk-golang/v2/okta"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // FDE-178 / RFC §8.5 gap-R6: user resources must carry a V1Identifier
@@ -194,6 +195,126 @@ func Test_shouldIncludeUserByEmails(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := shouldIncludeUserByEmails(tt.args.userEmails, tt.args.emailDomainFilters); got != tt.want {
 				t.Errorf("shouldIncludeUserByEmails() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetUserProfile(t *testing.T) {
+	tests := []struct {
+		name       string
+		profile    map[string]interface{}
+		wantKeys   []string
+		wantAbsent []string
+		wantErr    bool
+	}{
+		{
+			name: "core fields only",
+			profile: map[string]interface{}{
+				"first_name": "Ada",
+				"last_name":  "Lovelace",
+				"email":      "ada@example.com",
+				"login":      "ada@example.com",
+			},
+			wantKeys: []string{"firstName", "lastName", "email", "login"},
+		},
+		{
+			name: "login defaults to email",
+			profile: map[string]interface{}{
+				"first_name": "Ada",
+				"last_name":  "Lovelace",
+				"email":      "ada@example.com",
+			},
+			wantKeys: []string{"firstName", "lastName", "email", "login"},
+		},
+		{
+			name: "additionalAttributes merged",
+			profile: map[string]interface{}{
+				"first_name": "Ada",
+				"last_name":  "Lovelace",
+				"email":      "ada@example.com",
+				"login":      "ada@example.com",
+				"additionalAttributes": map[string]interface{}{
+					"city":       "London",
+					"department": "Engineering",
+				},
+			},
+			wantKeys: []string{"firstName", "lastName", "email", "login", "city", "department"},
+		},
+		{
+			name: "additionalAttributes absent",
+			profile: map[string]interface{}{
+				"first_name": "Ada",
+				"last_name":  "Lovelace",
+				"email":      "ada@example.com",
+				"login":      "ada@example.com",
+			},
+			wantKeys:   []string{"firstName", "lastName", "email", "login"},
+			wantAbsent: []string{"city"},
+		},
+		{
+			name: "additionalAttributes wrong type silently ignored",
+			profile: map[string]interface{}{
+				"first_name":           "Ada",
+				"last_name":            "Lovelace",
+				"email":                "ada@example.com",
+				"login":                "ada@example.com",
+				"additionalAttributes": "not-a-map",
+			},
+			wantKeys:   []string{"firstName", "lastName", "email", "login"},
+			wantAbsent: []string{"additionalAttributes"},
+		},
+		{
+			name: "protected field rejected",
+			profile: map[string]interface{}{
+				"first_name": "Ada",
+				"last_name":  "Lovelace",
+				"email":      "ada@example.com",
+				"login":      "ada@example.com",
+				"additionalAttributes": map[string]interface{}{
+					"firstName": "Override",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing required email",
+			profile: map[string]interface{}{
+				"first_name": "Ada",
+				"last_name":  "Lovelace",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := structpb.NewStruct(tt.profile)
+			if err != nil {
+				t.Fatalf("structpb.NewStruct: %v", err)
+			}
+			accountInfo := &v2.AccountInfo{Profile: s}
+
+			got, err := getUserProfile(accountInfo)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			for _, k := range tt.wantKeys {
+				if _, ok := (*got)[k]; !ok {
+					t.Errorf("profile missing key %q", k)
+				}
+			}
+			for _, k := range tt.wantAbsent {
+				if _, ok := (*got)[k]; ok {
+					t.Errorf("profile unexpectedly contains key %q", k)
+				}
 			}
 		})
 	}

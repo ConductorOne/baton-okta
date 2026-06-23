@@ -457,12 +457,23 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 		login = email
 	}
 
-	return &okta.UserProfile{
+	profile := &okta.UserProfile{
 		"firstName":       firstName,
 		"lastName":        lastName,
 		"email":           email,
 		profileFieldLogin: login,
-	}, nil
+	}
+
+	if additional, ok := pMap[profileFieldAdditionalAttributes].(map[string]interface{}); ok {
+		for k, v := range additional {
+			if protectedOktaProfileFields[k] {
+				return nil, fmt.Errorf("okta-connectorv2: additionalAttributes cannot override protected field %q", k)
+			}
+			(*profile)[k] = v
+		}
+	}
+
+	return profile, nil
 }
 
 func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
