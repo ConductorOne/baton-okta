@@ -477,31 +477,50 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 }
 
 func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
-	if credentialOptions.GetNoPassword() != nil {
-		return nil, nil
-	}
-
 	pMap := accountInfo.Profile.AsMap()
-	requirePass := pMap["password_change_on_login_required"]
-	requirePasswordChanged := false
-	switch v := requirePass.(type) {
+	params := &query.Params{}
+
+	// create_inactive applies regardless of credential type
+	createInactive := false
+	switch v := pMap[profileFieldCreateInactive].(type) {
 	case bool:
-		requirePasswordChanged = v
+		createInactive = v
 	case string:
 		parsed, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldCreateInactive, err)
 		}
-		requirePasswordChanged = parsed
+		createInactive = parsed
 	case nil:
-		// Do nothing
+		// absent = default false, activate=true is Okta's default
 	}
 
-	params := &query.Params{}
-	if requirePasswordChanged {
-		params.NextLogin = "changePassword"
-		params.Activate = ToPtr(true) // This defaults to true anyways, but lets be explicit
+	if createInactive {
+		params.Activate = ToPtr(false)
+		return params, nil
 	}
+
+	// random-password path: respect password_change_on_login_required
+	if credentialOptions.GetRandomPassword() != nil {
+		requirePasswordChanged := false
+		switch v := pMap[profileFieldPasswordChangeOnLoginRequired].(type) {
+		case bool:
+			requirePasswordChanged = v
+		case string:
+			parsed, err := strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
+			requirePasswordChanged = parsed
+		case nil:
+			// absent = default false
+		}
+		if requirePasswordChanged {
+			params.NextLogin = "changePassword"
+			params.Activate = ToPtr(true)
+		}
+	}
+
 	return params, nil
 }
 

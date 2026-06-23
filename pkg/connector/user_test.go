@@ -319,3 +319,125 @@ func TestGetUserProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAccountCreationQueryParams(t *testing.T) {
+	noPassword := v2.LocalCredentialOptions_builder{
+		NoPassword: &v2.LocalCredentialOptions_NoPassword{},
+	}.Build()
+
+	randomPassword := v2.LocalCredentialOptions_builder{
+		RandomPassword: &v2.LocalCredentialOptions_RandomPassword{Length: 12},
+	}.Build()
+
+	tests := []struct {
+		name        string
+		profile     map[string]interface{}
+		creds       *v2.LocalCredentialOptions
+		wantActivate *bool   // nil means we don't care / field should be unset
+		wantNextLogin string  // empty means field should be unset
+		wantErr     bool
+	}{
+		{
+			name:    "all defaults no-password",
+			profile: map[string]interface{}{},
+			creds:   noPassword,
+		},
+		{
+			name: "create_inactive true bool no-password",
+			profile: map[string]interface{}{
+				"create_inactive": true,
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+		},
+		{
+			name: "create_inactive true string no-password",
+			profile: map[string]interface{}{
+				"create_inactive": "true",
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+		},
+		{
+			name: "create_inactive wins over password_change",
+			profile: map[string]interface{}{
+				"create_inactive":                   true,
+				"password_change_on_login_required": true,
+			},
+			creds:        randomPassword,
+			wantActivate: boolPtr(false),
+			wantNextLogin: "",
+		},
+		{
+			name: "password_change_on_login_required with random-password",
+			profile: map[string]interface{}{
+				"password_change_on_login_required": true,
+			},
+			creds:         randomPassword,
+			wantActivate:  boolPtr(true),
+			wantNextLogin: "changePassword",
+		},
+		{
+			name: "password_change_on_login_required ignored for no-password",
+			profile: map[string]interface{}{
+				"password_change_on_login_required": true,
+			},
+			creds: noPassword,
+		},
+		{
+			name: "create_inactive invalid string",
+			profile: map[string]interface{}{
+				"create_inactive": "yes",
+			},
+			creds:   noPassword,
+			wantErr: true,
+		},
+		{
+			name:    "all defaults random-password",
+			profile: map[string]interface{}{},
+			creds:   randomPassword,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := structpb.NewStruct(tt.profile)
+			if err != nil {
+				t.Fatalf("structpb.NewStruct: %v", err)
+			}
+			accountInfo := &v2.AccountInfo{Profile: s}
+
+			got, err := getAccountCreationQueryParams(accountInfo, tt.creds)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Check Activate
+			if tt.wantActivate == nil {
+				if got != nil && got.Activate != nil {
+					t.Errorf("Activate = %v, want nil", *got.Activate)
+				}
+			} else {
+				if got == nil || got.Activate == nil {
+					t.Fatalf("Activate is nil, want %v", *tt.wantActivate)
+				}
+				if *got.Activate != *tt.wantActivate {
+					t.Errorf("Activate = %v, want %v", *got.Activate, *tt.wantActivate)
+				}
+			}
+
+			// Check NextLogin
+			if got != nil && got.NextLogin != tt.wantNextLogin {
+				t.Errorf("NextLogin = %q, want %q", got.NextLogin, tt.wantNextLogin)
+			}
+		})
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
