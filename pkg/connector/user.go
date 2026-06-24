@@ -372,7 +372,7 @@ func (r *userResourceType) CreateAccount(
 ) {
 	if raw, exists := accountInfo.Profile.AsMap()[profileFieldAdditionalAttributes]; exists {
 		if _, ok := raw.(map[string]interface{}); !ok {
-			ctxzap.Extract(ctx).Warn("okta-connectorv2: additionalAttributes was present but not a map; ignoring",
+			ctxzap.Extract(ctx).Debug("okta-connectorv2: additionalAttributes was present but not a map; ignoring",
 				zap.String("observed_type", fmt.Sprintf("%T", raw)),
 			)
 		}
