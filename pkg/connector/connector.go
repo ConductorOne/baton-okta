@@ -246,6 +246,25 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "True/False",
 					Order:       5,
 				},
+				profileFieldCreateInactive: {
+					DisplayName: "Create Inactive",
+					Required:    false,
+					Description: "When set to 'true', the user is created in a staged (inactive) state without activation.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "True/False",
+					Order:       6,
+				},
+				profileFieldAdditionalAttributes: {
+					DisplayName: "Additional Attributes",
+					Required:    false,
+					Description: "Extra Okta profile attributes (standard or custom schema) to set on the user. Keys must be valid Okta profile field names.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_MapField{
+						MapField: &v2.ConnectorAccountCreationSchema_MapField{},
+					},
+					Order: 7,
+				},
 			},
 		},
 	}, nil
