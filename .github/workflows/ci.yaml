@@ -15,40 +15,23 @@ jobs:
       BATON_DOMAIN: ${{ secrets.BATON_DOMAIN }}
       BATON_SYNC_CUSTOM_ROLES: true
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.25.x
-      - name: Checkout code
-        uses: actions/checkout@v4
+          go-version-file: go.mod
       - name: Build baton-okta
         run: go build ./cmd/baton-okta
-      - name: Install baton CLI from baton-sdk (conductorone/baton is archived)
-        # conductorone/baton is archived and its releases/latest is frozen at
-        # v0.4.5, which cannot resolve the NonHumanIdentityTrait proto this
-        # connector now emits. Pre-install the modern CLI from baton-sdk so the
-        # shared get-baton action's "already installed" early-exit skips the
-        # archived download.
-        run: |
-          set -euxo pipefail
-          BATON_VERSION=v0.11.0
-          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-          ARCH=$(uname -m)
-          if [ "${ARCH}" = "x86_64" ]; then ARCH="amd64"; fi
-          FILENAME="baton-${BATON_VERSION}-${OS}-${ARCH}.tar.gz"
-          curl -fsSL -O "https://github.com/conductorone/baton-sdk/releases/download/${BATON_VERSION}/${FILENAME}"
-          tar xzf "${FILENAME}"
-          mv baton /usr/local/bin/baton
-          baton --version
       - name: Test grant/revoke
-        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        uses: ConductorOne/github-workflows/actions/sync-test@v4
         with:
           connector: ./baton-okta
           baton-entitlement: app:0oaf4rf37pg7W4B6a5d7:access
           baton-principal: 00uacdfcbiu3Igbmz5d7
           baton-principal-type: user
       - name: Test grant/revoke with custom role
-        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        uses: ConductorOne/github-workflows/actions/sync-test@v4
         with:
           connector: ./baton-okta
           baton-entitlement: resourceset-binding:iamkg0dn9dH05taAc5d7:cr0kg059ztsV0pNMh5d7:member
