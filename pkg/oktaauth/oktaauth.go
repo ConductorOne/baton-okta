@@ -111,6 +111,7 @@ func transportOrDefault(c *http.Client) http.RoundTripper {
 }
 
 func parseRSAPrivateKey(pemStr string) (*rsa.PrivateKey, error) {
+	pemStr = strings.ReplaceAll(pemStr, `\n`, "\n")
 	block, _ := pem.Decode([]byte(pemStr))
 	if block == nil {
 		return nil, errors.New("no PEM block found")
