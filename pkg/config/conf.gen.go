@@ -7,7 +7,7 @@ type Okta struct {
 	Domain string `mapstructure:"domain"`
 	ApiToken string `mapstructure:"api-token"`
 	OktaClientId string `mapstructure:"okta-client-id"`
-	OktaPrivateKey string `mapstructure:"okta-private-key"`
+	OktaPrivateKey []byte `mapstructure:"okta-private-key"`
 	OktaPrivateKeyId string `mapstructure:"okta-private-key-id"`
 	SyncInactiveApps bool `mapstructure:"sync-inactive-apps"`
 	Cache bool `mapstructure:"cache"`

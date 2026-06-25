@@ -357,7 +357,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		dpopClient, err := oktaauth.NewDPoPHTTPClient(ctx, oktaauth.Config{
 			Domain:        cc.Domain,
 			ClientID:      cc.OktaClientId,
-			PrivateKeyPEM: cc.OktaPrivateKey,
+			PrivateKeyPEM: string(cc.OktaPrivateKey),
 			PrivateKeyID:  cc.OktaPrivateKeyId,
 			Scopes:        scopes,
 		}, client)
