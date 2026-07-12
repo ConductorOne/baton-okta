@@ -19,7 +19,7 @@ import (
 	storage_v3 "github.com/conductorone/baton-sdk/pb/c1/storage/v3"
 	"github.com/conductorone/baton-sdk/pkg/bid"
 	"github.com/conductorone/baton-sdk/pkg/dotc1z"
-	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
+	"github.com/conductorone/baton-sdk/pkg/sourcecache"
 	"github.com/conductorone/baton-sdk/pkg/sync/expand"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	batonGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
@@ -116,7 +116,7 @@ type syncer struct {
 	externalResourceEntitlementIdFilter string
 	previousSyncC1ZPath                 string
 	previousSyncC1ZPathOptional         bool
-	store                               c1zstore.Store
+	store                               dotc1z.C1ZStore
 	externalResourceReader              connectorstore.Reader
 	previousSyncReader                  connectorstore.Reader
 	connector                           types.ConnectorClient
@@ -125,7 +125,7 @@ type syncer struct {
 	transitionHandler                   func(s Action)
 	progressHandler                     func(p *Progress)
 	tmpDir                              string
-	storageEngine                       c1zstore.Engine
+	storageEngine                       dotc1z.Engine
 	skipFullSync                        bool
 	lastCheckPointTime                  time.Time
 	counts                              *progresslog.ProgressLog
@@ -135,6 +135,7 @@ type syncer struct {
 	syncID                              string
 	skipEGForResourceType               syncMap[string, bool]
 	skipEntitlementsForResourceType     syncMap[string, bool]
+	typeScopedGrantsForResourceType     syncMap[string, bool]
 	skipEntitlementsAndGrants           bool
 	skipGrants                          bool
 	resourceTypeTraits                  syncMap[string, []v2.ResourceType_Trait]
@@ -145,6 +146,7 @@ type syncer struct {
 	workerCount                         int // If 1, sync is sequential (default). If > 1, sync operations are done in parallel.
 	metricsHandler                      metrics.Handler
 	syncIdentity                        uotel.SyncIdentity
+	sourceCache                         syncerSourceCache
 }
 
 var _ Syncer = (*syncer)(nil)
@@ -153,7 +155,7 @@ var _ Syncer = (*syncer)(nil)
 // GrantStore.StoreExpandedGrants so the expander package can depend on
 // a single narrow interface without knowing about C1ZStore.
 type expanderStoreAdapter struct {
-	store c1zstore.Store
+	store dotc1z.C1ZStore
 }
 
 func (a expanderStoreAdapter) GetEntitlement(ctx context.Context, req *reader_v2.EntitlementsReaderServiceGetEntitlementRequest) (*reader_v2.EntitlementsReaderServiceGetEntitlementResponse, error) {
@@ -560,6 +562,11 @@ func (s *syncer) Sync(ctx context.Context) error {
 			}
 			s.injectSyncIDAnnotation = supportsActiveSyncId.Check(sdkVersion)
 		}
+	}
+
+	err = s.configureSourceCache(ctx, resp)
+	if err != nil {
+		return err
 	}
 
 	syncResourceTypeMap := make(map[string]bool)
@@ -1059,6 +1066,25 @@ func (s *syncer) syncResources(ctx context.Context, action *Action) error {
 		return err
 	}
 
+	putCtx, scPage, err := s.beginSourceCachePage(ctx, sourcecache.RowKindResources, annotations.Annotations(resp.GetAnnotations()), len(resp.GetList()))
+	if err != nil {
+		return err
+	}
+
+	// On any source-cache-scoped page the "already synced this sync"
+	// dedupe below is wrong — scoped pages are upsert streams whose rows
+	// are always authoritative:
+	//   - Replayed rounds copy the previous sync's rows in on the round's
+	//     FIRST page, so an overlay row's identity ALWAYS hits the store,
+	//     on every page of the round — but the stored row is the stale
+	//     base and the overlay row is the update that must overwrite it.
+	//     Keying off the replay annotation alone would only protect page
+	//     one (the annotation fires once per round).
+	//   - Cold delta enumerations may legally return the same object
+	//     multiple times (changed mid-walk), later occurrences
+	//     authoritative; deduping would keep the STALE first occurrence.
+	pageScoped := scPage != nil
+
 	bulkPutResoruces := []*v2.Resource{}
 	for _, r := range resp.GetList() {
 		validatedResource := false
@@ -1075,7 +1101,7 @@ func (s *syncer) syncResources(ctx context.Context, action *Action) error {
 			validatedResource = true
 
 			// We must *ALSO* check if we have any child resources.
-			if !s.hasChildResources(r) {
+			if !pageScoped && !s.hasChildResources(r) {
 				// Since we only have the resource type IDs of child resources,
 				// we can't tell if we already have synced those child resources.
 				// Those children may also have their own child resources,
@@ -1104,10 +1130,14 @@ func (s *syncer) syncResources(ctx context.Context, action *Action) error {
 	}
 
 	if len(bulkPutResoruces) > 0 {
-		err = s.store.PutResources(ctx, bulkPutResoruces...)
+		err = s.store.PutResources(putCtx, bulkPutResoruces...)
 		if err != nil {
 			return err
 		}
+	}
+
+	if err := s.finishSourceCachePage(ctx, scPage); err != nil {
+		return err
 	}
 
 	s.handleProgress(ctx, action, len(resp.GetList()))
@@ -1328,8 +1358,18 @@ func (s *syncer) syncEntitlementsForResource(ctx context.Context, action *Action
 	if err := s.validateEntitlementExclusionGroups(resp.GetList()); err != nil {
 		return err
 	}
-	err = s.store.PutEntitlements(ctx, resp.GetList()...)
+
+	putCtx, scPage, err := s.beginSourceCachePage(ctx, sourcecache.RowKindEntitlements, annotations.Annotations(resp.GetAnnotations()), len(resp.GetList()))
 	if err != nil {
+		return err
+	}
+
+	err = s.store.PutEntitlements(putCtx, resp.GetList()...)
+	if err != nil {
+		return err
+	}
+
+	if err := s.finishSourceCachePage(ctx, scPage); err != nil {
 		return err
 	}
 
@@ -1758,6 +1798,9 @@ func (s *syncer) fixEntitlementGraphCycles(ctx context.Context, graph *expand.En
 
 // SyncGrants fetches the grants for each resource from the connector. It iterates each resource
 // from the datastore, and pushes a new action to sync the grants for each individual resource.
+// Resource types annotated with TypeScopedGrants are excluded from the per-resource fan-out and
+// get a single type-scoped action instead (empty ResourceID); the connector enumerates the whole
+// type, optionally spawning additional cursors via the SpawnCursors annotation.
 func (s *syncer) SyncGrants(ctx context.Context, action *Action) error {
 	ctx, span := uotel.StartWithLink(ctx, tracer, "syncer.SyncGrants")
 	uotel.SetSyncIdentityAttrs(ctx, span)
@@ -1765,9 +1808,20 @@ func (s *syncer) SyncGrants(ctx context.Context, action *Action) error {
 	defer func() { uotel.EndSpanWithError(span, err) }()
 
 	if action.ResourceTypeID == "" && action.ResourceID == "" {
+		actions := make([]Action, 0)
 		if action.PageToken == "" {
 			ctxzap.Extract(ctx).Info("Syncing grants...")
 			s.handleInitialActionForStep(ctx, *action)
+
+			// One type-scoped action per annotated resource type, enqueued
+			// exactly once (the planner's first page).
+			typeScoped, err := s.typeScopedGrantsResourceTypes(ctx)
+			if err != nil {
+				return fmt.Errorf("sync-grants: error listing type-scoped resource types: %w", err)
+			}
+			for _, rtID := range typeScoped {
+				actions = append(actions, Action{Op: SyncGrantsOp, ResourceTypeID: rtID})
+			}
 		}
 
 		resp, err := s.store.ListResources(ctx, v2.ResourcesServiceListResourcesRequest_builder{
@@ -1778,16 +1832,25 @@ func (s *syncer) SyncGrants(ctx context.Context, action *Action) error {
 			return fmt.Errorf("sync-grants: error listing resources: %w", err)
 		}
 
-		actions := make([]Action, 0)
 		for _, r := range resp.GetList() {
 			shouldSkip, err := s.shouldSkipGrants(ctx, r)
 			if err != nil {
 				return err
 			}
-
 			if shouldSkip {
 				continue
 			}
+
+			// Types with type-scoped grants are excluded from the
+			// per-resource fan-out; their single action is enqueued above.
+			typeScoped, err := s.resourceTypeHasTypeScopedGrants(ctx, r.GetId().GetResourceType())
+			if err != nil {
+				return err
+			}
+			if typeScoped {
+				continue
+			}
+
 			actions = append(actions, Action{Op: SyncGrantsOp, ResourceID: r.GetId().GetResource(), ResourceTypeID: r.GetId().GetResourceType()})
 		}
 
@@ -1801,26 +1864,91 @@ func (s *syncer) SyncGrants(ctx context.Context, action *Action) error {
 	return nil
 }
 
+// resourceTypeHasTypeScopedGrants reports (cached per sync) whether the
+// resource type carries the TypeScopedGrants annotation.
+func (s *syncer) resourceTypeHasTypeScopedGrants(ctx context.Context, resourceTypeID string) (bool, error) {
+	if v, ok := s.typeScopedGrantsForResourceType.Load(resourceTypeID); ok {
+		return v, nil
+	}
+	rt, err := s.store.GetResourceType(ctx, reader_v2.ResourceTypesReaderServiceGetResourceTypeRequest_builder{
+		ResourceTypeId: resourceTypeID,
+	}.Build())
+	if err != nil {
+		return false, err
+	}
+	rtAnnos := annotations.Annotations(rt.GetResourceType().GetAnnotations())
+	typeScoped := rtAnnos.Contains(&v2.TypeScopedGrants{})
+	s.typeScopedGrantsForResourceType.Store(resourceTypeID, typeScoped)
+	return typeScoped, nil
+}
+
+// typeScopedGrantsResourceTypes lists every synced resource type annotated
+// with TypeScopedGrants.
+func (s *syncer) typeScopedGrantsResourceTypes(ctx context.Context) ([]string, error) {
+	var out []string
+	pageToken := ""
+	for {
+		resp, err := s.store.ListResourceTypes(ctx, v2.ResourceTypesServiceListResourceTypesRequest_builder{
+			PageToken: pageToken,
+		}.Build())
+		if err != nil {
+			return nil, err
+		}
+		for _, rt := range resp.GetList() {
+			rtAnnos := annotations.Annotations(rt.GetAnnotations())
+			typeScoped := rtAnnos.Contains(&v2.TypeScopedGrants{})
+			s.typeScopedGrantsForResourceType.Store(rt.GetId(), typeScoped)
+			if typeScoped {
+				out = append(out, rt.GetId())
+			}
+		}
+		pageToken = resp.GetNextPageToken()
+		if pageToken == "" {
+			return out, nil
+		}
+	}
+}
+
 // syncGrantsForResource fetches the grants for a specific resource from the connector.
+// An action with an empty ResourceID is a TYPE-SCOPED grants cursor: the connector
+// enumerates grants for the whole resource type (no single resource backs the call),
+// and may spawn sibling cursors via the SpawnCursors response annotation.
 // No span here: only call site is SyncGrants, which already owns a span.
 func (s *syncer) syncGrantsForResource(ctx context.Context, action *Action) error {
+	typeScoped := action.ResourceID == ""
 	resourceID := v2.ResourceId_builder{
 		ResourceType: action.ResourceTypeID,
 		Resource:     action.ResourceID,
 	}.Build()
-	resourceResponse, err := s.store.GetResource(ctx, reader_v2.ResourcesReaderServiceGetResourceRequest_builder{
-		ResourceId: resourceID,
-	}.Build())
-	if err != nil {
-		return fmt.Errorf("sync-grants-for-resource: error getting resource: %w", err)
-	}
 
-	resource := resourceResponse.GetResource()
+	var resource *v2.Resource
+	var reqAnnos annotations.Annotations
+	if typeScoped {
+		// Wire validation requires a non-empty resource id, so the stub is
+		// self-referential ({type, type}) and the request carries the
+		// TypeScopedGrants annotation as the routing marker.
+		resource = v2.Resource_builder{
+			Id: v2.ResourceId_builder{
+				ResourceType: action.ResourceTypeID,
+				Resource:     action.ResourceTypeID,
+			}.Build(),
+		}.Build()
+		reqAnnos.Update(&v2.TypeScopedGrants{})
+	} else {
+		resourceResponse, err := s.store.GetResource(ctx, reader_v2.ResourcesReaderServiceGetResourceRequest_builder{
+			ResourceId: resourceID,
+		}.Build())
+		if err != nil {
+			return fmt.Errorf("sync-grants-for-resource: error getting resource: %w", err)
+		}
+		resource = resourceResponse.GetResource()
+	}
 
 	resp, err := s.connector.ListGrants(ctx, v2.GrantsServiceListGrantsRequest_builder{
 		Resource:     resource,
 		PageToken:    action.PageToken,
 		ActiveSyncId: s.getActiveSyncID(),
+		Annotations:  reqAnnos,
 	}.Build())
 	if err != nil {
 		return fmt.Errorf("sync-grants-for-resource: error listing grants: %w", err)
@@ -1832,6 +1960,15 @@ func (s *syncer) syncGrantsForResource(ctx context.Context, action *Action) erro
 	resourcesToInsertMap := make(map[string]*v2.Resource, 0)
 	respAnnos := annotations.Annotations(resp.GetAnnotations())
 	insertResourceGrants := respAnnos.Contains(&v2.InsertResourceGrants{})
+
+	// Source-cache replay/stamping for this grants page. putCtx applies
+	// ONLY to the PutGrants call below — the related-resource PutResources
+	// writes in this function are resource rows and must not inherit a
+	// grants-scope stamp.
+	putCtx, scPage, err := s.beginSourceCachePage(ctx, sourcecache.RowKindGrants, respAnnos, len(grants))
+	if err != nil {
+		return fmt.Errorf("sync-grants-for-resource: %w", err)
+	}
 
 	// Stamp InsertResourceGrants per-grant so the slim-blob writer's
 	// gate sees it. The annotation is response-level, but the writer
@@ -1915,9 +2052,13 @@ func (s *syncer) syncGrantsForResource(ctx context.Context, action *Action) erro
 		}
 	}
 
-	err = s.store.PutGrants(ctx, grants...)
+	err = s.store.PutGrants(putCtx, grants...)
 	if err != nil {
 		return fmt.Errorf("sync-grants-for-resource: error putting grants: %w", err)
+	}
+
+	if err := s.finishSourceCachePage(ctx, scPage); err != nil {
+		return fmt.Errorf("sync-grants-for-resource: %w", err)
 	}
 
 	s.handleProgress(ctx, action, len(grants))
@@ -1927,7 +2068,37 @@ func (s *syncer) syncGrantsForResource(ctx context.Context, action *Action) erro
 		s.counts.LogGrantsProgress(ctx, resourceID.GetResourceType())
 	}
 
-	return s.nextPageOrFinishAction(ctx, action, resp.GetNextPageToken())
+	// SpawnCursors: a type-scoped response may enqueue sibling cursors for
+	// the same resource type (e.g. one per connector-defined shard). Each
+	// runs as its own action — scheduled, rate-limited, and checkpointed
+	// like any other pagination. Only meaningful on type-scoped calls;
+	// per-resource responses carrying it are a connector bug.
+	spawn := &v2.SpawnCursors{}
+	hasSpawn, err := respAnnos.Pick(spawn)
+	if err != nil {
+		return fmt.Errorf("sync-grants-for-resource: error parsing spawn-cursors annotation: %w", err)
+	}
+	var spawned []Action
+	if hasSpawn {
+		if !typeScoped {
+			l.Warn("sync-grants-for-resource: SpawnCursors on a per-resource grants response; ignored",
+				zap.String("resource_type_id", action.ResourceTypeID),
+				zap.String("resource_id", action.ResourceID))
+		} else {
+			for _, tok := range spawn.GetPageTokens() {
+				if tok == "" {
+					continue
+				}
+				spawned = append(spawned, Action{Op: SyncGrantsOp, ResourceTypeID: action.ResourceTypeID, PageToken: tok})
+			}
+			l.Debug("sync-grants-for-resource: spawned type-scoped grant cursors",
+				zap.String("resource_type_id", action.ResourceTypeID),
+				zap.Int("cursors", len(spawned)),
+				zap.Int64("estimated_total", spawn.GetEstimatedTotal()))
+		}
+	}
+
+	return s.nextPageOrFinishAction(ctx, action, resp.GetNextPageToken(), spawned...)
 }
 
 func (s *syncer) SyncExternalResources(ctx context.Context, action *Action) error {
@@ -2735,6 +2906,10 @@ func (s *syncer) Close(ctx context.Context) error {
 
 	var errs []error
 
+	// Detach the source-cache lookup before the stores go away so a late
+	// connector RPC can't read a store the syncer no longer owns.
+	s.clearSourceCacheLookup(ctx)
+
 	var storeCloseErr error
 	if s.store != nil {
 		storeCloseErr = s.store.Close(finalizeCtx)
@@ -2800,7 +2975,7 @@ func WithProgressHandler(f func(s *Progress)) SyncOpt {
 
 // WithConnectorStore sets the connector store to use. This is the preferred option.
 // Either this or WithC1ZPath must be provided to create a new syncer.
-func WithConnectorStore(store c1zstore.Store) SyncOpt {
+func WithConnectorStore(store dotc1z.C1ZStore) SyncOpt {
 	return func(s *syncer) {
 		s.store = store
 	}
@@ -2822,7 +2997,7 @@ func WithTmpDir(path string) SyncOpt {
 
 // WithStorageEngine selects the dotc1z storage engine when opening the c1z
 // file via WithC1ZPath. Empty uses the baton-sdk default.
-func WithStorageEngine(engine c1zstore.Engine) SyncOpt {
+func WithStorageEngine(engine dotc1z.Engine) SyncOpt {
 	return func(s *syncer) {
 		s.storageEngine = engine
 	}

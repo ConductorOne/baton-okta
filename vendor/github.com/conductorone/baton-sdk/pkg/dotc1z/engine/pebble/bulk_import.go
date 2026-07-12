@@ -54,6 +54,7 @@ const bulkSpillBufferSize = 1 << 20
 var grantIndexFamilies = []byte{
 	idxGrantByPrincipal,
 	idxGrantByNeedsExpansion,
+	idxGrantBySourceScope,
 }
 
 // bulkSSTWriter builds one SST file for a single disjoint key bucket.

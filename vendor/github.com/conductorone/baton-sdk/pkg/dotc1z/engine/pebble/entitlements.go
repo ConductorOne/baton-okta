@@ -75,6 +75,18 @@ func (e *Engine) PutEntitlementRecords(ctx context.Context, records ...*v3.Entit
 			if err := priBatch.Set(key, val, nil); err != nil {
 				return err
 			}
+			// by_source_scope is the only entitlement secondary index.
+			// No read-before-write cleanup here (matching this method's
+			// no-Get philosophy): a same-identity rewrite under a
+			// different scope within one sync can leave a stale index
+			// entry, which replay tolerates — the copied record carries
+			// its true scope and the file holds a single sync, so the
+			// staleness cannot outlive it.
+			if sh := r.GetSourceScopeHash(); sh != "" {
+				if err := priBatch.Set(encodeEntitlementBySourceScopeIndexKey(sh, id), nil, nil); err != nil {
+					return err
+				}
+			}
 		}
 		opts := writeOpts(e.opts.durability)
 		if fresh {
@@ -122,6 +134,22 @@ func (e *Engine) DeleteEntitlementRecord(ctx context.Context, externalID string)
 		key := encodeEntitlementIdentityKey(id)
 		batch := e.db.NewBatch()
 		defer batch.Close()
+		// Clean up the source-scope index entry (the only entitlement
+		// secondary index) so a replayed scope can't resurrect the row.
+		if oldVal, closer, getErr := e.db.Get(key); getErr == nil {
+			oldScope, scanErr := scanEntitlementSourceScopeRaw(oldVal)
+			closer.Close()
+			if scanErr != nil {
+				return scanErr
+			}
+			if oldScope != "" {
+				if err := batch.Delete(encodeEntitlementBySourceScopeIndexKey(oldScope, id), nil); err != nil {
+					return err
+				}
+			}
+		} else if !errors.Is(getErr, pebble.ErrNotFound) {
+			return getErr
+		}
 		if err := batch.Delete(key, nil); err != nil {
 			return err
 		}

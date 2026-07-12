@@ -54,6 +54,12 @@ func capabilityPermissions(perms ...string) *v2.CapabilityPermissions {
 	return cp
 }
 
+func groupResourceTypeAnnotations() annotations.Annotations {
+	annos := v1AnnotationsForResourceType("group", false, capabilityPermissions("okta.groups.read", "okta.groups.manage"))
+	annos.Update(&v2.TypeScopedGrants{})
+	return annos
+}
+
 func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool, perms *v2.CapabilityPermissions) annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Update(&v2.V1Identifier{
@@ -88,11 +94,15 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: v1AnnotationsForResourceType(userResourceTypeID, true, capabilityPermissions("okta.users.read", "okta.users.manage")),
 	}
+	// TypeScopedGrants excludes the group type from the SDK's per-resource
+	// grants fan-out: full syncs enumerate group grants through the
+	// planner/cursors in group_type_scoped.go (with source-cache replay for
+	// clean groups); the per-resource path serves targeted syncs.
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
 		DisplayName: "Group",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
-		Annotations: v1AnnotationsForResourceType("group", false, capabilityPermissions("okta.groups.read", "okta.groups.manage")),
+		Annotations: groupResourceTypeAnnotations(),
 	}
 	resourceTypeApp = &v2.ResourceType{
 		Id:          "app",
@@ -275,8 +285,14 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 }
 
 func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
+	// Source-cache replay opt-in: group member grants are validated by
+	// lastMembershipUpdated (group_type_scoped.go).
+	annos := annotations.New(&v2.SourceCacheCapability{
+		Mode: v2.SourceCacheCapability_MODE_READ_WRITE,
+	})
+
 	if c.apiToken == "" {
-		return nil, nil
+		return annos, nil
 	}
 
 	token := newPaginationToken(defaultLimit, "")
@@ -296,7 +312,7 @@ func (c *Okta) Validate(ctx context.Context) (annotations.Annotations, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	return annos, nil
 }
 
 func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCloser, error) {
@@ -316,6 +332,13 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		scopes     = defaultScopes
 	)
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Demo instrumentation: count/log Okta requests when
+	// BATON_OKTA_REQUEST_LOG is set (source-cache measurement harness).
+	client, err = wrapRequestCounting(client)
 	if err != nil {
 		return nil, nil, err
 	}

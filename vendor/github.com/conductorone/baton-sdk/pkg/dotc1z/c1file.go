@@ -31,7 +31,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	reader_v2 "github.com/conductorone/baton-sdk/pb/c1/reader/v2"
 	"github.com/conductorone/baton-sdk/pkg/connectorstore"
-	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
 	"github.com/conductorone/baton-sdk/pkg/uotel"
 )
 
@@ -74,7 +73,7 @@ type C1File struct {
 	deferredIndexTables []tableDescriptor
 
 	// Cached sync run for listConnectorObjects (avoids N+1 queries)
-	cachedViewSyncRun *c1zstore.SyncRun
+	cachedViewSyncRun *SyncRun
 	cachedViewSyncMu  sync.Mutex
 	cachedViewSyncErr error
 
@@ -95,22 +94,22 @@ type C1File struct {
 	// engine is the storage engine to use for newly created files.
 	// Reads dispatch on magic byte regardless of this value. Default
 	// is EngineSQLite (v1 .c1z format).
-	engine c1zstore.Engine
+	engine Engine
 
 	// payloadEncoding selects the v3 envelope payload framing for
 	// Pebble-written files. Zero value = PayloadEncodingTarZstd
 	// (default). Ignored by the SQLite engine.
-	payloadEncoding c1zstore.PayloadEncoding
+	payloadEncoding PayloadEncoding
 }
 
 // *C1File satisfies connectorstore.Writer (the connector-facing contract),
 // connectorstore.LatestFinishedSyncIDFetcher (narrow optional capability
-// added in PR #774), and c1zstore.Store (the internal sync-pipeline
+// added in PR #774), and dotc1z.C1ZStore (the internal sync-pipeline
 // contract asserted in c1file_store.go alongside the sub-store assertions).
 var (
 	_ connectorstore.Writer                      = (*C1File)(nil)
 	_ connectorstore.LatestFinishedSyncIDFetcher = (*C1File)(nil)
-	_ c1zstore.Store                             = (*C1File)(nil)
+	_ C1ZStore                                   = (*C1File)(nil)
 )
 
 type C1FOption func(*C1File)
@@ -211,7 +210,7 @@ func WithC1FSyncCountLimit(limit int) C1FOption {
 // Engine selection only affects newly created files. Existing files
 // dispatch on their magic byte; readers handle both v1 and v3
 // regardless of this option.
-func WithC1FEngine(engine c1zstore.Engine) C1FOption {
+func WithC1FEngine(engine Engine) C1FOption {
 	return func(o *C1File) {
 		o.engine = engine
 	}
@@ -219,7 +218,7 @@ func WithC1FEngine(engine c1zstore.Engine) C1FOption {
 
 // WithC1FPayloadEncoding selects the v3 envelope payload encoding
 // (TAR_ZSTD default, TAR uncompressed). No-op for SQLite engines.
-func WithC1FPayloadEncoding(enc c1zstore.PayloadEncoding) C1FOption {
+func WithC1FPayloadEncoding(enc PayloadEncoding) C1FOption {
 	return func(o *C1File) {
 		o.payloadEncoding = enc
 	}
@@ -294,7 +293,7 @@ func NewC1File(ctx context.Context, dbFilePath string, opts ...C1FOption) (*C1Fi
 	// engine manages its own storage and does not use those indexes, so bulk
 	// load does not apply there. Make the combination an explicit, logged
 	// no-op rather than leaving it silently unspecified.
-	if c1File.bulkLoad && c1File.engine == c1zstore.EnginePebble {
+	if c1File.bulkLoad && c1File.engine == EnginePebble {
 		l.Info("new-c1-file: bulk load ignored for the pebble engine; the deferred-index optimization applies only to the sqlite engine")
 		c1File.bulkLoad = false
 	}
@@ -312,7 +311,7 @@ func NewC1File(ctx context.Context, dbFilePath string, opts ...C1FOption) (*C1Fi
 	// Normalize the engine zero value so downstream switch/if-eq
 	// checks treat an unset engine as EngineSQLite.
 	if c1File.engine == "" {
-		c1File.engine = c1zstore.EngineSQLite
+		c1File.engine = EngineSQLite
 	}
 
 	err = c1File.validateDb(ctx)
@@ -342,13 +341,13 @@ type c1zOptions struct {
 
 	// engine is the storage engine to use for newly created files.
 	// Reads dispatch on magic byte regardless. Default EngineSQLite.
-	engine c1zstore.Engine
+	engine Engine
 
 	// payloadEncoding controls the v3 envelope payload framing. Only
 	// honored when engine == EnginePebble (the v3 path). Allowed
 	// values: PayloadEncodingTarZstd (default), PayloadEncodingTar.
 	// Zero value means PayloadEncodingTarZstd.
-	payloadEncoding c1zstore.PayloadEncoding
+	payloadEncoding PayloadEncoding
 
 	// decoderPool optionally scopes v3 payload-decoder reuse to the
 	// caller's operation. See WithDecoderPool.
@@ -431,7 +430,7 @@ func WithSyncLimit(limit int) C1ZOption {
 //
 // Reading existing files dispatches on the file's magic byte and is
 // independent of this option.
-func WithEngine(engine c1zstore.Engine) C1ZOption {
+func WithEngine(engine Engine) C1ZOption {
 	return func(o *c1zOptions) {
 		o.engine = engine
 	}
@@ -466,7 +465,7 @@ func WithBulkLoad(enabled bool) C1ZOption {
 //
 // No-op for SQLite engines; the encoding selector applies only to
 // the v3 envelope written by Pebble.
-func WithPayloadEncoding(enc c1zstore.PayloadEncoding) C1ZOption {
+func WithPayloadEncoding(enc PayloadEncoding) C1ZOption {
 	return func(o *c1zOptions) {
 		o.payloadEncoding = enc
 	}
@@ -492,11 +491,8 @@ func NewC1ZFile(ctx context.Context, outputFilePath string, opts ...C1ZOption) (
 		return nil, err
 	}
 
-	if options.engine == c1zstore.EnginePebble && !options.readOnly {
-		err = fmt.Errorf(
-			"new-c1z-file: %s is a v1/sqlite c1z and engine %q was requested; "+
-				"NewC1ZFile cannot return a *C1File for it — open with NewStore to convert",
-			outputFilePath, c1zstore.EnginePebble)
+	if options.engine == EnginePebble && !options.readOnly {
+		err = fmt.Errorf("new-c1z-file: %s is a v1/sqlite c1z and engine %q was requested; NewC1ZFile cannot return a *C1File for it — open with NewStore to convert", outputFilePath, EnginePebble)
 		return nil, err
 	}
 
@@ -539,7 +535,7 @@ func NewC1ZFile(ctx context.Context, outputFilePath string, opts ...C1ZOption) (
 	if options.engine != "" {
 		c1fopts = append(c1fopts, WithC1FEngine(options.engine))
 	}
-	if options.payloadEncoding != c1zstore.PayloadEncodingUnspecified {
+	if options.payloadEncoding != PayloadEncodingUnspecified {
 		c1fopts = append(c1fopts, WithC1FPayloadEncoding(options.payloadEncoding))
 	}
 
@@ -1424,7 +1420,7 @@ func (c *C1File) OutputFilepath() (string, error) {
 func (c *C1File) Metadata() connectorstore.StoreMetadata {
 	engine := c.engine
 	if engine == "" {
-		engine = c1zstore.EngineSQLite
+		engine = EngineSQLite
 	}
 	return connectorstore.StoreMetadata{
 		Engine: string(engine),

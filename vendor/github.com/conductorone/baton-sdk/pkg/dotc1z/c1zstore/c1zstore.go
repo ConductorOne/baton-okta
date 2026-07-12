@@ -7,8 +7,9 @@
 // pkg/connectorstore. Storage engines (pkg/dotc1z's SQLite C1File,
 // pkg/dotc1z/engine/pebble's Adapter) implement these interfaces without
 // importing pkg/dotc1z, which lets dotc1z import the engines and register
-// them statically. Callers reference these types directly through this
-// package (c1zstore.Store, c1zstore.Engine, etc.).
+// them statically. pkg/dotc1z re-exports every type here under its
+// historical name (dotc1z.C1ZStore = c1zstore.Store, etc.), so callers
+// outside the engine packages can keep using the dotc1z names.
 package c1zstore
 
 import (

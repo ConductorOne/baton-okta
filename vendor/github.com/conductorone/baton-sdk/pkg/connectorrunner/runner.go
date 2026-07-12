@@ -13,7 +13,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/bid"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
-	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
+	"github.com/conductorone/baton-sdk/pkg/dotc1z"
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/healthcheck"
 	"github.com/conductorone/baton-sdk/pkg/synccompactor"
@@ -422,10 +422,11 @@ type runnerConfig struct {
 	syncDifferConfig                      *syncDifferConfig
 	syncCompactorConfig                   *syncCompactorConfig
 	skipFullSync                          bool
-	storageEngine                         c1zstore.Engine
+	storageEngine                         dotc1z.Engine
 	workerCount                           int
 	targetedSyncResourceIDs               []string
 	externalResourceC1Z                   string
+	previousSyncC1Z                       string
 	externalResourceEntitlementIdFilter   string
 	keepPreviousSyncC1ZCapable            bool
 	keepPreviousSyncC1ZEnabled            bool
@@ -669,7 +670,7 @@ func WithWorkerCount(workerCount int) Option {
 	}
 }
 
-func WithStorageEngine(engine c1zstore.Engine) Option {
+func WithStorageEngine(engine dotc1z.Engine) Option {
 	return func(ctx context.Context, cfg *runnerConfig) error {
 		cfg.storageEngine = engine
 		return nil
@@ -756,6 +757,13 @@ func WithTempDir(tempDir string) Option {
 func WithExternalResourceC1Z(externalResourceC1Z string) Option {
 	return func(ctx context.Context, cfg *runnerConfig) error {
 		cfg.externalResourceC1Z = externalResourceC1Z
+		return nil
+	}
+}
+
+func WithPreviousSyncC1Z(previousSyncC1Z string) Option {
+	return func(ctx context.Context, cfg *runnerConfig) error {
+		cfg.previousSyncC1Z = previousSyncC1Z
 		return nil
 	}
 }
@@ -973,7 +981,15 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 		wrapperOpts = append(wrapperOpts, connector.WithTargetedSyncResources(cfg.targetedSyncResourceIDs))
 	}
 
-	if cfg.sessionStoreEnabled {
+	// The parent control-plane listener serves BOTH BatonSessionService and
+	// BatonSourceCacheService (internal/connector.runServer). Source-cache
+	// replay therefore needs the listener even when the connector never uses
+	// sessions: without it the subprocess connector's lookup degrades to
+	// NoopLookup, every scope misses, and every sync runs a full cold
+	// enumeration despite a valid --previous-sync-c1z. Start it whenever
+	// replay could be in play: the author declared the capability
+	// (WithKeepPreviousSyncC1Z) or a previous-sync c1z was configured.
+	if cfg.sessionStoreEnabled || cfg.keepPreviousSyncC1ZCapable || cfg.previousSyncC1Z != "" {
 		wrapperOpts = append(wrapperOpts, connector.WithSessionStoreEnabled())
 	}
 
@@ -1081,6 +1097,7 @@ func NewConnectorRunner(ctx context.Context, c types.ConnectorServer, opts ...Op
 			tm, err = local.NewSyncer(ctx, cfg.c1zPath,
 				local.WithTmpDir(cfg.tempDir),
 				local.WithExternalResourceC1Z(cfg.externalResourceC1Z),
+				local.WithPreviousSyncC1Z(cfg.previousSyncC1Z),
 				local.WithExternalResourceEntitlementIdFilter(cfg.externalResourceEntitlementIdFilter),
 				local.WithTargetedSyncResources(resources),
 				local.WithSkipEntitlementsAndGrants(cfg.skipEntitlementsAndGrants),

@@ -19,7 +19,6 @@ import (
 	v3 "github.com/conductorone/baton-sdk/pb/c1/storage/v3"
 	"github.com/conductorone/baton-sdk/pkg/connectorstore"
 	"github.com/conductorone/baton-sdk/pkg/dotc1z"
-	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
 	enginepkg "github.com/conductorone/baton-sdk/pkg/dotc1z/engine/pebble"
 	formatv3 "github.com/conductorone/baton-sdk/pkg/dotc1z/format/v3"
 	mergepkg "github.com/conductorone/baton-sdk/pkg/synccompactor/pebble"
@@ -34,7 +33,7 @@ import (
 // This is the only supported way to choose the engine; an engine
 // passed through WithC1ZOptions does not select the compaction
 // strategy and is overridden.
-func WithEngine(engine c1zstore.Engine) Option {
+func WithEngine(engine dotc1z.Engine) Option {
 	return func(c *Compactor) {
 		c.engine = engine
 	}
@@ -340,7 +339,7 @@ func fileSizeOrZero(path string) int64 {
 // pre-static-registration era. Pebble is now registered by dotc1z init, so this
 // is a cheap sanity check.
 func ensurePebbleRegistered() error {
-	if _, ok := dotc1z.EngineDriverFor(c1zstore.EnginePebble); ok {
+	if _, ok := dotc1z.EngineDriverFor(dotc1z.EnginePebble); ok {
 		return nil
 	}
 	return dotc1z.ErrEngineNotAvailable

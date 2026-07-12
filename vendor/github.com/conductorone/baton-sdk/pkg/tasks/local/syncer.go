@@ -10,7 +10,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	v1 "github.com/conductorone/baton-sdk/pb/c1/connectorapi/baton/v1"
-	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
+	"github.com/conductorone/baton-sdk/pkg/dotc1z"
 	"github.com/conductorone/baton-sdk/pkg/session"
 	sdkSync "github.com/conductorone/baton-sdk/pkg/sync"
 	"github.com/conductorone/baton-sdk/pkg/tasks"
@@ -24,13 +24,14 @@ type localSyncer struct {
 	o                                   sync.Once
 	tmpDir                              string
 	externalResourceC1Z                 string
+	previousSyncC1Z                     string
 	externalResourceEntitlementIdFilter string
 	targetedSyncResources               []*v2.Resource
 	skipEntitlementsAndGrants           bool
 	skipGrants                          bool
 	syncResourceTypeIDs                 []string
 	workerCount                         int
-	storageEngine                       c1zstore.Engine
+	storageEngine                       dotc1z.Engine
 }
 
 type Option func(*localSyncer)
@@ -44,6 +45,12 @@ func WithTmpDir(tmpDir string) Option {
 func WithExternalResourceC1Z(externalResourceC1Z string) Option {
 	return func(m *localSyncer) {
 		m.externalResourceC1Z = externalResourceC1Z
+	}
+}
+
+func WithPreviousSyncC1Z(previousSyncC1Z string) Option {
+	return func(m *localSyncer) {
+		m.previousSyncC1Z = previousSyncC1Z
 	}
 }
 
@@ -83,7 +90,7 @@ func WithWorkerCount(workerCount int) Option {
 	}
 }
 
-func WithStorageEngine(engine c1zstore.Engine) Option {
+func WithStorageEngine(engine dotc1z.Engine) Option {
 	return func(m *localSyncer) {
 		m.storageEngine = engine
 	}
@@ -122,6 +129,7 @@ func (m *localSyncer) Process(ctx context.Context, task *v1.Task, cc types.Conne
 		sdkSync.WithC1ZPath(m.dbPath),
 		sdkSync.WithTmpDir(m.tmpDir),
 		sdkSync.WithExternalResourceC1ZPath(m.externalResourceC1Z),
+		sdkSync.WithPreviousSyncC1ZPath(m.previousSyncC1Z),
 		sdkSync.WithExternalResourceEntitlementIdFilter(m.externalResourceEntitlementIdFilter),
 		sdkSync.WithTargetedSyncResources(m.targetedSyncResources),
 		sdkSync.WithSkipEntitlementsAndGrants(m.skipEntitlementsAndGrants),

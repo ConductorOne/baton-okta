@@ -21,6 +21,7 @@ import (
 	v3 "github.com/conductorone/baton-sdk/pb/c1/storage/v3"
 	"github.com/conductorone/baton-sdk/pkg/connectorstore"
 	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
+	"github.com/conductorone/baton-sdk/pkg/sourcecache"
 )
 
 // Adapter wraps an *Engine and implements connectorstore.Writer
@@ -400,10 +401,25 @@ func (a *Adapter) PutGrants(ctx context.Context, grants ...*v2.Grant) error {
 		return ErrNoCurrentSync
 	}
 	records := translateGrants(syncID, grants)
+	stampSourceScope(ctx, records, func(r *v3.GrantRecord, s string) { r.SetSourceScopeHash(s) })
 	if err := a.engine.PutGrantRecords(ctx, records...); err != nil {
 		return fmt.Errorf("PutGrants: %w", err)
 	}
 	return nil
+}
+
+// stampSourceScope stamps the source-cache scope hash carried by ctx
+// (sourcecache.WithScope) onto freshly translated records. The syncer
+// sets the scope around a page's store writes when the page carried a
+// SourceCacheScope annotation; everything else writes unstamped rows.
+func stampSourceScope[T any](ctx context.Context, records []T, set func(T, string)) {
+	scope := sourcecache.ScopeFromContext(ctx)
+	if scope == "" {
+		return
+	}
+	for _, r := range records {
+		set(r, scope)
+	}
 }
 
 // UnsafePutUniqueGrants writes grants on the trusted-import path: records
@@ -563,6 +579,7 @@ func (a *Adapter) PutResources(ctx context.Context, resources ...*v2.Resource) e
 		}
 		records = append(records, rec)
 	}
+	stampSourceScope(ctx, records, func(r *v3.ResourceRecord, s string) { r.SetSourceScopeHash(s) })
 	if err := a.engine.PutResourceRecords(ctx, records...); err != nil {
 		return fmt.Errorf("PutResources: %w", err)
 	}
@@ -590,6 +607,7 @@ func (a *Adapter) PutEntitlements(ctx context.Context, entitlements ...*v2.Entit
 		}
 		records = append(records, rec)
 	}
+	stampSourceScope(ctx, records, func(r *v3.EntitlementRecord, s string) { r.SetSourceScopeHash(s) })
 	if err := a.engine.PutEntitlementRecords(ctx, records...); err != nil {
 		return fmt.Errorf("PutEntitlements: %w", err)
 	}
@@ -967,7 +985,7 @@ func (a *Adapter) CurrentDBSizeBytes() (int64, error) {
 //
 // Strings are inlined rather than referencing dotc1z constants
 // because this subpackage is imported by dotc1z, so the reverse
-// import would cycle. The values match c1zstore.EnginePebble.String()
+// import would cycle. The values match dotc1z.EnginePebble.String()
 // and dotc1z.C1ZFormatV3.String() — see connectorstore.StoreMetadata
 // docs for the canonical value list.
 func (a *Adapter) Metadata() connectorstore.StoreMetadata {

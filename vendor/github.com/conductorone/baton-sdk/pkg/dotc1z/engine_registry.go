@@ -10,7 +10,6 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
-	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
 	formatv3 "github.com/conductorone/baton-sdk/pkg/dotc1z/format/v3"
 )
 
@@ -32,13 +31,13 @@ type StoreOptions struct {
 	SyncLimit          int
 	SkipCleanup        bool
 	V2GrantsWriter     bool
-	Engine             c1zstore.Engine
+	Engine             Engine
 
 	// PayloadEncoding selects the v3 envelope payload framing for
 	// engines that produce a v3 envelope (currently Pebble). Zero
 	// value means "engine default" (PayloadEncodingIndexedZstd for
 	// Pebble).
-	PayloadEncoding c1zstore.PayloadEncoding
+	PayloadEncoding PayloadEncoding
 
 	// DecoderPool optionally scopes v3 payload-decoder reuse to the
 	// caller's operation (see WithDecoderPool). Nil means a one-shot
@@ -85,20 +84,20 @@ func WithDecoderPool(p *EnvelopeDecoderPool) C1ZOption {
 // and Pebble drivers are both registered statically by this package;
 // RegisterEngine exists for additional engines.
 type EngineDriver interface {
-	Engine() c1zstore.Engine
+	Engine() Engine
 	Format() C1ZFormat
-	OpenStore(ctx context.Context, outputFilePath string, opts StoreOptions) (c1zstore.Store, error)
+	OpenStore(ctx context.Context, outputFilePath string, opts StoreOptions) (C1ZStore, error)
 }
 
 type engineRegistry struct {
 	mu       sync.RWMutex
-	byEngine map[c1zstore.Engine]EngineDriver
+	byEngine map[Engine]EngineDriver
 }
 
 var defaultEngineRegistry = &engineRegistry{
-	byEngine: map[c1zstore.Engine]EngineDriver{
-		c1zstore.EngineSQLite: sqliteDriver{},
-		c1zstore.EnginePebble: pebbleDriver{},
+	byEngine: map[Engine]EngineDriver{
+		EngineSQLite: sqliteDriver{},
+		EnginePebble: pebbleDriver{},
 	},
 }
 
@@ -109,7 +108,7 @@ func RegisterEngine(driver EngineDriver) error {
 }
 
 // EngineDriverFor returns the registered driver for engine.
-func EngineDriverFor(engine c1zstore.Engine) (EngineDriver, bool) {
+func EngineDriverFor(engine Engine) (EngineDriver, bool) {
 	return defaultEngineRegistry.driverForEngine(engine)
 }
 
@@ -135,7 +134,7 @@ func (r *engineRegistry) register(driver EngineDriver) error {
 	return nil
 }
 
-func (r *engineRegistry) driverForEngine(engine c1zstore.Engine) (EngineDriver, bool) {
+func (r *engineRegistry) driverForEngine(engine Engine) (EngineDriver, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	driver, ok := r.byEngine[engine]
@@ -146,7 +145,7 @@ func (r *engineRegistry) driverForEngine(engine c1zstore.Engine) (EngineDriver, 
 // the engine-neutral constructor for callers that may opt into non-default
 // engines. NewC1ZFile remains the concrete SQLite constructor for legacy
 // callers that need *C1File.
-func NewStore(ctx context.Context, outputFilePath string, opts ...C1ZOption) (c1zstore.Store, error) {
+func NewStore(ctx context.Context, outputFilePath string, opts ...C1ZOption) (C1ZStore, error) {
 	options, err := buildC1ZOptions(opts...)
 	if err != nil {
 		return nil, err
@@ -194,7 +193,7 @@ func storeOptionsFromC1ZOptions(options *c1zOptions) StoreOptions {
 		MaxDecoderMemoryBytes:  maxDecoderMemoryBytes,
 	}
 	if out.Engine == "" {
-		out.Engine = c1zstore.EngineSQLite
+		out.Engine = EngineSQLite
 	}
 	out.Pragmas = make([]StorePragma, 0, len(options.pragmas))
 	for _, p := range options.pragmas {
@@ -225,7 +224,7 @@ func selectStoreDriver(ctx context.Context, outputFilePath string, options *c1zO
 	l := ctxzap.Extract(ctx)
 	requested := options.engine
 	if requested == "" {
-		requested = c1zstore.EngineSQLite
+		requested = EngineSQLite
 	}
 
 	stat, err := os.Stat(outputFilePath) // #nosec G703 -- c1z path is caller-controlled by API design.
@@ -253,11 +252,11 @@ func selectStoreDriver(ctx context.Context, outputFilePath string, options *c1zO
 		return nil, err
 	}
 
-	var fileEngine c1zstore.Engine
+	var fileEngine Engine
 	switch format {
 	case C1ZFormatV1:
 		// Maybe error if the file is read-only?
-		if requested == c1zstore.EnginePebble && !options.readOnly {
+		if requested == EnginePebble && !options.readOnly {
 			// Close our header-read handle before converting: the conversion
 			// renames a temp file over outputFilePath, which fails on Windows
 			// if any handle to the destination is still open. Nil out f so
@@ -272,9 +271,9 @@ func selectStoreDriver(ctx context.Context, outputFilePath string, options *c1zO
 				return nil, fmt.Errorf("select-store-driver: convert existing v1 c1z to pebble: %w", err)
 			}
 			l.Debug("converted existing v1 c1z to pebble", zap.String("output_file_path", outputFilePath))
-			return requireEngineDriver(c1zstore.EnginePebble)
+			return requireEngineDriver(EnginePebble)
 		}
-		fileEngine = c1zstore.EngineSQLite
+		fileEngine = EngineSQLite
 	case C1ZFormatV3:
 		if _, err := f.Seek(0, 0); err != nil {
 			return nil, err
@@ -289,13 +288,13 @@ func selectStoreDriver(ctx context.Context, outputFilePath string, options *c1zO
 		if err != nil {
 			return nil, err
 		}
-		fileEngine = c1zstore.Engine(m.GetEngine())
+		fileEngine = Engine(m.GetEngine())
 		// Current and legacy pebble manifest names all dispatch to the same
 		// driver; legacy interiors are re-keyed by the on-open id-index
 		// migration. Unknown (newer) names fall through and fail loudly in
 		// requireEngineDriver.
-		if fileEngine == c1zstore.PebbleManifestEngine || fileEngine == c1zstore.PebbleManifestEngineV2 {
-			fileEngine = c1zstore.EnginePebble
+		if fileEngine == PebbleManifestEngine || fileEngine == PebbleManifestEngineV2 {
+			fileEngine = EnginePebble
 		}
 	default:
 		return nil, ErrInvalidFile
@@ -312,7 +311,7 @@ func selectStoreDriver(ctx context.Context, outputFilePath string, options *c1zO
 	return requireEngineDriver(fileEngine)
 }
 
-func requireEngineDriver(engine c1zstore.Engine) (EngineDriver, error) {
+func requireEngineDriver(engine Engine) (EngineDriver, error) {
 	driver, ok := EngineDriverFor(engine)
 	if !ok {
 		return nil, fmt.Errorf("require-engine-driver: %w: %s", ErrEngineNotAvailable, engine)
@@ -322,12 +321,12 @@ func requireEngineDriver(engine c1zstore.Engine) (EngineDriver, error) {
 
 type sqliteDriver struct{}
 
-func (sqliteDriver) Engine() c1zstore.Engine { return c1zstore.EngineSQLite }
-func (sqliteDriver) Format() C1ZFormat       { return C1ZFormatV1 }
+func (sqliteDriver) Engine() Engine    { return EngineSQLite }
+func (sqliteDriver) Format() C1ZFormat { return C1ZFormatV1 }
 
-func (sqliteDriver) OpenStore(ctx context.Context, outputFilePath string, opts StoreOptions) (c1zstore.Store, error) {
+func (sqliteDriver) OpenStore(ctx context.Context, outputFilePath string, opts StoreOptions) (C1ZStore, error) {
 	c1zOpts := []C1ZOption{
-		WithEngine(c1zstore.EngineSQLite),
+		WithEngine(EngineSQLite),
 		WithEncoderConcurrency(opts.EncoderConcurrency),
 	}
 	if opts.TmpDir != "" {
