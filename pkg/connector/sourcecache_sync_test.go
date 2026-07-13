@@ -35,6 +35,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/connectorclient"
 	"github.com/conductorone/baton-sdk/pkg/dotc1z"
+	"github.com/conductorone/baton-sdk/pkg/dotc1z/c1zstore"
 	"github.com/conductorone/baton-sdk/pkg/logging"
 	"github.com/conductorone/baton-sdk/pkg/sourcecache"
 	sdkSync "github.com/conductorone/baton-sdk/pkg/sync"
@@ -476,6 +477,27 @@ type syncHarness struct {
 }
 
 func newSyncHarness(ctx context.Context, t *testing.T, mock *mockOkta) *syncHarness {
+	return newSyncHarnessTopology(ctx, t, mock, false)
+}
+
+// newSyncHarnessTopology builds the harness in one of two lookup
+// topologies:
+//
+//   - direct (deferredLookup=false): the syncer's per-sync lookup is wired
+//     into the builder via SetSourceCacheSetter, mirroring in-process and
+//     subprocess runtimes — connector lookups are answered inline.
+//   - deferred (deferredLookup=true): the setter wiring is OMITTED, so the
+//     builder has no direct lookup and the ask/answer continuation runs
+//     for real over the gRPC loopback, mirroring single-shot transports
+//     (gRPC-over-Lambda): the syncer attaches SourceCacheLookupOffer on
+//     warm syncs, the connector's phase-1 lookup defers with
+//     ErrLookupDeferred, the builder answers with a SourceCacheLookupAsk,
+//     and the syncer re-invokes with SourceCacheLookupAnswers.
+//
+// Every scenario assertion is topology-independent: a warm round that
+// spends zero member-listing requests in deferred mode proves the bounce
+// delivered the validator (a broken continuation would miss and go cold).
+func newSyncHarnessTopology(ctx context.Context, t *testing.T, mock *mockOkta, deferredLookup bool) *syncHarness {
 	t.Helper()
 
 	server := httptest.NewServer(mock.handler())
@@ -534,16 +556,21 @@ func newSyncHarness(ctx context.Context, t *testing.T, mock *mockOkta) *syncHarn
 
 	cc := connectorclient.NewConnectorClient(ctx, conn)
 
-	// In-process lookup delivery: the syncer installs its per-sync lookup on
+	// Direct lookup delivery: the syncer installs its per-sync lookup on
 	// the client, which forwards it to the builder (the CLI wrapper does
-	// this same wiring in internal/connector).
-	setter, ok := cc.(interface {
-		SetSourceCacheSetter(sourcecache.SetLookup)
-	})
-	require.True(t, ok, "connector client must accept a source-cache setter")
-	lookupSink, ok := srv.(sourcecache.SetLookup)
-	require.True(t, ok, "connectorbuilder server must implement sourcecache.SetLookup")
-	setter.SetSourceCacheSetter(lookupSink)
+	// this same wiring in internal/connector). Skipped in the deferred
+	// topology: with no direct lookup, the builder installs a per-request
+	// ContinuationLookup and the ask/answer protocol carries validators
+	// across the loopback instead.
+	if !deferredLookup {
+		setter, ok := cc.(interface {
+			SetSourceCacheSetter(sourcecache.SetLookup)
+		})
+		require.True(t, ok, "connector client must accept a source-cache setter")
+		lookupSink, ok := srv.(sourcecache.SetLookup)
+		require.True(t, ok, "connectorbuilder server must implement sourcecache.SetLookup")
+		setter.SetSourceCacheSetter(lookupSink)
+	}
 
 	return &syncHarness{t: t, ctx: ctx, mock: mock, cc: cc, tmpDir: t.TempDir()}
 }
@@ -556,7 +583,7 @@ func (h *syncHarness) runSync(name string, prevPath string) string {
 	path := filepath.Join(h.tmpDir, fmt.Sprintf("%02d-%s.c1z", h.syncN, name))
 
 	store, err := dotc1z.NewStore(h.ctx, path,
-		dotc1z.WithEngine(dotc1z.EnginePebble),
+		dotc1z.WithEngine(c1zstore.EnginePebble),
 		dotc1z.WithTmpDir(h.tmpDir),
 	)
 	require.NoError(h.t, err)
@@ -591,7 +618,7 @@ func (h *syncHarness) runControlSync(name string) string {
 func (h *syncHarness) snapshot(path string) map[string]string {
 	h.t.Helper()
 	store, err := dotc1z.NewStore(h.ctx, path,
-		dotc1z.WithEngine(dotc1z.EnginePebble),
+		dotc1z.WithEngine(c1zstore.EnginePebble),
 		dotc1z.WithReadOnly(true),
 		dotc1z.WithTmpDir(h.tmpDir),
 	)
@@ -888,4 +915,89 @@ func TestSourceCacheReplayEndToEnd(t *testing.T) {
 	require.Empty(t, sortedKeys(mc15), "the round after mass invalidation must be fully warm again, got %v", mc15)
 	control15 := h.runControlSync("recovery-control")
 	h.requireEquivalent(sync15, control15, "post-invalidation recovery")
+}
+
+// TestSourceCacheReplayDeferredLookup runs the replay flow through the
+// ask/answer lookup continuation — the topology of single-shot transports
+// (gRPC-over-Lambda), where the connector cannot reach the syncer's lookup
+// service mid-request. The harness omits the direct-lookup wiring, so on
+// warm syncs every group cursor's first call genuinely bounces: phase 1
+// defers at the scope lookup (before any upstream request — the mock's
+// strict counters prove no phase-1 double work), the builder answers with
+// a SourceCacheLookupAsk, and the syncer re-invokes with answers resolved
+// from the previous c1z.
+//
+// The assertions are deliberately the same ones the direct-topology test
+// makes: zero member listings on clean groups is only possible if the
+// bounce delivered the stored validator (a broken continuation degrades to
+// cold and fails the count ceilings), and reader-surface equivalence
+// proves phase-2 re-execution changed nothing.
+func TestSourceCacheReplayDeferredLookup(t *testing.T) {
+	ctx, err := logging.Init(t.Context())
+	require.NoError(t, err)
+
+	mock := newMockOkta(t)
+	for i := 1; i <= 4; i++ {
+		mock.addUser(&mockOktaUser{
+			ID:        fmt.Sprintf("u%d", i),
+			FirstName: "Member",
+			LastName:  fmt.Sprintf("Number%d", i),
+			Email:     fmt.Sprintf("u%d@x.test", i),
+		})
+	}
+	mock.addGroup(&mockOktaGroup{ID: "g1", Name: "Engineering", Members: []string{"u1", "u2", "u3"}})
+	mock.addGroup(&mockOktaGroup{ID: "g2", Name: "Sales", Members: []string{"u4"}})
+	mock.addGroup(&mockOktaGroup{ID: "g3", Name: "Empty"})
+	mock.assignGroupRole("g1", mockOktaGroupRole{AssignmentID: "gra1", Type: roleTypeUserAdmin, Label: roleLabelGroupAdmin})
+
+	h := newSyncHarnessTopology(ctx, t, mock, true)
+
+	// Cold: no previous sync means no offer, no deferral — plain cold
+	// enumeration that seeds the scope manifest.
+	sync1 := h.runSync("deferred-cold", "")
+	c1 := mock.snapshotCounts()
+	mc1 := memberListingCalls(c1)
+	require.Equal(t, 2, mc1["g1"], "3 members at page size 2 = 2 requests")
+	require.Equal(t, 1, mc1["g2"])
+	require.Zero(t, mc1["g3"], "users_count==0 skips the member listing even cold")
+
+	// Warm no-op: every cursor bounces (ask → answers) and replays.
+	sync2 := h.runSync("deferred-noop", sync1)
+	c2 := mock.snapshotCounts()
+	mc2 := memberListingCalls(c2)
+	require.Empty(t, sortedKeys(mc2), "warm round over the continuation must spend ZERO member-listing requests, got %v", mc2)
+	require.Equal(t, 1, c2["group-roles:g1"], "phase-2 re-execution must not double the roles leg")
+	require.Equal(t, 1, c2["group-roles:g2"])
+	require.Equal(t, 1, c2["group-roles:g3"])
+	control2 := h.runControlSync("deferred-noop-control")
+	h.requireEquivalent(sync2, control2, "deferred no-op round")
+
+	// Member REMOVE: the bounce answers with a stale validator, the dirty
+	// group re-enumerates cold in phase 2, clean groups still replay.
+	mock.removeMember("g1", "u2")
+	sync3 := h.runSync("deferred-remove", sync2)
+	mc3 := memberListingCalls(mock.snapshotCounts())
+	require.Equal(t, []string{"g1"}, sortedKeys(mc3), "only the dirty group re-enumerates, got %v", mc3)
+	snap3 := h.snapshot(sync3)
+	require.NotContains(t, snap3, "grant:"+memberGrantID("g1", "u2"))
+	require.Contains(t, snap3, "grant:"+memberGrantID("g1", "u1"))
+	control3 := h.runControlSync("deferred-remove-control")
+	h.requireEquivalent(sync3, control3, "deferred member remove")
+
+	// Mass invalidation + recovery: every scope misses on the bounce, all
+	// non-empty groups go cold, and the next round is fully warm again.
+	for _, gid := range []string{"g1", "g2", "g3"} {
+		mock.touchGroup(gid)
+	}
+	sync4 := h.runSync("deferred-mass-invalidation", sync3)
+	mc4 := memberListingCalls(mock.snapshotCounts())
+	require.Equal(t, []string{"g1", "g2"}, sortedKeys(mc4), "non-empty groups re-enumerate, got %v", mc4)
+	control4 := h.runControlSync("deferred-mass-invalidation-control")
+	h.requireEquivalent(sync4, control4, "deferred mass invalidation")
+
+	sync5 := h.runSync("deferred-recovery", sync4)
+	mc5 := memberListingCalls(mock.snapshotCounts())
+	require.Empty(t, sortedKeys(mc5), "post-invalidation round must be fully warm again, got %v", mc5)
+	control5 := h.runControlSync("deferred-recovery-control")
+	h.requireEquivalent(sync5, control5, "deferred recovery")
 }
