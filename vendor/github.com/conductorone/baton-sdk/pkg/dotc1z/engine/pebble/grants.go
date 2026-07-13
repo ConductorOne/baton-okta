@@ -263,6 +263,12 @@ func (e *Engine) PutExpandedGrantRecords(ctx context.Context, records []*v3.Gran
 				r.SetExpansion(prior.GetExpansion())
 				r.SetNeedsExpansion(prior.GetNeedsExpansion())
 				r.SetDiscoveredAt(prior.GetDiscoveredAt())
+				// Preserve the source-cache scope stamp exactly like the
+				// expansion side-state: the expander rewrites existing
+				// direct grants to bake in Sources, and clobbering the
+				// stamp here would silently drop every expander-touched
+				// grant from the next sync's replay of its scope.
+				r.SetSourceScopeHash(prior.GetSourceScopeHash())
 				var err error
 				idxScratch, err = e.deleteGrantIndexesScratch(idxBatch, ext, oldVal, idxScratch)
 				if err != nil {
@@ -746,14 +752,17 @@ func (e *Engine) putSynthesizedGrantContributionsBatch(ctx context.Context, reco
 			if err != nil {
 				return err
 			}
-			// sources (field 9) is the record's highest field, so appending
-			// it after the base marshal matches the deterministic byte order.
+			// sources (field 9) is the highest field this record carries, so
+			// appending it after the base marshal matches the deterministic
+			// byte order. (source_scope_hash is field 10, but synthesized
+			// grants never carry a scope stamp — fillSynthGrantRecord leaves
+			// it unset — so field 9 stays last on the wire.)
 			val, srcScratch = appendGrantSourcesWire(val, srcScratch, rec.sources)
 			valScratch = val
 			if err := priBatch.Set(keyScratch, val, nil); err != nil {
 				return err
 			}
-			idxScratch, err = e.writeGrantIndexesForIdentityScratch(idxBatch, rec.id, false, idxScratch)
+			idxScratch, err = e.writeGrantIndexesForIdentityScratch(idxBatch, rec.id, false, "", idxScratch)
 			if err != nil {
 				return err
 			}
@@ -986,10 +995,13 @@ func grantIndexKeys(r *v3.GrantRecord) [][]byte {
 	if err != nil {
 		return nil
 	}
-	keys := make([][]byte, 0, 2)
+	keys := make([][]byte, 0, 3)
 	keys = append(keys, encodeGrantByPrincipalIdentityIndexKey(id))
 	if r.GetNeedsExpansion() {
 		keys = append(keys, encodeGrantByNeedsExpansionIdentityIndexKey(id))
+	}
+	if sh := r.GetSourceScopeHash(); sh != "" {
+		keys = append(keys, encodeGrantBySourceScopeIndexKey(sh, id))
 	}
 	return keys
 }
@@ -1015,7 +1027,7 @@ func (e *Engine) writeGrantIndexesScratch(batch *pebble.Batch, r *v3.GrantRecord
 	if err != nil {
 		return scratch, err
 	}
-	return e.writeGrantIndexesForIdentityScratch(batch, id, r.GetNeedsExpansion(), scratch)
+	return e.writeGrantIndexesForIdentityScratch(batch, id, r.GetNeedsExpansion(), r.GetSourceScopeHash(), scratch)
 }
 
 // markDeferredIdxPending arms the deferred by_principal rebuild, durably.
@@ -1058,12 +1070,21 @@ func (e *Engine) clearDeferredIdxPending() error {
 // for one grant. by_principal is never written inline: it is scattered
 // relative to the entitlement-first write order, so it is always rebuilt as
 // one sorted SST at EndSync (deferredIdxPending → BuildDeferredGrantIndexes).
-func (e *Engine) writeGrantIndexesForIdentityScratch(batch *pebble.Batch, id grantIdentity, needsExpansion bool, scratch []byte) ([]byte, error) {
+// by_needs_expansion and by_source_scope are written inline: both share the
+// entitlement-first ordering of the primary keyspace, so their writes stay
+// sorted.
+func (e *Engine) writeGrantIndexesForIdentityScratch(batch *pebble.Batch, id grantIdentity, needsExpansion bool, sourceScopeHash string, scratch []byte) ([]byte, error) {
 	if err := e.markDeferredIdxPending(); err != nil {
 		return scratch, err
 	}
 	if needsExpansion {
 		scratch = appendGrantByNeedsExpansionIdentityIndexKey(scratch[:0], id)
+		if err := batch.Set(scratch, nil, nil); err != nil {
+			return scratch, err
+		}
+	}
+	if sourceScopeHash != "" {
+		scratch = appendGrantBySourceScopeIndexKey(scratch[:0], sourceScopeHash, id)
 		if err := batch.Set(scratch, nil, nil); err != nil {
 			return scratch, err
 		}
@@ -1080,7 +1101,7 @@ func (e *Engine) writeGrantIndexesForIdentityScratch(batch *pebble.Batch, id gra
 // which also clears any stale entries an overwrite would have left. Returns
 // the (possibly grown) scratch buffer.
 func (e *Engine) deleteGrantIndexesScratch(batch *pebble.Batch, externalID string, value, scratch []byte) ([]byte, error) {
-	entRT, entRID, entID, principalRT, principalID, _, err := scanGrantIndexFieldsRaw(value)
+	entRT, entRID, entID, principalRT, principalID, _, sourceScopeHash, err := scanGrantIndexFieldsRaw(value)
 	if err != nil {
 		return scratch, err
 	}
@@ -1095,6 +1116,12 @@ func (e *Engine) deleteGrantIndexesScratch(batch *pebble.Batch, externalID strin
 	scratch = appendGrantByNeedsExpansionIdentityIndexKey(scratch[:0], id)
 	if err := batch.Delete(scratch, nil); err != nil {
 		return scratch, err
+	}
+	if sourceScopeHash != "" {
+		scratch = appendGrantBySourceScopeIndexKey(scratch[:0], sourceScopeHash, id)
+		if err := batch.Delete(scratch, nil); err != nil {
+			return scratch, err
+		}
 	}
 	return scratch, nil
 }

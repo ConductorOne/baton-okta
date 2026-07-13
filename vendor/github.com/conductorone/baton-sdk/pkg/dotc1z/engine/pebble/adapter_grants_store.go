@@ -220,6 +220,10 @@ func (g pebbleGrantStore) translateExpanded(syncID string, grants []*v2.Grant) [
 		// because the caller left a residual GrantExpandable annotation.
 		newRec.SetExpansion(nil)
 		newRec.SetNeedsExpansion(false)
+		// Same shape for the source-cache scope stamp: existing records get
+		// their prior stamp restored in PutExpandedGrantRecords; brand-new
+		// expander-derived rows are never part of a source scope.
+		newRec.SetSourceScopeHash("")
 		merged = append(merged, newRec)
 	}
 	return merged

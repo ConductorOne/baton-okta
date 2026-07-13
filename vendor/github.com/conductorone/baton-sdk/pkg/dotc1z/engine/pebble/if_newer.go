@@ -182,7 +182,16 @@ func (e *Engine) PutEntitlementRecordsIfNewer(ctx context.Context, records ...*v
 					closer.Close()
 					continue
 				}
+				oldScope, scanErr := scanEntitlementSourceScopeRaw(oldVal)
 				closer.Close()
+				if scanErr != nil {
+					return scanErr
+				}
+				if oldScope != "" && oldScope != r.GetSourceScopeHash() {
+					if err := batch.Delete(encodeEntitlementBySourceScopeIndexKey(oldScope, id), nil); err != nil {
+						return err
+					}
+				}
 			case errors.Is(getErr, pebble.ErrNotFound):
 			default:
 				return fmt.Errorf("PutEntitlementRecordsIfNewer: get: %w", getErr)
@@ -193,6 +202,11 @@ func (e *Engine) PutEntitlementRecordsIfNewer(ctx context.Context, records ...*v
 			}
 			if err := batch.Set(key, val, nil); err != nil {
 				return err
+			}
+			if sh := r.GetSourceScopeHash(); sh != "" {
+				if err := batch.Set(encodeEntitlementBySourceScopeIndexKey(sh, id), nil, nil); err != nil {
+					return err
+				}
 			}
 			written++
 		}
