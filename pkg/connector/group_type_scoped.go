@@ -407,7 +407,7 @@ func (o *groupResourceType) groupRolesPage(
 	shouldExpand := tok.UsersCount == nil || *tok.UsersCount > 0
 	var rv []*v2.Grant
 	for _, role := range roles {
-		if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" {
+		if role.Status == roleStatusInactive || role.AssignmentType != groupRoleAssignmentType {
 			continue
 		}
 		if !o.connector.SyncCustomRoles && role.Type == roleTypeCustom {

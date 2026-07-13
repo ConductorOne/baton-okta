@@ -38,7 +38,7 @@ func wrapRequestCounting(httpClient *http.Client) (*http.Client, error) {
 	if logPath == "" {
 		return httpClient, nil
 	}
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644) //nolint:gosec // path comes from the operator's own env var, not untrusted input
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to open request log %s: %w", logPath, err)
 	}

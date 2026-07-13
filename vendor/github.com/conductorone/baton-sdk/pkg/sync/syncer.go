@@ -2063,7 +2063,16 @@ func (s *syncer) syncGrantsForResource(ctx context.Context, action *Action) erro
 
 	s.handleProgress(ctx, action, len(grants))
 
-	if resp.GetNextPageToken() == "" {
+	if typeScoped {
+		// Cursors don't map 1:1 to resources (one cursor can cover many
+		// groups and may also emit cross-type grants), so the per-resource
+		// "N of M resources covered" accounting is meaningless here and
+		// would trip the "more grant resources than resources" warning on
+		// healthy syncs. Count raw grant rows instead.
+		s.counts.SetGrantsCountOnly(resourceID.GetResourceType())
+		s.counts.AddGrantsProgress(resourceID.GetResourceType(), len(grants))
+		s.counts.LogGrantsProgress(ctx, resourceID.GetResourceType())
+	} else if resp.GetNextPageToken() == "" {
 		s.counts.AddGrantsProgress(resourceID.GetResourceType(), 1)
 		s.counts.LogGrantsProgress(ctx, resourceID.GetResourceType())
 	}

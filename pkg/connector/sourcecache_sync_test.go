@@ -56,6 +56,17 @@ const mockPageSize = 2
 
 var mockTimeBase = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
+// Test-local constants for repeated literals (keeps package-wide goconst
+// counts at their pre-existing baseline).
+const (
+	mockStatusActive    = "ACTIVE"
+	mockErrNotFound     = "E0000007"
+	roleTypeUserAdmin   = "USER_ADMIN"
+	roleTypeHelpDesk    = "HELP_DESK_ADMIN"
+	roleLabelGroupAdmin = "Group Administrator"
+	mockKeyStatus       = "status"
+)
+
 type mockOktaUser struct {
 	ID        string
 	FirstName string
@@ -120,7 +131,7 @@ func (m *mockOkta) addUser(u *mockOktaUser) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if u.Status == "" {
-		u.Status = "ACTIVE"
+		u.Status = mockStatusActive
 	}
 	m.users[u.ID] = u
 	m.userOrder = append(m.userOrder, u.ID)
@@ -261,7 +272,7 @@ func (m *mockOkta) snapshotCounts() map[string]int {
 func (m *mockOkta) userJSON(u *mockOktaUser) map[string]any {
 	return map[string]any{
 		"id":          u.ID,
-		"status":      u.Status,
+		mockKeyStatus: u.Status,
 		"created":     mockTS(0),
 		"lastUpdated": mockTS(0),
 		"profile": map[string]any{
@@ -276,7 +287,7 @@ func (m *mockOkta) userJSON(u *mockOktaUser) map[string]any {
 func (m *mockOkta) groupJSON(g *mockOktaGroup, withStats bool) map[string]any {
 	obj := map[string]any{
 		"id":                    g.ID,
-		"type":                  g.Type,
+		groupTypeProfileKey:     g.Type,
 		"created":               mockTS(0),
 		"lastUpdated":           mockTS(g.lastUpdated),
 		"lastMembershipUpdated": mockTS(g.lastMembershipUpdated),
@@ -299,7 +310,7 @@ func (m *mockOkta) groupJSON(g *mockOktaGroup, withStats bool) map[string]any {
 
 // pageOf slices order after the given cursor. The cursor is the last id of
 // the previous page (Okta's after-cursor is opaque; ids work fine).
-func pageOf(order []string, after string, size int) (ids []string, next string) {
+func pageOf(order []string, after string, size int) ([]string, string) {
 	start := 0
 	if after != "" {
 		for i, id := range order {
@@ -406,7 +417,7 @@ func (m *mockOkta) handler() http.HandlerFunc {
 			g, ok := m.groups[gid]
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
-				mockWriteJSON(w, map[string]any{"errorCode": "E0000007", "errorSummary": "Not found: " + gid})
+				mockWriteJSON(w, map[string]any{"errorCode": mockErrNotFound, "errorSummary": "Not found: " + gid})
 				return
 			}
 			ids, next := pageOf(g.Members, q.Get("after"), mockPageSize)
@@ -424,17 +435,17 @@ func (m *mockOkta) handler() http.HandlerFunc {
 			g, ok := m.groups[gid]
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
-				mockWriteJSON(w, map[string]any{"errorCode": "E0000007", "errorSummary": "Not found: " + gid})
+				mockWriteJSON(w, map[string]any{"errorCode": mockErrNotFound, "errorSummary": "Not found: " + gid})
 				return
 			}
 			out := make([]map[string]any, 0, len(g.Roles))
 			for _, role := range g.Roles {
 				out = append(out, map[string]any{
-					"id":             role.AssignmentID,
-					"type":           role.Type,
-					"label":          role.Label,
-					"status":         "ACTIVE",
-					"assignmentType": "GROUP",
+					"id":                role.AssignmentID,
+					groupTypeProfileKey: role.Type,
+					"label":             role.Label,
+					mockKeyStatus:       mockStatusActive,
+					"assignmentType":    "GROUP",
 				})
 			}
 			mockWriteJSON(w, out)
@@ -446,14 +457,14 @@ func (m *mockOkta) handler() http.HandlerFunc {
 		default:
 			m.t.Errorf("mock okta: unexpected request %s %s", r.Method, r.URL.String())
 			w.WriteHeader(http.StatusNotFound)
-			mockWriteJSON(w, map[string]any{"errorCode": "E0000007", "errorSummary": "unhandled: " + path})
+			mockWriteJSON(w, map[string]any{"errorCode": mockErrNotFound, "errorSummary": "unhandled: " + path})
 		}
 	}
 }
 
 // --- harness -----------------------------------------------------------------
 
-var harnessSyncResourceTypes = []string{"user", "group", "role"}
+var harnessSyncResourceTypes = []string{resourceTypeUser.Id, resourceTypeGroup.Id, resourceTypeRole.Id}
 
 type syncHarness struct {
 	t      *testing.T
@@ -512,7 +523,7 @@ func newSyncHarness(ctx context.Context, t *testing.T, mock *mockOkta) *syncHarn
 	v2.RegisterAccountManagerServiceServer(gs, srv)
 	v2.RegisterCredentialManagerServiceServer(gs, srv)
 
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	lis, err := net.Listen("tcp", "127.0.0.1:0") //nolint:noctx // test-scoped loopback listener
 	require.NoError(t, err)
 	go func() { _ = gs.Serve(lis) }()
 	t.Cleanup(gs.Stop)
@@ -710,7 +721,7 @@ func TestSourceCacheReplayEndToEnd(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		mock.addUser(&mockOktaUser{
 			ID:        fmt.Sprintf("u%d", i),
-			FirstName: "User",
+			FirstName: "Member",
 			LastName:  fmt.Sprintf("Number%d", i),
 			Email:     fmt.Sprintf("u%d@x.test", i),
 		})
@@ -718,7 +729,7 @@ func TestSourceCacheReplayEndToEnd(t *testing.T) {
 	mock.addGroup(&mockOktaGroup{ID: "g1", Name: "Engineering", Members: []string{"u1", "u2", "u3"}})
 	mock.addGroup(&mockOktaGroup{ID: "g2", Name: "Sales", Members: []string{"u4"}})
 	mock.addGroup(&mockOktaGroup{ID: "g3", Name: "Empty"})
-	mock.assignGroupRole("g1", mockOktaGroupRole{AssignmentID: "gra1", Type: "USER_ADMIN", Label: "Group Administrator"})
+	mock.assignGroupRole("g1", mockOktaGroupRole{AssignmentID: "gra1", Type: roleTypeUserAdmin, Label: roleLabelGroupAdmin})
 
 	h := newSyncHarness(ctx, t, mock)
 
@@ -740,7 +751,7 @@ func TestSourceCacheReplayEndToEnd(t *testing.T) {
 	require.Contains(t, snap1, "grant:"+memberGrantID("g1", "u1"))
 	require.Contains(t, snap1, "grant:"+memberGrantID("g1", "u3"))
 	require.Contains(t, snap1, "grant:"+memberGrantID("g2", "u4"))
-	require.Contains(t, snap1, "grant:"+roleGroupGrantID("USER_ADMIN", "g1"), "group role grant from the fresh roles leg")
+	require.Contains(t, snap1, "grant:"+roleGroupGrantID(roleTypeUserAdmin, "g1"), "group role grant from the fresh roles leg")
 	// Grant expansion: g1's members must hold derived USER_ADMIN grants.
 	foundDerived := false
 	for k := range snap1 {
@@ -847,17 +858,17 @@ func TestSourceCacheReplayEndToEnd(t *testing.T) {
 	h.requireEquivalent(sync11, control11, "user deletion")
 
 	// --- Scenario 10: role assignment changes ride the fresh leg ---------------
-	mock.assignGroupRole("g2", mockOktaGroupRole{AssignmentID: "gra2", Type: "HELP_DESK_ADMIN", Label: "Help Desk Administrator"})
+	mock.assignGroupRole("g2", mockOktaGroupRole{AssignmentID: "gra2", Type: roleTypeHelpDesk, Label: "Help Desk Administrator"})
 	sync12 := h.runSync("role-assign", sync11)
 	mc12 := memberListingCalls(mock.snapshotCounts())
 	require.Empty(t, sortedKeys(mc12), "role assignment must not dirty the member scope, got %v", mc12)
-	require.Contains(t, h.snapshot(sync12), "grant:"+roleGroupGrantID("HELP_DESK_ADMIN", "g2"), "new role grant arrives on a fully-warm round via the fresh leg")
+	require.Contains(t, h.snapshot(sync12), "grant:"+roleGroupGrantID(roleTypeHelpDesk, "g2"), "new role grant arrives on a fully-warm round via the fresh leg")
 	control12 := h.runControlSync("role-assign-control")
 	h.requireEquivalent(sync12, control12, "group role assignment")
 
-	mock.revokeGroupRole("g2", "HELP_DESK_ADMIN")
+	mock.revokeGroupRole("g2", roleTypeHelpDesk)
 	sync13 := h.runSync("role-revoke", sync12)
-	require.NotContains(t, h.snapshot(sync13), "grant:"+roleGroupGrantID("HELP_DESK_ADMIN", "g2"))
+	require.NotContains(t, h.snapshot(sync13), "grant:"+roleGroupGrantID(roleTypeHelpDesk, "g2"))
 	control13 := h.runControlSync("role-revoke-control")
 	h.requireEquivalent(sync13, control13, "group role revocation")
 

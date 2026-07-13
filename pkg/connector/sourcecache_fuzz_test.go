@@ -47,7 +47,7 @@ func (m *mockOkta) fuzzView() fuzzOrgView {
 	}
 	for _, id := range m.userOrder {
 		v.allUsers = append(v.allUsers, id)
-		if m.users[id].Status == "ACTIVE" {
+		if m.users[id].Status == mockStatusActive {
 			v.activeUsers = append(v.activeUsers, id)
 		}
 	}
@@ -86,13 +86,13 @@ func (f *fuzzRun) pick(items []string) string {
 	return items[f.rng.Intn(len(items))]
 }
 
-func (f *fuzzRun) note(format string, args ...any) {
+func (f *fuzzRun) notef(format string, args ...any) {
 	f.log = append(f.log, fmt.Sprintf(format, args...))
 }
 
 // fuzzableRoleTypes are standard org roles the fuzzer assigns to groups
 // (drawn from standardRoleTypes so the role resources exist).
-var fuzzableRoleTypes = []string{"USER_ADMIN", "HELP_DESK_ADMIN", "APP_ADMIN", "REPORT_ADMIN"}
+var fuzzableRoleTypes = []string{roleTypeUserAdmin, roleTypeHelpDesk, "APP_ADMIN", "REPORT_ADMIN"}
 
 func fuzzOps() []fuzzOp {
 	return []fuzzOp{
@@ -104,7 +104,7 @@ func fuzzOps() []fuzzOp {
 				f.m.addUser(&mockOktaUser{
 					ID: id, FirstName: "Fuzz", LastName: id, Email: id + "@x.test",
 				})
-				f.note("add-user %s", id)
+				f.notef("add-user %s", id)
 			},
 		},
 		{
@@ -113,7 +113,7 @@ func fuzzOps() []fuzzOp {
 			apply: func(f *fuzzRun, v fuzzOrgView) {
 				uid := f.pick(v.activeUsers)
 				f.m.deactivateUser(uid)
-				f.note("deactivate-user %s", uid)
+				f.notef("deactivate-user %s", uid)
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func fuzzOps() []fuzzOp {
 			apply: func(f *fuzzRun, v fuzzOrgView) {
 				uid := f.pick(v.allUsers)
 				f.m.deleteUser(uid)
-				f.note("delete-user %s", uid)
+				f.notef("delete-user %s", uid)
 			},
 		},
 		{
@@ -135,7 +135,7 @@ func fuzzOps() []fuzzOp {
 					g.Members = []string{f.pick(v.activeUsers)}
 				}
 				f.m.addGroup(g)
-				f.note("create-group %s (members=%v)", gid, g.Members)
+				f.notef("create-group %s (members=%v)", gid, g.Members)
 			},
 		},
 		{
@@ -144,7 +144,7 @@ func fuzzOps() []fuzzOp {
 			apply: func(f *fuzzRun, v fuzzOrgView) {
 				gid := f.pick(v.groups)
 				f.m.deleteGroup(gid)
-				f.note("delete-group %s", gid)
+				f.notef("delete-group %s", gid)
 			},
 		},
 		{
@@ -169,7 +169,7 @@ func fuzzOps() []fuzzOp {
 				}
 				uid := f.pick(cands)
 				f.m.addMember(gid, uid)
-				f.note("add-member %s -> %s", uid, gid)
+				f.notef("add-member %s -> %s", uid, gid)
 			},
 		},
 		{
@@ -192,7 +192,7 @@ func fuzzOps() []fuzzOp {
 				gid := f.pick(withMembers)
 				uid := f.pick(v.members[gid])
 				f.m.removeMember(gid, uid)
-				f.note("remove-member %s <- %s", uid, gid)
+				f.notef("remove-member %s <- %s", uid, gid)
 			},
 		},
 		{
@@ -201,7 +201,7 @@ func fuzzOps() []fuzzOp {
 			apply: func(f *fuzzRun, v fuzzOrgView) {
 				gid := f.pick(v.groups)
 				f.m.renameGroup(gid, "Renamed "+f.id("nm"))
-				f.note("rename-group %s", gid)
+				f.notef("rename-group %s", gid)
 			},
 		},
 		{
@@ -210,7 +210,7 @@ func fuzzOps() []fuzzOp {
 			apply: func(f *fuzzRun, v fuzzOrgView) {
 				gid := f.pick(v.groups)
 				f.m.touchGroup(gid)
-				f.note("touch-group %s", gid)
+				f.notef("touch-group %s", gid)
 			},
 		},
 		{
@@ -243,7 +243,7 @@ func fuzzOps() []fuzzOp {
 				}
 				rt := f.pick(free)
 				f.m.assignGroupRole(gid, mockOktaGroupRole{AssignmentID: f.id("gra"), Type: rt, Label: rt})
-				f.note("assign-group-role %s -> %s", rt, gid)
+				f.notef("assign-group-role %s -> %s", rt, gid)
 			},
 		},
 		{
@@ -266,7 +266,7 @@ func fuzzOps() []fuzzOp {
 				gid := f.pick(withRoles)
 				rt := f.pick(v.roles[gid])
 				f.m.revokeGroupRole(gid, rt)
-				f.note("revoke-group-role %s <- %s", rt, gid)
+				f.notef("revoke-group-role %s <- %s", rt, gid)
 			},
 		},
 	}
@@ -295,17 +295,17 @@ func TestSourceCacheChurnFuzz(t *testing.T) {
 	// round zero.
 	for i := 1; i <= 4; i++ {
 		mock.addUser(&mockOktaUser{
-			ID: fmt.Sprintf("u%d", i), FirstName: "User", LastName: fmt.Sprintf("N%d", i),
+			ID: fmt.Sprintf("u%d", i), FirstName: "Member", LastName: fmt.Sprintf("N%d", i),
 			Email: fmt.Sprintf("u%d@x.test", i),
 		})
 	}
 	mock.addGroup(&mockOktaGroup{ID: "g1", Name: "Group One", Members: []string{"u1", "u2"}})
 	mock.addGroup(&mockOktaGroup{ID: "g2", Name: "Group Two", Members: []string{"u3"}})
 	mock.addGroup(&mockOktaGroup{ID: "g3", Name: "Empty"})
-	mock.assignGroupRole("g1", mockOktaGroupRole{AssignmentID: "gra-seed", Type: "USER_ADMIN", Label: "Group Administrator"})
+	mock.assignGroupRole("g1", mockOktaGroupRole{AssignmentID: "gra-seed", Type: roleTypeUserAdmin, Label: roleLabelGroupAdmin})
 
 	h := newSyncHarness(ctx, t, mock)
-	f := &fuzzRun{t: t, m: mock, rng: rand.New(rand.NewSource(seed))}
+	f := &fuzzRun{t: t, m: mock, rng: rand.New(rand.NewSource(seed))} //nolint:gosec // deterministic replayable fuzzing requires seeded math/rand
 	ops := fuzzOps()
 
 	prev := h.runSync("fuzz-cold", "")
@@ -334,7 +334,7 @@ func TestSourceCacheChurnFuzz(t *testing.T) {
 			for _, gid := range mock.fuzzView().groups {
 				mock.touchGroup(gid)
 			}
-			f.note("mass-invalidation")
+			f.notef("mass-invalidation")
 		}
 
 		warm := h.runSync(fmt.Sprintf("fuzz-warm-%02d", round), prev)

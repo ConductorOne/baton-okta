@@ -33,6 +33,10 @@ const appGroupType = "APP_GROUP"
 const oktaGroupType = "OKTA_GROUP"
 const apiPathGetGroupFmt = "/api/v1/groups/%s"
 
+// groupRoleAssignmentType is the assignmentType value on role assignments
+// held by a group (vs "USER").
+const groupRoleAssignmentType = "GROUP"
+
 type groupResourceType struct {
 	resourceType *v2.ResourceType
 	connector    *Okta
@@ -209,7 +213,7 @@ func (o *groupResourceType) Grants(
 		}
 
 		for _, role := range roles {
-			if role.Status == roleStatusInactive || role.AssignmentType != "GROUP" {
+			if role.Status == roleStatusInactive || role.AssignmentType != groupRoleAssignmentType {
 				continue
 			}
 
