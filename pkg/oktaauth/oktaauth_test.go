@@ -323,6 +323,7 @@ func TestParseRSAPrivateKey(t *testing.T) {
 		wantOK    bool
 	}{
 		{name: "PKCS1", pem: pemPKCS1(t, rsaKey), wantOK: true},
+		{name: "PKCS1_literal_newlines", pem: strings.ReplaceAll(pemPKCS1(t, rsaKey), "\n", `\n`), wantOK: true},
 		{name: "PKCS8_RSA", pem: pemPKCS8(t, rsaKey), wantOK: true},
 		{name: "PKCS8_ECDSA", pem: pemPKCS8(t, ecKey), wantErr: "Okta DPoP requires RSA"},
 		{name: "empty", pem: "", wantErr: "no PEM block found"},
