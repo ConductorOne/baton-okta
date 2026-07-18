@@ -195,6 +195,10 @@ func (o *appResourceType) listAppGroupGrants(
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 				},
 			),
+			sdkGrant.WithAnnotation(&v2.GrantExpandable{
+				EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
+				Shallow:        true,
+			}),
 		))
 	}
 
@@ -228,6 +232,10 @@ func (o *appResourceType) listAppUsersGrants(
 	for _, applicationUser := range applicationUsers {
 		// for okta v2, we only attempt to filter app users by email domains when a list is provided
 		if len(o.userEmailFilters) > 0 && !shouldIncludeOktaAppUser(applicationUser, o.userEmailFilters) {
+			continue
+		}
+
+		if strings.EqualFold(applicationUser.Scope, "GROUP") {
 			continue
 		}
 
