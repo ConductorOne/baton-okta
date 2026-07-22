@@ -270,10 +270,13 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 	oktaProfile["c1_okta_raw_user_status"] = user.Status
 
 	options := []resource.UserTraitOption{
-		resource.WithUserProfile(oktaProfile),
 		// TODO?: use the user types API to figure out the account type
 		// https://developer.okta.com/docs/reference/api/user-types/
 		// resource.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_UNSPECIFIED),
+	}
+
+	resourceOpts := []resource.ResourceOption{
+		resource.WithResourceProfile(oktaProfile),
 	}
 
 	displayName, ok := oktaProfile["displayName"].(string)
@@ -282,7 +285,7 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 	}
 
 	if user.Created != nil {
-		options = append(options, resource.WithCreatedAt(*user.Created))
+		resourceOpts = append(resourceOpts, resource.WithResourceCreatedAt(*user.Created))
 	}
 	if user.LastLogin != nil {
 		options = append(options, resource.WithLastLogin(*user.LastLogin))
@@ -328,20 +331,24 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 	// case userStatusDeprovisioned:
 	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
 	case userStatusSuspended, userStatusDeprovisioned:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DISABLED, user.Status))
+		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_DISABLED, user.Status))
 	case userStatusActive, userStatusProvisioned, userStatusStaged, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_ENABLED, user.Status))
+		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_ENABLED, user.Status))
 	default:
-		options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_UNSPECIFIED, user.Status))
+		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_UNSPECIFIED, user.Status))
 	}
+
+	resourceOpts = append(resourceOpts,
+		resource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(user.Id)}),
+		resource.WithAnnotation(&v2.RawId{Id: user.Id}),
+	)
 
 	ret, err := resource.NewUserResource(
 		displayName,
 		resourceTypeUser,
 		user.Id,
 		options,
-		resource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(user.Id)}),
-		resource.WithAnnotation(&v2.RawId{Id: user.Id}),
+		resourceOpts...,
 	)
 	return ret, err
 }

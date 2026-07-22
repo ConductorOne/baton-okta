@@ -361,9 +361,9 @@ func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, erro
 		"status": app.Status,
 	}
 	var appTraitOpts []sdkResource.AppTraitOption
-	appTraitOpts = append(appTraitOpts, sdkResource.WithAppProfile(appProfile))
 
 	resourceOpts := []sdkResource.ResourceOption{
+		sdkResource.WithResourceProfile(appProfile),
 		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(app.Id)}),
 		sdkResource.WithAnnotation(&v2.RawId{Id: app.Id}),
 	}

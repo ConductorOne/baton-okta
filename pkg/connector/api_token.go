@@ -141,7 +141,6 @@ func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {
 			BatonResource: false,
 		}),
 		resource.WithSecretLastUsedAt(*apiToken.LastUpdated),
-		resource.WithSecretCreatedAt(*apiToken.Created),
 		resource.WithSecretType(v2.SecretTrait_CREDENTIAL_TYPE_STATIC_SECRET),
 		resource.WithSecretDetail("okta.api_token"),
 	}
@@ -150,6 +149,7 @@ func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {
 		resourceTypeApiToken,
 		*apiToken.Id,
 		options,
+		resource.WithResourceCreatedAt(*apiToken.Created),
 	)
 	if err != nil {
 		return nil, err

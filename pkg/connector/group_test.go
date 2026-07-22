@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
-func TestGroupTrait_TypeProfileKey(t *testing.T) {
+func TestGroupResource_TypeProfileKey(t *testing.T) {
 	tests := []struct {
 		name           string
 		oktaType       string
@@ -35,28 +36,34 @@ func TestGroupTrait_TypeProfileKey(t *testing.T) {
 				},
 			}
 
-			trait, err := o.groupTrait(ctx, group)
+			resource, err := o.groupResource(ctx, group)
 			if err != nil {
-				t.Fatalf("groupTrait returned error: %v", err)
-			}
-			if trait == nil || trait.Profile == nil {
-				t.Fatalf("groupTrait returned nil trait or profile")
+				t.Fatalf("groupResource returned error: %v", err)
 			}
 
-			got, ok := trait.Profile.Fields[groupTypeProfileKey]
-			if !ok {
-				t.Fatalf("profile is missing %q key; fields=%v", groupTypeProfileKey, trait.Profile.Fields)
+			profile := resource.GetProfile()
+			if profile == nil {
+				t.Fatalf("groupResource returned resource with nil profile")
 			}
-			if got.GetStringValue() != tc.want {
-				t.Errorf("profile[%q] = %q, want %q", groupTypeProfileKey, got.GetStringValue(), tc.want)
+
+			got, ok := sdkResource.GetProfileStringValue(profile, groupTypeProfileKey)
+			if !ok {
+				t.Fatalf("profile is missing %q key; fields=%v", groupTypeProfileKey, profile.GetFields())
+			}
+			if got != tc.want {
+				t.Errorf("profile[%q] = %q, want %q", groupTypeProfileKey, got, tc.want)
 			}
 
 			for _, key := range []string{profileFieldName, profileFieldDescription} {
-				if _, ok := trait.Profile.Fields[key]; !ok {
+				if _, ok := profile.GetFields()[key]; !ok {
 					t.Errorf("profile is missing pre-existing %q key", key)
 				}
 			}
 
+			trait, err := sdkResource.GetGroupTrait(resource)
+			if err != nil {
+				t.Fatalf("GetGroupTrait returned error: %v", err)
+			}
 			if got := trait.GetRawGroupSourceType(); got != tc.oktaType {
 				t.Errorf("RawGroupSourceType = %q, want %q", got, tc.oktaType)
 			}

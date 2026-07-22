@@ -51,7 +51,8 @@ func resourceSetsBindingsResource(ctx context.Context, rs *ResourceSets, parentR
 		resourceTypeResourceSetsBindings,
 		rs.ID,
 		sdkResource.WithParentResourceID(parentResourceID),
-		sdkResource.WithAppTrait(sdkResource.WithAppProfile(profile)),
+		sdkResource.WithAppTrait(),
+		sdkResource.WithResourceProfile(profile),
 	)
 }
 
@@ -67,7 +68,8 @@ func resourceSetBindingsResource(ctx context.Context, rs *oktav5.ResourceSet, pa
 		resourceTypeResourceSetsBindings,
 		rs.GetId(),
 		sdkResource.WithParentResourceID(parentResourceID),
-		sdkResource.WithAppTrait(sdkResource.WithAppProfile(profile)),
+		sdkResource.WithAppTrait(),
+		sdkResource.WithResourceProfile(profile),
 	)
 }
 func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentResourceID *v2.ResourceId, attrs sdkResource.SyncOpAttrs) ([]*v2.Resource, *sdkResource.SyncOpResults, error) {
