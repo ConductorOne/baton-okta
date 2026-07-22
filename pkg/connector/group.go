@@ -378,10 +378,30 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 	}
 
 	ret := &v2.GroupTrait{
-		Profile: profile,
+		Profile:            profile,
+		GroupSourceType:    mapOktaGroupSourceType(group.Type),
+		RawGroupSourceType: group.Type,
 	}
 
 	return ret, nil
+}
+
+// mapOktaGroupSourceType maps Okta's group.Type to the C1-normalized source
+// type vocabulary. AD/LDAP-sourced APP_GROUPs (directory_synced) and
+// dynamic/distribution groups have no distinguishing signal in this field
+// alone, so only the baseline 3-way mapping is covered; unknown/empty types
+// map to "" rather than a fabricated classification.
+func mapOktaGroupSourceType(oktaType string) string {
+	switch oktaType {
+	case builtInGroupType:
+		return "built_in"
+	case appGroupType:
+		return "app_imported"
+	case oktaGroupType:
+		return "native"
+	default:
+		return ""
+	}
 }
 
 func getGroupStat(group *okta.Group, statName string) (float64, bool) {
@@ -576,7 +596,7 @@ func (o *groupResourceType) registerModifyGroupAction(ctx context.Context, regis
 				DisplayName: "Description",
 				Description: "The new description for the group.",
 				Field:       &config.Field_StringField{},
-				IsRequired: false,
+				IsRequired:  false,
 			},
 		},
 		ReturnTypes: []*config.Field{

@@ -9,15 +9,16 @@ import (
 
 func TestGroupTrait_TypeProfileKey(t *testing.T) {
 	tests := []struct {
-		name     string
-		oktaType string
-		want     string
+		name           string
+		oktaType       string
+		want           string
+		wantSourceType string
 	}{
-		{name: "okta-native group", oktaType: oktaGroupType, want: "OKTA_GROUP"},
-		{name: "app push group", oktaType: appGroupType, want: "APP_GROUP"},
-		{name: "built-in group", oktaType: builtInGroupType, want: "BUILT_IN"},
-		{name: "unknown future value passes through verbatim", oktaType: "FUTURE_TYPE", want: "FUTURE_TYPE"},
-		{name: "empty type passes through as empty", oktaType: "", want: ""},
+		{name: "okta-native group", oktaType: oktaGroupType, want: "OKTA_GROUP", wantSourceType: "native"},
+		{name: "app push group", oktaType: appGroupType, want: "APP_GROUP", wantSourceType: "app_imported"},
+		{name: "built-in group", oktaType: builtInGroupType, want: "BUILT_IN", wantSourceType: "built_in"},
+		{name: "unknown future value passes through verbatim", oktaType: "FUTURE_TYPE", want: "FUTURE_TYPE", wantSourceType: ""},
+		{name: "empty type passes through as empty", oktaType: "", want: "", wantSourceType: ""},
 	}
 
 	o := &groupResourceType{}
@@ -54,6 +55,34 @@ func TestGroupTrait_TypeProfileKey(t *testing.T) {
 				if _, ok := trait.Profile.Fields[key]; !ok {
 					t.Errorf("profile is missing pre-existing %q key", key)
 				}
+			}
+
+			if got := trait.GetRawGroupSourceType(); got != tc.oktaType {
+				t.Errorf("RawGroupSourceType = %q, want %q", got, tc.oktaType)
+			}
+			if got := trait.GetGroupSourceType(); got != tc.wantSourceType {
+				t.Errorf("GroupSourceType = %q, want %q", got, tc.wantSourceType)
+			}
+		})
+	}
+}
+
+func TestMapOktaGroupSourceType(t *testing.T) {
+	tests := []struct {
+		oktaType string
+		want     string
+	}{
+		{oktaType: oktaGroupType, want: "native"},
+		{oktaType: appGroupType, want: "app_imported"},
+		{oktaType: builtInGroupType, want: "built_in"},
+		{oktaType: "FUTURE_TYPE", want: ""},
+		{oktaType: "", want: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.oktaType, func(t *testing.T) {
+			if got := mapOktaGroupSourceType(tc.oktaType); got != tc.want {
+				t.Errorf("mapOktaGroupSourceType(%q) = %q, want %q", tc.oktaType, got, tc.want)
 			}
 		})
 	}
