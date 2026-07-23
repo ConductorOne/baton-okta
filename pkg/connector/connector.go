@@ -260,6 +260,26 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "True/False",
 					Order:       6,
 				},
+				profileFieldSendActivationEmail: {
+					DisplayName: "Send Activation Email",
+					Required:    false,
+					Description: "When set to 'false', the Okta activation email is suppressed by creating the user staged and activating without sending an email. Defaults to 'true'.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "True/False",
+					Order:       7,
+				},
+				profileFieldProviderType: {
+					DisplayName: "Provider Type",
+					Required:    false,
+					Description: "The authentication provider type for the user. Set to 'FEDERATION' to create a federated user (no Okta password). Defaults to 'OKTA'.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "OKTA/FEDERATION",
+					Order:       8,
+				},
 				profileFieldAdditionalAttributes: {
 					DisplayName: "Additional Attributes",
 					Required:    false,
@@ -267,7 +287,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Field: &v2.ConnectorAccountCreationSchema_Field_MapField{
 						MapField: &v2.ConnectorAccountCreationSchema_MapField{},
 					},
-					Order: 7,
+					Order: 9,
 				},
 			},
 		},
