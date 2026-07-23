@@ -390,7 +390,8 @@ func roleResource(ctx context.Context, role *okta.Role, ctype *v2.ResourceType) 
 		role.Label,
 		ctype,
 		objectID,
-		[]sdkResource.RoleTraitOption{sdkResource.WithRoleProfile(profile)},
+		[]sdkResource.RoleTraitOption{},
+		sdkResource.WithResourceProfile(profile),
 		sdkResource.WithAnnotation(&v2.V1Identifier{
 			Id: V1RoleEntitlementID(objectID),
 		}),

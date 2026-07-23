@@ -52,9 +52,8 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 		resourceTypeResourceSets,
 		rs.ID,
 		sdkResource.WithParentResourceID(parentResourceID),
-		sdkResource.WithAppTrait(
-			sdkResource.WithAppProfile(profile),
-		),
+		sdkResource.WithAppTrait(),
+		sdkResource.WithResourceProfile(profile),
 	)
 }
 
@@ -70,9 +69,8 @@ func resourceSetResource(ctx context.Context, rs *oktav5.ResourceSet, parentReso
 		resourceTypeResourceSets,
 		*rs.Id,
 		sdkResource.WithParentResourceID(parentResourceID),
-		sdkResource.WithAppTrait(
-			sdkResource.WithAppProfile(profile),
-		),
+		sdkResource.WithAppTrait(),
+		sdkResource.WithResourceProfile(profile),
 	)
 }
 

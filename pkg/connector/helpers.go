@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/url"
 
-	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
@@ -44,13 +43,6 @@ func fmtGrantIdV1(entitlementID string, userID string) string {
 
 func fmtResourceIdV1(id string) string {
 	return id
-}
-
-func fmtResourceId(resourceTypeID string, id string) *v2.ResourceId {
-	return &v2.ResourceId{
-		ResourceType: resourceTypeID,
-		Resource:     id,
-	}
 }
 
 // extractFieldAsString extracts and validates a string field from the arguments struct by key.

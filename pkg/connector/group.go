@@ -133,11 +133,7 @@ func (o *groupResourceType) Grants(
 
 	switch bag.ResourceTypeID() {
 	case resourceTypeUser.Id:
-		groupTrait, err := sdkResource.GetGroupTrait(resource)
-		if err != nil {
-			return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
-		}
-		usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+		usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
 
 		var annos annotations.Annotations
 		nextPage := ""
@@ -235,11 +231,7 @@ func (o *groupResourceType) Grants(
 				return nil, nil, err
 			}
 
-			groupTrait, err := sdkResource.GetGroupTrait(resource)
-			if err != nil {
-				return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
-			}
-			usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+			usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
 			shouldExpand := !ok || usersCount > 0
 			if !shouldExpand {
 				l.Debug("okta-connectorv2: skipping expand for role group grant since users_count is 0")
@@ -335,29 +327,27 @@ func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, 
 }
 
 func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error) {
-	trait, err := o.groupTrait(ctx, group)
-	if err != nil {
-		return nil, err
+	traitOpts := []sdkResource.GroupTraitOption{
+		sdkResource.WithGroupSourceType(sdkResource.GroupSourceType(mapOktaGroupSourceType(group.Type))),
+		sdkResource.WithRawGroupSourceType(group.Type),
 	}
 
-	var annos annotations.Annotations
-	annos.Update(trait)
-	annos.Update(&v2.V1Identifier{
-		Id: fmtResourceIdV1(group.Id),
-	})
-	annos.Update(&v2.RawId{Id: group.Id})
-
+	resourceOpts := []sdkResource.ResourceOption{
+		sdkResource.WithResourceProfile(groupProfileMap(group)),
+		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(group.Id)}),
+		sdkResource.WithAnnotation(&v2.RawId{Id: group.Id}),
+	}
 	if group.Type == builtInGroupType {
-		annos.Update(&v2.EntitlementImmutable{})
+		resourceOpts = append(resourceOpts, sdkResource.WithAnnotation(&v2.EntitlementImmutable{}))
 	}
-	return &v2.Resource{
-		Id:          fmtResourceId(resourceTypeGroup.Id, group.Id),
-		DisplayName: group.Profile.Name,
-		Annotations: annos,
-	}, nil
+
+	return sdkResource.NewGroupResource(group.Profile.Name, resourceTypeGroup, group.Id, traitOpts, resourceOpts...)
 }
 
-func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (*v2.GroupTrait, error) {
+// groupProfileMap builds the C1 profile for an Okta group. The profile is set
+// at the resource level (see groupResource). The users_count / apps_count
+// entries drive grant-expansion decisions in Entitlements and Grants.
+func groupProfileMap(group *okta.Group) map[string]interface{} {
 	profileMap := map[string]interface{}{
 		profileFieldDescription: group.Profile.Description,
 		profileFieldName:        group.Profile.Name,
@@ -372,18 +362,7 @@ func (o *groupResourceType) groupTrait(ctx context.Context, group *okta.Group) (
 		profileMap["apps_count"] = int64(appCount)
 	}
 
-	profile, err := structpb.NewStruct(profileMap)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: failed to construct group profile for group trait: %w", err)
-	}
-
-	ret := &v2.GroupTrait{
-		Profile:            profile,
-		GroupSourceType:    mapOktaGroupSourceType(group.Type),
-		RawGroupSourceType: group.Type,
-	}
-
-	return ret, nil
+	return profileMap
 }
 
 // mapOktaGroupSourceType maps Okta's group.Type to the C1-normalized source
@@ -540,11 +519,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		return nil, annos, err
 	}
 
-	groupTrait, err := sdkResource.GetGroupTrait(resource)
-	if err != nil {
-		return nil, annos, fmt.Errorf("okta-connectorv2: failed to get group trait: %w", err)
-	}
-	usersCount, ok := sdkResource.GetProfileInt64Value(groupTrait.Profile, usersCountProfileKey)
+	usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
 	if ok && usersCount == 0 {
 		groupAnnos := annotations.Annotations(resource.GetAnnotations())
 		groupAnnos.Update(&v2.SkipGrants{})
