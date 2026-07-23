@@ -15,9 +15,16 @@ const (
 const userResourceTypeID = "user"
 
 const (
-	profileFieldCreateInactive               = "create_inactive"
-	profileFieldAdditionalAttributes         = "additionalAttributes"
+	profileFieldCreateInactive                = "create_inactive"
+	profileFieldAdditionalAttributes          = "additionalAttributes"
 	profileFieldPasswordChangeOnLoginRequired = "password_change_on_login_required"
+	profileFieldSendActivationEmail           = "send_activation_email"
+	profileFieldProviderType                  = "provider_type"
+)
+
+const (
+	providerTypeOkta       = "OKTA"
+	providerTypeFederation = "FEDERATION"
 )
 
 // protectedOktaProfileFields lists the core profile keys set explicitly during

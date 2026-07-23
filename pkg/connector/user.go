@@ -395,7 +395,25 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	params, err := getAccountCreationQueryParams(accountInfo, credentialOptions)
+	providerType, err := getProviderType(accountInfo)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if providerType == providerTypeFederation {
+		// Federated users are mastered by an external IdP and cannot have an Okta password.
+		if credentialOptions.GetRandomPassword() != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a random password credential option", profileFieldProviderType, providerTypeFederation)
+		}
+		if creds == nil {
+			creds = &okta.UserCredentials{}
+		}
+		creds.Provider = &okta.AuthenticationProvider{
+			Type: providerTypeFederation,
+			Name: providerTypeFederation,
+		}
+	}
+
+	params, suppressActivationEmail, err := getAccountCreationQueryParams(accountInfo, credentialOptions, providerType)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -413,6 +431,16 @@ func (r *userResourceType) CreateAccount(
 	}
 	if response != nil && response.StatusCode != http.StatusOK {
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
+	}
+
+	if suppressActivationEmail {
+		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created but activation failed: %w", err)
+		}
+		if activateResp != nil && activateResp.StatusCode != http.StatusOK {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created but activation returned non-200: %s", activateResp.Status)
+		}
 	}
 
 	userResource, err := userResource(ctx, user, r.connector.skipSecondaryEmails)
@@ -491,9 +519,20 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	return profile, nil
 }
 
-func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
+// getAccountCreationQueryParams builds the Create User query params from the account
+// profile. When providerType is FEDERATION it sets provider=true so Okta honors the
+// credentials.provider block. It also returns whether the caller must perform a follow-up
+// activation with sendEmail=false (used to suppress the activation email, since the Create
+// User endpoint itself does not honor sendEmail).
+func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions, providerType string) (*query.Params, bool, error) {
 	pMap := accountInfo.Profile.AsMap()
 	params := &query.Params{}
+
+	// Okta only honors credentials.provider when the provider=true query param is set;
+	// without it the provider block is ignored and a default OKTA user is created.
+	if providerType == providerTypeFederation {
+		params.Provider = true
+	}
 
 	// create_inactive applies regardless of credential type
 	createInactive := false
@@ -503,40 +542,91 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	case string:
 		parsed, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldCreateInactive, err)
+			return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldCreateInactive, err)
 		}
 		createInactive = parsed
 	case nil:
 		// absent = default false, activate=true is Okta's default
 	}
 
+	// send_activation_email defaults to true to preserve existing behavior
+	sendActivationEmail := true
+	switch v := pMap[profileFieldSendActivationEmail].(type) {
+	case bool:
+		sendActivationEmail = v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldSendActivationEmail, err)
+		}
+		sendActivationEmail = parsed
+	case nil:
+		// absent = default true
+	}
+
 	if createInactive {
 		params.Activate = ToPtr(false)
-		return params, nil
+		return params, false, nil
 	}
 
 	// random-password path: respect password_change_on_login_required
+	requirePasswordChanged := false
 	if credentialOptions.GetRandomPassword() != nil {
-		requirePasswordChanged := false
 		switch v := pMap[profileFieldPasswordChangeOnLoginRequired].(type) {
 		case bool:
 			requirePasswordChanged = v
 		case string:
 			parsed, err := strconv.ParseBool(v)
 			if err != nil {
-				return nil, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
+				return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
 			}
 			requirePasswordChanged = parsed
 		case nil:
 			// absent = default false
 		}
-		if requirePasswordChanged {
-			params.NextLogin = "changePassword"
-			params.Activate = ToPtr(true)
-		}
 	}
 
-	return params, nil
+	// Suppressing the activation email uses the staged-create + activate(sendEmail=false)
+	// flow, which cannot also honor nextLogin=changePassword.
+	if !sendActivationEmail && requirePasswordChanged {
+		return nil, false, fmt.Errorf("okta-connectorv2: %s=false cannot be combined with %s=true", profileFieldSendActivationEmail, profileFieldPasswordChangeOnLoginRequired)
+	}
+
+	if !sendActivationEmail {
+		// Stage the user so no activation email is sent; the caller activates with sendEmail=false.
+		params.Activate = ToPtr(false)
+		return params, true, nil
+	}
+
+	if requirePasswordChanged {
+		params.NextLogin = "changePassword"
+		params.Activate = ToPtr(true)
+	}
+
+	return params, false, nil
+}
+
+// getProviderType reads the optional provider_type profile field. It returns an empty
+// string when unset (equivalent to the default Okta provider), the normalized value for
+// OKTA or FEDERATION, and an error for any unsupported value.
+func getProviderType(accountInfo *v2.AccountInfo) (string, error) {
+	raw, ok := accountInfo.Profile.AsMap()[profileFieldProviderType]
+	if !ok || raw == nil {
+		return "", nil
+	}
+
+	providerType, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("okta-connectorv2: %s must be a string", profileFieldProviderType)
+	}
+
+	providerType = strings.ToUpper(strings.TrimSpace(providerType))
+	switch providerType {
+	case "", providerTypeOkta, providerTypeFederation:
+		return providerType, nil
+	default:
+		return "", fmt.Errorf("okta-connectorv2: unsupported %s value %q (supported: %q, %q)", profileFieldProviderType, providerType, providerTypeOkta, providerTypeFederation)
+	}
 }
 
 func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {

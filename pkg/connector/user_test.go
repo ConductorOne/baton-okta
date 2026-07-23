@@ -330,12 +330,15 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 	}.Build()
 
 	tests := []struct {
-		name        string
-		profile     map[string]interface{}
-		creds       *v2.LocalCredentialOptions
-		wantActivate *bool   // nil means we don't care / field should be unset
-		wantNextLogin string  // empty means field should be unset
-		wantErr     bool
+		name          string
+		profile       map[string]interface{}
+		creds         *v2.LocalCredentialOptions
+		providerType  string
+		wantActivate  *bool  // nil means we don't care / field should be unset
+		wantNextLogin string // empty means field should be unset
+		wantProvider  bool
+		wantSuppress  bool
+		wantErr       bool
 	}{
 		{
 			name:    "all defaults no-password",
@@ -364,8 +367,8 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 				"create_inactive":                   true,
 				"password_change_on_login_required": true,
 			},
-			creds:        randomPassword,
-			wantActivate: boolPtr(false),
+			creds:         randomPassword,
+			wantActivate:  boolPtr(false),
 			wantNextLogin: "",
 		},
 		{
@@ -397,6 +400,90 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			profile: map[string]interface{}{},
 			creds:   randomPassword,
 		},
+		{
+			name: "send_activation_email absent keeps default behavior",
+			profile: map[string]interface{}{
+				"send_activation_email": nil,
+			},
+			creds: noPassword,
+		},
+		{
+			name: "send_activation_email true explicit keeps default behavior",
+			profile: map[string]interface{}{
+				"send_activation_email": true,
+			},
+			creds: noPassword,
+		},
+		{
+			name: "send_activation_email false bool stages and suppresses",
+			profile: map[string]interface{}{
+				"send_activation_email": false,
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: true,
+		},
+		{
+			name: "send_activation_email false string stages and suppresses",
+			profile: map[string]interface{}{
+				"send_activation_email": "false",
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: true,
+		},
+		{
+			name: "create_inactive wins over send_activation_email false",
+			profile: map[string]interface{}{
+				"create_inactive":       true,
+				"send_activation_email": false,
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: false,
+		},
+		{
+			name: "send_activation_email invalid string",
+			profile: map[string]interface{}{
+				"send_activation_email": "nope",
+			},
+			creds:   noPassword,
+			wantErr: true,
+		},
+		{
+			name: "send_activation_email false conflicts with password_change",
+			profile: map[string]interface{}{
+				"send_activation_email":             false,
+				"password_change_on_login_required": true,
+			},
+			creds:   randomPassword,
+			wantErr: true,
+		},
+		{
+			name:         "federation provider sets provider query param",
+			profile:      map[string]interface{}{},
+			creds:        noPassword,
+			providerType: providerTypeFederation,
+			wantProvider: true,
+		},
+		{
+			name:         "okta provider does not set provider query param",
+			profile:      map[string]interface{}{},
+			creds:        noPassword,
+			providerType: providerTypeOkta,
+			wantProvider: false,
+		},
+		{
+			name: "federation provider with send_activation_email false stages and sets provider",
+			profile: map[string]interface{}{
+				"send_activation_email": false,
+			},
+			creds:        noPassword,
+			providerType: providerTypeFederation,
+			wantActivate: boolPtr(false),
+			wantProvider: true,
+			wantSuppress: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -407,7 +494,7 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			}
 			accountInfo := &v2.AccountInfo{Profile: s}
 
-			got, err := getAccountCreationQueryParams(accountInfo, tt.creds)
+			got, suppress, err := getAccountCreationQueryParams(accountInfo, tt.creds, tt.providerType)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -435,6 +522,95 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			// Check NextLogin
 			if got != nil && got.NextLogin != tt.wantNextLogin {
 				t.Errorf("NextLogin = %q, want %q", got.NextLogin, tt.wantNextLogin)
+			}
+
+			// Check Provider query param
+			gotProvider := false
+			if got != nil {
+				if b, ok := got.Provider.(bool); ok {
+					gotProvider = b
+				}
+			}
+			if gotProvider != tt.wantProvider {
+				t.Errorf("Provider = %v, want %v", gotProvider, tt.wantProvider)
+			}
+
+			if suppress != tt.wantSuppress {
+				t.Errorf("suppress = %v, want %v", suppress, tt.wantSuppress)
+			}
+		})
+	}
+}
+
+func TestGetProviderType(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile map[string]interface{}
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "absent defaults to empty",
+			profile: map[string]interface{}{},
+			want:    "",
+		},
+		{
+			name: "explicit nil defaults to empty",
+			profile: map[string]interface{}{
+				"provider_type": nil,
+			},
+			want: "",
+		},
+		{
+			name: "okta uppercase",
+			profile: map[string]interface{}{
+				"provider_type": "OKTA",
+			},
+			want: providerTypeOkta,
+		},
+		{
+			name: "federation lowercase normalized",
+			profile: map[string]interface{}{
+				"provider_type": "federation",
+			},
+			want: providerTypeFederation,
+		},
+		{
+			name: "federation with surrounding whitespace",
+			profile: map[string]interface{}{
+				"provider_type": "  FEDERATION  ",
+			},
+			want: providerTypeFederation,
+		},
+		{
+			name: "unsupported value rejected",
+			profile: map[string]interface{}{
+				"provider_type": "SOCIAL",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := structpb.NewStruct(tt.profile)
+			if err != nil {
+				t.Fatalf("structpb.NewStruct: %v", err)
+			}
+			accountInfo := &v2.AccountInfo{Profile: s}
+
+			got, err := getProviderType(accountInfo)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("getProviderType() = %q, want %q", got, tt.want)
 			}
 		})
 	}
