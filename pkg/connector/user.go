@@ -609,6 +609,86 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 	return oktaUsers, &responseContext{OktaResponse: resp}, nil
 }
 
+func (o *userResourceType) Delete(ctx context.Context, resourceId *v2.ResourceId, parentResourceID *v2.ResourceId) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	userId := resourceId.Resource
+
+	err := deactivateUser(ctx, o.connector.client, userId)
+	if err != nil {
+		l.Error("failed to deactivate Okta user", zap.String("userId", userId), zap.Error(err))
+		return nil, err
+	}
+
+	err = deleteUser(ctx, o.connector.client, userId)
+	if err != nil {
+		l.Error("failed to delete Okta user", zap.String("userId", userId), zap.Error(err))
+		return nil, err
+	}
+
+	l.Info("deprovisioned Okta user", zap.String("userId", userId))
+	return nil, nil
+}
+
+func deactivateUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	l := ctxzap.Extract(ctx)
+	l.Debug("deactivating user", zap.String("user_id", oktaUserID))
+
+	if oktaUserID == "" {
+		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
+	}
+
+	qp := query.NewQueryParams()
+	qp.SendEmail = ToPtr(false)
+
+	resp, err := client.User.DeactivateUser(ctx, oktaUserID, qp)
+	if err != nil {
+		if strings.Contains(err.Error(), "Cannot deactivate a user with a DEPROVISIONED status") {
+			l.Debug("user is already deprovisioned", zap.String("user_id", oktaUserID))
+			return nil
+		}
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		return fmt.Errorf("okta-connectorv2: failed to deactivate user: %w", err)
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("okta-connectorv2: failed to deactivate user: %s", resp.Status)
+	}
+
+	l.Info("user deactivated", zap.String("user_id", oktaUserID))
+	return nil
+}
+
+func deleteUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	l := ctxzap.Extract(ctx)
+	l.Debug("deleting user", zap.String("user_id", oktaUserID))
+
+	if oktaUserID == "" {
+		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
+	}
+
+	resp, err := client.User.DeactivateOrDeleteUser(ctx, oktaUserID, nil)
+	if err != nil {
+		if resp != nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusNotFound {
+				l.Debug("user already deleted", zap.String("user_id", oktaUserID))
+				return nil
+			}
+		}
+		return fmt.Errorf("okta-connectorv2: failed to delete user: %w", handleOktaResponseError(resp, err))
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	l.Info("user deleted", zap.String("user_id", oktaUserID))
+	return nil
+}
+
 // suspendUser suspends the Okta user identified by oktaUserID.
 //
 // It validates that oktaUserID and client are provided, invokes the Okta suspend API,

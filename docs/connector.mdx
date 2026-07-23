@@ -14,7 +14,7 @@ sidebarTitle: "Okta"
 
 | Resource | Sync | Provision | Delete |
 | :--- | :--- | :--- | :--- |
-| Accounts | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> |  |
+| Accounts | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> |
 | Applications | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> |  |
 | Groups | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> |
 | Roles | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> |  |
@@ -39,7 +39,7 @@ Use this attribute in policies and access profiles to verify that bindings and g
 
 The Okta connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
-This connector does not support account deprovisioning. You must deprovision accounts directly in Okta.
+The Okta connector supports account deprovisioning. When a user account is deprovisioned through C1, the connector deactivates and then deletes the user in Okta. The deactivation step transitions the user to the DEPROVISIONED state, and the deletion step permanently removes the user. This requires an API token or OAuth app with `okta.users.manage` scope.
 
 Syncing standard and custom admin roles requires a super admin token. 
 
