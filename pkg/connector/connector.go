@@ -39,6 +39,7 @@ type Okta struct {
 	skipSecondaryEmails bool
 	skipAppGroups       bool
 	SyncSecrets         bool
+	SyncDevices         bool
 	userFilters         *userFilterConfig
 }
 
@@ -116,6 +117,12 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_SECRET},
 		Annotations: v1AnnotationsForResourceType("api-token", true, capabilityPermissions("okta.apiTokens.read")),
 	}
+	resourceTypeDevice = &v2.ResourceType{
+		Id:          "device",
+		DisplayName: "Device",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_MANAGED_DEVICE},
+		Annotations: v1AnnotationsForResourceType("device", true, capabilityPermissions("okta.devices.read")),
+	}
 	defaultScopes = []string{
 		"okta.users.read",
 		"okta.groups.read",
@@ -159,6 +166,10 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		resourceSyncer = append(resourceSyncer, apiTokenBuilder(o.clientV5))
 	}
 
+	if o.SyncDevices {
+		resourceSyncer = append(resourceSyncer, deviceBuilder(o.clientV5))
+	}
+
 	return resourceSyncer
 }
 
@@ -176,6 +187,10 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 
 	if c.SyncSecrets {
 		resourceTypes = append(resourceTypes, resourceTypeApiToken)
+	}
+
+	if c.SyncDevices {
+		resourceTypes = append(resourceTypes, resourceTypeDevice)
 	}
 
 	return &v2.ResourceTypesServiceListResourceTypesResponse{
@@ -394,6 +409,10 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
+		if cc.SyncDevices {
+			scopes = append(scopes, "okta.devices.read")
+		}
+
 		dpopClient, err := oktaauth.NewDPoPHTTPClient(ctx, oktaauth.Config{
 			Domain:        cc.Domain,
 			ClientID:      cc.OktaClientId,
@@ -445,6 +464,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		skipAppGroups:       cc.SkipAppGroups,
 		SyncSecrets:         cc.SyncSecrets,
+		SyncDevices:         cc.SyncDevices,
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 		},

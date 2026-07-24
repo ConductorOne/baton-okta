@@ -121,6 +121,42 @@
     },
     {
       "resourceType": {
+        "id": "device",
+        "displayName": "Device",
+        "traits": [
+          "TRAIT_MANAGED_DEVICE"
+        ],
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+            "id": "device"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+            "permissions": [
+              {
+                "permission": "okta.devices.read"
+              }
+            ]
+          }
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC"
+      ],
+      "permissions": {
+        "permissions": [
+          {
+            "permission": "okta.devices.read"
+          }
+        ]
+      }
+    },
+    {
+      "resourceType": {
         "id": "group",
         "displayName": "Group",
         "traits": [

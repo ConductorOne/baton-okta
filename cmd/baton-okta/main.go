@@ -19,6 +19,6 @@ func main() {
 		cfg.Config,
 		connector.New,
 		connectorrunner.WithSessionStoreEnabled(),
-		connectorrunner.WithDefaultCapabilitiesConnectorBuilderV2(&connector.Okta{SyncCustomRoles: true, SyncSecrets: true}),
+		connectorrunner.WithDefaultCapabilitiesConnectorBuilderV2(&connector.Okta{SyncCustomRoles: true, SyncSecrets: true, SyncDevices: true}),
 	)
 }

@@ -178,6 +178,12 @@
       "boolField": {}
     },
     {
+      "name": "sync-devices",
+      "displayName": "Sync devices",
+      "description": "Whether to sync devices or not",
+      "boolField": {}
+    },
+    {
       "name": "filter-email-domains",
       "displayName": "Filter email domains",
       "description": "Press Enter to add multiple items.",
@@ -209,6 +215,7 @@
         "sync-custom-roles",
         "skip-secondary-emails",
         "sync-secrets",
+        "sync-devices",
         "filter-email-domains",
         "skip-app-groups"
       ]
@@ -229,6 +236,7 @@
         "sync-custom-roles",
         "skip-secondary-emails",
         "sync-secrets",
+        "sync-devices",
         "filter-email-domains",
         "skip-app-groups"
       ]

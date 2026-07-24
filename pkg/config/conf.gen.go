@@ -16,6 +16,7 @@ type Okta struct {
 	SyncCustomRoles bool `mapstructure:"sync-custom-roles"`
 	SkipSecondaryEmails bool `mapstructure:"skip-secondary-emails"`
 	SyncSecrets bool `mapstructure:"sync-secrets"`
+	SyncDevices bool `mapstructure:"sync-devices"`
 	FilterEmailDomains []string `mapstructure:"filter-email-domains"`
 	SkipAppGroups bool `mapstructure:"skip-app-groups"`
 }
