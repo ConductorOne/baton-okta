@@ -110,7 +110,7 @@ func extractEmailsFromUserProfile(user *okta.User) []string {
 	oktaProfile := *user.Profile
 
 	// Extract primary email
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	if email, ok := oktaProfile[profileFieldEmail].(string); ok && email != "" {
 		userEmails = append(userEmails, email)
 	}
 
@@ -146,7 +146,7 @@ func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
 	}
 
 	// Extract primary email
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	if email, ok := oktaProfile[profileFieldEmail].(string); ok && email != "" {
 		userEmails = append(userEmails, email)
 	}
 
@@ -200,11 +200,11 @@ func (o *userResourceType) Grants(
 func userName(user *okta.User) (string, string) {
 	profile := *user.Profile
 
-	firstName, ok := profile["firstName"].(string)
+	firstName, ok := profile[oktaAttrFirstName].(string)
 	if !ok {
 		firstName = unknownProfileValue
 	}
-	lastName, ok := profile["lastName"].(string)
+	lastName, ok := profile[oktaAttrLastName].(string)
 	if !ok {
 		lastName = unknownProfileValue
 	}
@@ -291,7 +291,7 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		options = append(options, resource.WithLastLogin(*user.LastLogin))
 	}
 
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	if email, ok := oktaProfile[profileFieldEmail].(string); ok && email != "" {
 		options = append(options, resource.WithEmail(email, true))
 	}
 	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" && !skipSecondaryEmails {
@@ -441,6 +441,11 @@ func (r *userResourceType) CreateAccount(
 		if activateResp != nil && activateResp.StatusCode != http.StatusOK {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created but activation returned non-200: %s", activateResp.Status)
 		}
+		// ActivateUser returns a token, not the user.
+		user, _, err = r.connector.client.User.GetUser(ctx, user.Id)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created and activated but fetch failed: %w", err)
+		}
 	}
 
 	userResource, err := userResource(ctx, user, r.connector.skipSecondaryEmails)
@@ -480,17 +485,17 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 
 func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	pMap := accountInfo.Profile.AsMap()
-	firstName, ok := pMap["first_name"]
+	firstName, ok := pMap[profileFieldFirstName]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
 	}
 
-	lastName, ok := pMap["last_name"]
+	lastName, ok := pMap[profileFieldLastName]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
 	}
 
-	email, ok := pMap["email"]
+	email, ok := pMap[profileFieldEmail]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing email in account info")
 	}
@@ -501,9 +506,9 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	}
 
 	profile := &okta.UserProfile{
-		"firstName":       firstName,
-		"lastName":        lastName,
-		"email":           email,
+		oktaAttrFirstName: firstName,
+		oktaAttrLastName:  lastName,
+		profileFieldEmail: email,
 		profileFieldLogin: login,
 	}
 
@@ -519,17 +524,13 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	return profile, nil
 }
 
-// getAccountCreationQueryParams builds the Create User query params from the account
-// profile. When providerType is FEDERATION it sets provider=true so Okta honors the
-// credentials.provider block. It also returns whether the caller must perform a follow-up
-// activation with sendEmail=false (used to suppress the activation email, since the Create
-// User endpoint itself does not honor sendEmail).
+// getAccountCreationQueryParams builds Create User query params and whether a
+// follow-up ActivateUser(sendEmail=false) is required.
 func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions, providerType string) (*query.Params, bool, error) {
 	pMap := accountInfo.Profile.AsMap()
 	params := &query.Params{}
 
-	// Okta only honors credentials.provider when the provider=true query param is set;
-	// without it the provider block is ignored and a default OKTA user is created.
+	// Without provider=true Okta ignores credentials.provider.
 	if providerType == providerTypeFederation {
 		params.Provider = true
 	}
@@ -606,9 +607,7 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	return params, false, nil
 }
 
-// getProviderType reads the optional provider_type profile field. It returns an empty
-// string when unset (equivalent to the default Okta provider), the normalized value for
-// OKTA or FEDERATION, and an error for any unsupported value.
+// getProviderType returns "" (Okta default), OKTA, or FEDERATION from the profile.
 func getProviderType(accountInfo *v2.AccountInfo) (string, error) {
 	raw, ok := accountInfo.Profile.AsMap()[profileFieldProviderType]
 	if !ok || raw == nil {

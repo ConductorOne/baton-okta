@@ -154,7 +154,7 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 	if err != nil {
 		return nil, false, err
 	}
-	resp, err := t.cfg.httpClient.Do(req) //nolint:gosec // tokenURL fixed at construction
+	resp, err := t.cfg.httpClient.Do(req)
 	if err != nil {
 		if resp != nil {
 			_ = resp.Body.Close()
@@ -199,7 +199,6 @@ func (t *tokenSource) buildTokenRequest(ctx context.Context) (*http.Request, err
 	if len(t.cfg.scopes) > 0 {
 		form.Set("scope", strings.Join(t.cfg.scopes, " "))
 	}
-	//nolint:gosec // tokenURL fixed at construction from operator-provided Okta domain
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.cfg.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("build token request: %w", err)

@@ -373,11 +373,11 @@ func groupProfileMap(group *okta.Group) map[string]interface{} {
 func mapOktaGroupSourceType(oktaType string) string {
 	switch oktaType {
 	case builtInGroupType:
-		return "built_in"
+		return groupSourceTypeBuiltIn
 	case appGroupType:
-		return "app_imported"
+		return groupSourceTypeAppImported
 	case oktaGroupType:
-		return "native"
+		return groupSourceTypeNative
 	default:
 		return ""
 	}

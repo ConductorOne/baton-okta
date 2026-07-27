@@ -4,7 +4,17 @@ const (
 	profileFieldName        = "name"
 	profileFieldDescription = "description"
 	profileFieldLabel       = "label"
+	profileFieldFirstName   = "first_name"
+	profileFieldLastName    = "last_name"
+	profileFieldEmail       = "email"
 	profileFieldLogin       = "login"
+)
+
+const (
+	// Okta user-profile attribute names (camelCase). email/login match the
+	// schema keys above, so those reuse profileFieldEmail / profileFieldLogin.
+	oktaAttrFirstName = "firstName"
+	oktaAttrLastName  = "lastName"
 )
 
 const (
@@ -12,7 +22,10 @@ const (
 	actionResultSuccessDisplay = "Success"
 )
 
-const userResourceTypeID = "user"
+const (
+	userResourceTypeID          = "user"
+	userResourceTypeDisplayName = "User"
+)
 
 const (
 	profileFieldCreateInactive                = "create_inactive"
@@ -27,11 +40,21 @@ const (
 	providerTypeFederation = "FEDERATION"
 )
 
+// placeholderBoolean is the account creation schema placeholder for fields parsed
+// with strconv.ParseBool.
+const placeholderBoolean = "True/False"
+
+const (
+	groupSourceTypeBuiltIn     = "built_in"
+	groupSourceTypeAppImported = "app_imported"
+	groupSourceTypeNative      = "native"
+)
+
 // protectedOktaProfileFields lists the core profile keys set explicitly during
 // account creation. additionalAttributes entries cannot override these.
 var protectedOktaProfileFields = map[string]bool{
-	"firstName": true,
-	"lastName":  true,
-	"email":     true,
-	"login":     true,
+	oktaAttrFirstName:   true,
+	oktaAttrLastName:    true,
+	profileFieldEmail:   true,
+	profileFieldLogin:   true,
 }

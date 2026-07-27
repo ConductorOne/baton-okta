@@ -41,16 +41,16 @@ var (
 	}
 	CreateGrantFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("group.user_membership.add"),
-		TargetTypes: mapset.NewSet[string]("UserGroup", "User"),
+		TargetTypes: mapset.NewSet[string]("UserGroup", userResourceTypeDisplayName),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
 			}
 			userGroup := targetMap["UserGroup"][0]
-			if len(targetMap["User"]) != 1 {
-				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			if len(targetMap[userResourceTypeDisplayName]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[userResourceTypeDisplayName]))
 			}
-			user := targetMap["User"][0]
+			user := targetMap[userResourceTypeDisplayName][0]
 
 			resource, err := sdkResource.NewResource(userGroup.DisplayName, resourceTypeGroup, userGroup.Id)
 			if err != nil {
@@ -87,16 +87,16 @@ var (
 	}
 	CreateRevokeFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("group.user_membership.remove"),
-		TargetTypes: mapset.NewSet[string]("UserGroup", "User"),
+		TargetTypes: mapset.NewSet[string]("UserGroup", userResourceTypeDisplayName),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["UserGroup"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 UserGroup target, got %d", len(targetMap["UserGroup"]))
 			}
 			userGroup := targetMap["UserGroup"][0]
-			if len(targetMap["User"]) != 1 {
-				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			if len(targetMap[userResourceTypeDisplayName]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[userResourceTypeDisplayName]))
 			}
-			user := targetMap["User"][0]
+			user := targetMap[userResourceTypeDisplayName][0]
 
 			resource, err := sdkResource.NewResource(userGroup.DisplayName, resourceTypeGroup, userGroup.Id)
 			if err != nil {
@@ -159,15 +159,15 @@ var (
 	}
 	ApplicationMembershipFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("application.user_membership.add"),
-		TargetTypes: mapset.NewSet[string]("AppInstance", "User"),
+		TargetTypes: mapset.NewSet[string]("AppInstance", userResourceTypeDisplayName),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
 			}
-			if len(targetMap["User"]) != 1 {
-				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			if len(targetMap[userResourceTypeDisplayName]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[userResourceTypeDisplayName]))
 			}
-			user := targetMap["User"][0]
+			user := targetMap[userResourceTypeDisplayName][0]
 			appInstance := targetMap["AppInstance"][0]
 
 			resource, err := sdkResource.NewResource(appInstance.DisplayName, resourceTypeApp, appInstance.Id)
@@ -205,17 +205,17 @@ var (
 	}
 	RoleMembershipFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("user.account.privilege.grant"),
-		TargetTypes: mapset.NewSet[string]("ROLE", "User"),
+		TargetTypes: mapset.NewSet[string]("ROLE", userResourceTypeDisplayName),
 		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["ROLE"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 ROLE target, got %d", len(targetMap["ROLE"]))
 			}
 			role := targetMap["ROLE"][0]
 
-			if len(targetMap["User"]) != 1 {
-				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			if len(targetMap[userResourceTypeDisplayName]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[userResourceTypeDisplayName]))
 			}
-			user := targetMap["User"][0]
+			user := targetMap[userResourceTypeDisplayName][0]
 
 			// for some reason we don't get the role ID (or type) formatted properly.
 			// hack to look it up via DisplayName
@@ -259,12 +259,12 @@ var (
 			"user.lifecycle.unsuspend",
 			"user.lifecycle.reactivate",
 		),
-		TargetTypes: mapset.NewSet[string]("User"),
+		TargetTypes: mapset.NewSet[string](userResourceTypeDisplayName),
 		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
-			if len(targetMap["User"]) != 1 {
-				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap["User"]))
+			if len(targetMap[userResourceTypeDisplayName]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[userResourceTypeDisplayName]))
 			}
-			user := targetMap["User"][0]
+			user := targetMap[userResourceTypeDisplayName][0]
 			rv.Event = &v2.Event_ResourceChangeEvent{
 				ResourceChangeEvent: &v2.ResourceChangeEvent{
 					ResourceId: &v2.ResourceId{
@@ -278,7 +278,7 @@ var (
 	}
 	UsageFilter = EventFilter{
 		EventTypes:  mapset.NewSet[string]("user.authentication.sso"),
-		ActorType:   "User",
+		ActorType:   userResourceTypeDisplayName,
 		TargetTypes: mapset.NewSet[string]("AppInstance"),
 		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {

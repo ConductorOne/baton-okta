@@ -106,7 +106,7 @@ func (h *tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newTestTokenSource(t *testing.T, server *httptest.Server, key *rsa.PrivateKey, now func() time.Time) *tokenSource {
 	t.Helper()
-	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: "sig"}
+	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: jwkUseSig}
 	p, err := dpop.NewProofer(jwk)
 	if err != nil {
 		t.Fatalf("proofer: %v", err)
@@ -352,7 +352,7 @@ func (f *fakeTokenSource) Token(context.Context) (*accessToken, error) { return 
 
 func newRoundTripperForTest(t *testing.T, key *rsa.PrivateKey, tok *accessToken, ns *dpop_oauth2.NonceStore, inner http.RoundTripper) *dpopRoundTripper {
 	t.Helper()
-	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: "sig"}
+	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: jwkUseSig}
 	p, err := dpop.NewProofer(jwk)
 	if err != nil {
 		t.Fatalf("proofer: %v", err)
@@ -817,7 +817,7 @@ func TestTokenSource_ClientAssertionExpiry(t *testing.T) {
 	key := generateRSAKey(t)
 	var capturedAssertion string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil { //nolint:gosec // test fixture; body size bounded by httptest
+		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse form: %v", err)
 		}
 		capturedAssertion = r.PostForm.Get("client_assertion")
@@ -985,7 +985,7 @@ func TestRoundTripper_TokenSchemeChangesBetweenCalls(t *testing.T) {
 	defer srv.Close()
 
 	switching := &switchingTokenSource{toks: []*accessToken{dpopAccessToken("tok1"), bearerAccessToken("tok2")}}
-	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: "sig"}
+	jwk := &jose.JSONWebKey{Key: key, KeyID: "kid-1", Algorithm: string(jose.RS256), Use: jwkUseSig}
 	p, err := dpop.NewProofer(jwk)
 	if err != nil {
 		t.Fatalf("proofer: %v", err)

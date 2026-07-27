@@ -27,6 +27,7 @@ const (
 	dpopNonceHdr       = "DPoP-Nonce"
 	wwwAuthenticateHdr = "WWW-Authenticate"
 	userAgentExtHdr    = "x-okta-user-agent-extended"
+	jwkUseSig          = "sig"
 )
 
 type Config struct {
@@ -63,7 +64,7 @@ func NewDPoPHTTPClient(ctx context.Context, cfg Config, baseClient *http.Client)
 		Key:       rsaKey,
 		KeyID:     cfg.PrivateKeyID,
 		Algorithm: string(jose.RS256),
-		Use:       "sig",
+		Use:       jwkUseSig,
 	}
 
 	proofer, err := dpop.NewProofer(jwk)
