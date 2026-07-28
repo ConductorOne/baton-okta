@@ -87,16 +87,18 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 ### Conflict / validation rules
 
 - `provider_type=FEDERATION` + random password credential option → error (Okta rejects password on FEDERATION users).
-- `send_activation_email=false` + `password_change_on_login_required=true` → error (staged+activate path cannot also set `nextLogin=changePassword`).
-- `create_inactive=true` wins over `send_activation_email=false` (user stays staged; no activate call).
+- `send_activation_email=false` + `password_change_on_login_required=true` + **random password** → error (staged+activate path cannot also set `nextLogin=changePassword`). On the no-password path, `password_change_on_login_required` is inert and does not conflict (pre-existing behavior).
+- `create_inactive=true` wins over `send_activation_email` / `password_change_on_login_required`: evaluated first, user stays staged, no activate call, and the conflict check above is skipped.
 - Without query `provider=true`, Okta **ignores** a `credentials.provider` block and creates a normal OKTA user (verified live).
 
 ### Retry semantics
 
 The suppressed-email flow spans three calls, so a failure can leave the user created but not
 activated. On retry, Okta rejects the create with `E0000001` and an `errorCauses` entry naming
-`login`; the connector adopts that user, activates it if it is still `STAGED`, and returns
-`AlreadyExistsResult` instead of failing forever on the duplicate login.
+`login`. The connector adopts that user **only when** `send_activation_email=false` was requested
+**and** the existing user is still `STAGED` (the stranded partial-create case), then activates and
+returns `AlreadyExistsResult`. A duplicate login against an already-ACTIVE (or otherwise non-STAGED)
+account is returned as the original create error — it is a genuine collision, not a retry.
 
 ### Org2Org / hub-spoke
 

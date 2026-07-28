@@ -53,8 +53,8 @@ const (
 // protectedOktaProfileFields lists the core profile keys set explicitly during
 // account creation. additionalAttributes entries cannot override these.
 var protectedOktaProfileFields = map[string]bool{
-	oktaAttrFirstName:   true,
-	oktaAttrLastName:    true,
-	profileFieldEmail:   true,
-	profileFieldLogin:   true,
+	oktaAttrFirstName: true,
+	oktaAttrLastName:  true,
+	profileFieldEmail: true,
+	profileFieldLogin: true,
 }

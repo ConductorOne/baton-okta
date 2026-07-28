@@ -419,20 +419,27 @@ func (r *userResourceType) CreateAccount(
 		Credentials: creds,
 	}, params)
 
-	// An earlier attempt can leave the user created but not yet activated. Adopt the
-	// existing account instead of failing, so a retry converges rather than looping on
-	// a duplicate login forever.
-	alreadyExists := isDuplicateLoginError(err)
+	// An earlier suppressed-activation attempt can leave the user created but not yet
+	// activated. Adopt only that stranded STAGED account so a retry converges; any other
+	// duplicate login is a genuine collision and must surface as an error.
+	alreadyExists := false
 	switch {
-	case alreadyExists:
+	case isDuplicateLoginError(err):
 		login, ok := (*userProfile)[profileFieldLogin].(string)
 		if !ok || login == "" {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login already exists but is unusable for lookup: %w", err)
 		}
-		user, _, err = r.connector.client.User.GetUser(ctx, login)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, err)
+		existing, _, getErr := r.connector.client.User.GetUser(ctx, login)
+		if getErr != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, getErr)
 		}
+		// Only a prior suppressed-activation attempt of ours can leave a STAGED user behind.
+		// Anything else is a genuine collision with an account we did not create.
+		if !suppressActivationEmail || existing.Status != userStatusStaged {
+			return nil, nil, nil, err
+		}
+		user = existing
+		alreadyExists = true
 	case err != nil:
 		return nil, nil, nil, err
 	case response != nil && response.StatusCode != http.StatusOK:
@@ -624,14 +631,17 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 		// absent = default false
 	}
 
+	// create_inactive wins over send_activation_email / password_change_on_login_required:
+	// the user stays staged and no activation follow-up runs.
 	if createInactive {
 		params.Activate = ToPtr(false)
 		return params, false, nil
 	}
 
-	// Suppressing the activation email uses the staged-create + activate(sendEmail=false)
-	// flow, which cannot also honor nextLogin=changePassword.
-	if !sendActivationEmail && requirePasswordChanged {
+	// nextLogin=changePassword is only applied on the random-password path, so the
+	// conflict with send_activation_email=false is only real there. On no-password,
+	// password_change_on_login_required remains inert (pre-existing behavior).
+	if !sendActivationEmail && requirePasswordChanged && credentialOptions.GetRandomPassword() != nil {
 		return nil, false, fmt.Errorf("okta-connectorv2: %s=false cannot be combined with %s=true", profileFieldSendActivationEmail, profileFieldPasswordChangeOnLoginRequired)
 	}
 

@@ -462,13 +462,14 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "send_activation_email false conflicts with password_change for no-password",
+			name: "send_activation_email false ignores inert password_change for no-password",
 			profile: map[string]interface{}{
 				"send_activation_email":             false,
 				"password_change_on_login_required": true,
 			},
-			creds:   noPassword,
-			wantErr: true,
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: true,
 		},
 		{
 			name: "password_change_on_login_required invalid string with random-password",

@@ -93,8 +93,13 @@ Optional keys in the account creation profile (see [docs/docs-info.md](docs/docs
 | `provider_type` | `OKTA` / `FEDERATION` | `FEDERATION` creates a federated user (no Okta password). Use with the **no-password** credential option. |
 | `send_activation_email` | `true` / `false` | Default `true`. When `false`, activates without sending Okta's activation email. |
 | `create_inactive` | `true` / `false` | Create as staged; skips activation. |
-| `password_change_on_login_required` | `true` / `false` | Only with random password. Conflicts with `send_activation_email=false`. |
+| `password_change_on_login_required` | `true` / `false` | Only applied with random password. Conflicts with `send_activation_email=false` on that path only. |
 | `additionalAttributes` | object | Extra Okta profile attributes. |
+
+Precedence notes:
+
+- `create_inactive=true` wins over `send_activation_email` — the user stays staged; no activation follow-up runs.
+- `password_change_on_login_required` is inert on the no-password credential path (same as before this feature).
 
 Example (federated user, no activation email):
 
