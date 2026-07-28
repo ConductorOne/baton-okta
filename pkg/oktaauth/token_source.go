@@ -154,6 +154,9 @@ func (t *tokenSource) tryExchange(ctx context.Context) (*accessToken, bool, erro
 	if err != nil {
 		return nil, false, err
 	}
+	// The token URL is derived from the operator-configured Okta domain and is
+	// forced to HTTPS by NewDPoPHTTPClient.
+	// #nosec G704 -- the configured Okta tenant is the intended request target
 	resp, err := t.cfg.httpClient.Do(req)
 	if err != nil {
 		if resp != nil {
@@ -199,6 +202,9 @@ func (t *tokenSource) buildTokenRequest(ctx context.Context) (*http.Request, err
 	if len(t.cfg.scopes) > 0 {
 		form.Set("scope", strings.Join(t.cfg.scopes, " "))
 	}
+	// The token URL is derived from the operator-configured Okta domain and is
+	// forced to HTTPS by NewDPoPHTTPClient.
+	// #nosec G704 -- the configured Okta tenant is the intended request target
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.cfg.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("build token request: %w", err)

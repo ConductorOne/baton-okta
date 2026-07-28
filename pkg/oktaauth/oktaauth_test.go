@@ -817,6 +817,8 @@ func TestTokenSource_ClientAssertionExpiry(t *testing.T) {
 	key := generateRSAKey(t)
 	var capturedAssertion string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The only client is this test; the body it posts is a fixed form.
+		// #nosec G120 -- test fixture, request body is bounded by the test itself
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse form: %v", err)
 		}
