@@ -82,7 +82,7 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 | :--- | :--- | :--- |
 | Create user | `POST /api/v1/users` | Query: `activate`, `provider`, optional `nextLogin` |
 | Activate user | `POST /api/v1/users/{id}/lifecycle/activate` | Query: `sendEmail=false` when suppressing activation email |
-| Get user | `GET /api/v1/users/{id}` | Re-fetch after activate so the returned resource reflects ACTIVE |
+| Get user | `GET /api/v1/users/{idOrLogin}` | Re-fetch after activate to pick up the post-activation status; best-effort, a failure keeps the created user. Also used to adopt an existing login on retry |
 
 ### Conflict / validation rules
 
@@ -90,6 +90,13 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 - `send_activation_email=false` + `password_change_on_login_required=true` → error (staged+activate path cannot also set `nextLogin=changePassword`).
 - `create_inactive=true` wins over `send_activation_email=false` (user stays staged; no activate call).
 - Without query `provider=true`, Okta **ignores** a `credentials.provider` block and creates a normal OKTA user (verified live).
+
+### Retry semantics
+
+The suppressed-email flow spans three calls, so a failure can leave the user created but not
+activated. On retry, Okta rejects the create with `E0000001` and an `errorCauses` entry naming
+`login`; the connector adopts that user, activates it if it is still `STAGED`, and returns
+`AlreadyExistsResult` instead of failing forever on the duplicate login.
 
 ### Org2Org / hub-spoke
 

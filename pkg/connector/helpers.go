@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -140,6 +141,32 @@ func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, 
 var oktaNotFoundErrors = map[string]struct{}{
 	"E0000007": {},
 	"E0000008": {},
+}
+
+// apiValidationFailedErrorCode covers every Create User validation failure, so a
+// duplicate login has to be confirmed from errorCauses before treating it as one.
+// https://developer.okta.com/docs/reference/error-codes/#E0000001
+const apiValidationFailedErrorCode = "E0000001"
+
+// isDuplicateLoginError reports whether err is Okta rejecting a create because the
+// login is already taken.
+func isDuplicateLoginError(err error) bool {
+	var oktaApiError *okta.Error
+	if !errors.As(err, &oktaApiError) || oktaApiError.ErrorCode != apiValidationFailedErrorCode {
+		return false
+	}
+
+	for _, cause := range oktaApiError.ErrorCauses {
+		summary, ok := cause["errorSummary"].(string)
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(summary, profileFieldLogin+":") && strings.Contains(summary, "already exists") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func convertNotFoundError(err error, message string) error {

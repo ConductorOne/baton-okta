@@ -130,6 +130,13 @@ BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
 --revoke-grant 'resourceset-binding:iamkuwy3gqcfNexfQ697:cr0kuwv5507zJCtSy697:member:user:00ujp51vjgWd6ylZ6697'
 ```
 
+Revoking everything associated to a custom role (deletes the role's binding):
+
+```
+BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
+resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697
+```
+
 # Documentation
 
 - [docs/connector.mdx](docs/connector.mdx) — customer-facing C1 setup guide

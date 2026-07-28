@@ -2,6 +2,8 @@ package connector
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -460,6 +462,40 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "send_activation_email false conflicts with password_change for no-password",
+			profile: map[string]interface{}{
+				"send_activation_email":             false,
+				"password_change_on_login_required": true,
+			},
+			creds:   noPassword,
+			wantErr: true,
+		},
+		{
+			name: "password_change_on_login_required invalid string with random-password",
+			profile: map[string]interface{}{
+				"password_change_on_login_required": "nope",
+			},
+			creds:   randomPassword,
+			wantErr: true,
+		},
+		{
+			name: "password_change_on_login_required invalid string for no-password",
+			profile: map[string]interface{}{
+				"password_change_on_login_required": "nope",
+			},
+			creds:   noPassword,
+			wantErr: true,
+		},
+		{
+			name: "password_change_on_login_required invalid string with create_inactive",
+			profile: map[string]interface{}{
+				"create_inactive":                   true,
+				"password_change_on_login_required": "nope",
+			},
+			creds:   randomPassword,
+			wantErr: true,
+		},
+		{
 			name:         "federation provider sets provider query param",
 			profile:      map[string]interface{}{},
 			creds:        noPassword,
@@ -611,6 +647,178 @@ func TestGetProviderType(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("getProviderType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestApplyProviderCredentials(t *testing.T) {
+	noPassword := v2.LocalCredentialOptions_builder{
+		NoPassword: &v2.LocalCredentialOptions_NoPassword{},
+	}.Build()
+
+	randomPassword := v2.LocalCredentialOptions_builder{
+		RandomPassword: &v2.LocalCredentialOptions_RandomPassword{Length: 12},
+	}.Build()
+
+	tests := []struct {
+		name         string
+		creds        *okta.UserCredentials
+		providerType string
+		credentials  *v2.LocalCredentialOptions
+		wantProvider bool
+		wantNilCreds bool
+		wantErr      bool
+	}{
+		{
+			name:         "no provider type leaves credentials untouched",
+			creds:        nil,
+			providerType: "",
+			credentials:  noPassword,
+			wantNilCreds: true,
+		},
+		{
+			name:         "okta provider type leaves credentials untouched",
+			creds:        &okta.UserCredentials{Password: &okta.PasswordCredential{Value: "secret"}},
+			providerType: providerTypeOkta,
+			credentials:  randomPassword,
+		},
+		{
+			name:         "federation allocates credentials when none exist",
+			creds:        nil,
+			providerType: providerTypeFederation,
+			credentials:  noPassword,
+			wantProvider: true,
+		},
+		{
+			name:         "federation sets provider on existing credentials",
+			creds:        &okta.UserCredentials{},
+			providerType: providerTypeFederation,
+			credentials:  noPassword,
+			wantProvider: true,
+		},
+		{
+			name:         "federation rejects random password",
+			creds:        &okta.UserCredentials{Password: &okta.PasswordCredential{Value: "secret"}},
+			providerType: providerTypeFederation,
+			credentials:  randomPassword,
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := applyProviderCredentials(tt.creds, tt.providerType, tt.credentials)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.wantNilCreds {
+				if got != nil {
+					t.Fatalf("credentials = %+v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("credentials are nil, want non-nil")
+			}
+
+			if !tt.wantProvider {
+				if got.Provider != nil {
+					t.Errorf("Provider = %+v, want nil", got.Provider)
+				}
+				return
+			}
+			if got.Provider == nil {
+				t.Fatal("Provider is nil, want FEDERATION")
+			}
+			if got.Provider.Type != providerTypeFederation {
+				t.Errorf("Provider.Type = %q, want %q", got.Provider.Type, providerTypeFederation)
+			}
+			if got.Provider.Name != providerTypeFederation {
+				t.Errorf("Provider.Name = %q, want %q", got.Provider.Name, providerTypeFederation)
+			}
+		})
+	}
+}
+
+func TestIsDuplicateLoginError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+		},
+		{
+			name: "not an okta error",
+			err:  errors.New("boom"),
+		},
+		{
+			name: "duplicate login",
+			err: &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "login: An object with this field already exists in the current organization"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "duplicate login wrapped",
+			err: fmt.Errorf("create user: %w", &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "login: An object with this field already exists in the current organization"},
+				},
+			}),
+			want: true,
+		},
+		{
+			name: "validation failure on another field is not a duplicate login",
+			err: &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "email: Does not match required pattern"},
+				},
+			},
+		},
+		{
+			name: "duplicate on another field is not a duplicate login",
+			err: &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "employeeNumber: An object with this field already exists in the current organization"},
+				},
+			},
+		},
+		{
+			name: "validation failure with no causes",
+			err:  &okta.Error{ErrorCode: apiValidationFailedErrorCode},
+		},
+		{
+			name: "different error code",
+			err: &okta.Error{
+				ErrorCode: ResourceNotFoundExceptionErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "login: An object with this field already exists in the current organization"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isDuplicateLoginError(tt.err); got != tt.want {
+				t.Errorf("isDuplicateLoginError() = %v, want %v", got, tt.want)
 			}
 		})
 	}

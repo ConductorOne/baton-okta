@@ -399,18 +399,10 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if providerType == providerTypeFederation {
-		// Federated users are mastered by an external IdP and cannot have an Okta password.
-		if credentialOptions.GetRandomPassword() != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a random password credential option", profileFieldProviderType, providerTypeFederation)
-		}
-		if creds == nil {
-			creds = &okta.UserCredentials{}
-		}
-		creds.Provider = &okta.AuthenticationProvider{
-			Type: providerTypeFederation,
-			Name: providerTypeFederation,
-		}
+
+	creds, err = applyProviderCredentials(creds, providerType, credentialOptions)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	params, suppressActivationEmail, err := getAccountCreationQueryParams(accountInfo, credentialOptions, providerType)
@@ -426,25 +418,48 @@ func (r *userResourceType) CreateAccount(
 		},
 		Credentials: creds,
 	}, params)
-	if err != nil {
+
+	// An earlier attempt can leave the user created but not yet activated. Adopt the
+	// existing account instead of failing, so a retry converges rather than looping on
+	// a duplicate login forever.
+	alreadyExists := isDuplicateLoginError(err)
+	switch {
+	case alreadyExists:
+		login, ok := (*userProfile)[profileFieldLogin].(string)
+		if !ok || login == "" {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login already exists but is unusable for lookup: %w", err)
+		}
+		user, _, err = r.connector.client.User.GetUser(ctx, login)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, err)
+		}
+	case err != nil:
 		return nil, nil, nil, err
-	}
-	if response != nil && response.StatusCode != http.StatusOK {
+	case response != nil && response.StatusCode != http.StatusOK:
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
 
-	if suppressActivationEmail {
+	// Activation is only valid from STAGED; an adopted user past that point is already
+	// activated and Okta rejects a second attempt.
+	if suppressActivationEmail && user.Status == userStatusStaged {
 		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created but activation failed: %w", err)
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, err)
 		}
 		if activateResp != nil && activateResp.StatusCode != http.StatusOK {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created but activation returned non-200: %s", activateResp.Status)
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation returned non-200: %s", user.Id, activateResp.Status)
 		}
-		// ActivateUser returns a token, not the user.
-		user, _, err = r.connector.client.User.GetUser(ctx, user.Id)
+		// ActivateUser returns a token, not the user. The account is fully provisioned
+		// by now and this read only refreshes Status, so a failure here keeps the
+		// create payload rather than discarding a successful provision.
+		activated, _, err := r.connector.client.User.GetUser(ctx, user.Id)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user created and activated but fetch failed: %w", err)
+			ctxzap.Extract(ctx).Debug("okta-connectorv2: activated user could not be re-read; returning the created user",
+				zap.String("user_id", user.Id),
+				zap.Error(err),
+			)
+		} else {
+			user = activated
 		}
 	}
 
@@ -452,11 +467,39 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	car := &v2.CreateAccountResponse_SuccessResult{
-		Resource: userResource,
+
+	if alreadyExists {
+		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: userResource}, nil, nil, nil
 	}
 
-	return car, nil, nil, nil
+	return &v2.CreateAccountResponse_SuccessResult{Resource: userResource}, nil, nil, nil
+}
+
+// applyProviderCredentials attaches the federated authentication provider to the
+// credentials sent to Okta. Federated users are mastered by an external IdP, so they
+// cannot also carry an Okta password.
+func applyProviderCredentials(
+	creds *okta.UserCredentials,
+	providerType string,
+	credentialOptions *v2.LocalCredentialOptions,
+) (*okta.UserCredentials, error) {
+	if providerType != providerTypeFederation {
+		return creds, nil
+	}
+
+	if credentialOptions.GetRandomPassword() != nil {
+		return nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a random password credential option", profileFieldProviderType, providerTypeFederation)
+	}
+
+	if creds == nil {
+		creds = &okta.UserCredentials{}
+	}
+	creds.Provider = &okta.AuthenticationProvider{
+		Type: providerTypeFederation,
+		Name: providerTypeFederation,
+	}
+
+	return creds, nil
 }
 
 func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.UserCredentials, error) {
@@ -565,26 +608,25 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 		// absent = default true
 	}
 
+	// Validated on every credential path so an invalid value is never silently
+	// dropped, but only applied where Okta sets a password.
+	requirePasswordChanged := false
+	switch v := pMap[profileFieldPasswordChangeOnLoginRequired].(type) {
+	case bool:
+		requirePasswordChanged = v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
+		}
+		requirePasswordChanged = parsed
+	case nil:
+		// absent = default false
+	}
+
 	if createInactive {
 		params.Activate = ToPtr(false)
 		return params, false, nil
-	}
-
-	// random-password path: respect password_change_on_login_required
-	requirePasswordChanged := false
-	if credentialOptions.GetRandomPassword() != nil {
-		switch v := pMap[profileFieldPasswordChangeOnLoginRequired].(type) {
-		case bool:
-			requirePasswordChanged = v
-		case string:
-			parsed, err := strconv.ParseBool(v)
-			if err != nil {
-				return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
-			}
-			requirePasswordChanged = parsed
-		case nil:
-			// absent = default false
-		}
 	}
 
 	// Suppressing the activation email uses the staged-create + activate(sendEmail=false)
@@ -599,7 +641,7 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 		return params, true, nil
 	}
 
-	if requirePasswordChanged {
+	if requirePasswordChanged && credentialOptions.GetRandomPassword() != nil {
 		params.NextLogin = "changePassword"
 		params.Activate = ToPtr(true)
 	}
