@@ -17,11 +17,13 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -81,7 +83,7 @@ func (o *userResourceType) List(
 		if !shouldInclude {
 			continue
 		}
-		resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+		resource, err := userResource(user, o.connector.skipSecondaryEmails)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -110,7 +112,7 @@ func extractEmailsFromUserProfile(user *okta.User) []string {
 	oktaProfile := *user.Profile
 
 	// Extract primary email
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	if email, ok := oktaProfile[profileFieldEmail].(string); ok && email != "" {
 		userEmails = append(userEmails, email)
 	}
 
@@ -146,7 +148,7 @@ func extractEmailsFromAppUserProfile(appUser *okta.AppUser) []string {
 	}
 
 	// Extract primary email
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	if email, ok := oktaProfile[profileFieldEmail].(string); ok && email != "" {
 		userEmails = append(userEmails, email)
 	}
 
@@ -200,11 +202,11 @@ func (o *userResourceType) Grants(
 func userName(user *okta.User) (string, string) {
 	profile := *user.Profile
 
-	firstName, ok := profile["firstName"].(string)
+	firstName, ok := profile[oktaAttrFirstName].(string)
 	if !ok {
 		firstName = unknownProfileValue
 	}
-	lastName, ok := profile["lastName"].(string)
+	lastName, ok := profile[oktaAttrLastName].(string)
 	if !ok {
 		lastName = unknownProfileValue
 	}
@@ -263,7 +265,7 @@ func userBuilder(connector *Okta) *userResourceType {
 }
 
 // Create a new connector resource for a okta user.
-func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
+func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
 	firstName, lastName := userName(user)
 
 	oktaProfile := *user.Profile
@@ -291,7 +293,7 @@ func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool
 		options = append(options, resource.WithLastLogin(*user.LastLogin))
 	}
 
-	if email, ok := oktaProfile["email"].(string); ok && email != "" {
+	if email, ok := oktaProfile[profileFieldEmail].(string); ok && email != "" {
 		options = append(options, resource.WithEmail(email, true))
 	}
 	if secondEmail, ok := oktaProfile["secondEmail"].(string); ok && secondEmail != "" && !skipSecondaryEmails {
@@ -395,7 +397,17 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	params, err := getAccountCreationQueryParams(accountInfo, credentialOptions)
+	providerType, err := getProviderType(accountInfo)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	creds, err = applyProviderCredentials(creds, providerType, credentialOptions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	params, suppressActivationEmail, err := getAccountCreationQueryParams(accountInfo, credentialOptions, providerType)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -408,22 +420,96 @@ func (r *userResourceType) CreateAccount(
 		},
 		Credentials: creds,
 	}, params)
-	if err != nil {
+
+	// An earlier suppressed-activation attempt can leave the user created but not yet
+	// activated. Adopt only that stranded STAGED account so a retry converges; any other
+	// duplicate login is a genuine collision and must surface as an error.
+	alreadyExists := false
+	switch {
+	case isDuplicateLoginError(err):
+		login, ok := (*userProfile)[profileFieldLogin].(string)
+		if !ok || login == "" {
+			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, "okta-connectorv2: login already exists but is unusable for lookup", err)
+		}
+		existing, _, getErr := r.connector.client.User.GetUser(ctx, login)
+		if getErr != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, getErr)
+		}
+		// Only a prior suppressed-activation attempt of ours can leave a STAGED user behind.
+		// Anything else is a genuine collision with an account we did not create, so it has
+		// to reach a human as AlreadyExists rather than be silently adopted.
+		if !suppressActivationEmail || existing.Status != userStatusStaged {
+			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, fmt.Sprintf("okta-connectorv2: login %s already exists on user %s with status %s", login, existing.Id, existing.Status), err)
+		}
+		user = existing
+		alreadyExists = true
+	case err != nil:
 		return nil, nil, nil, err
-	}
-	if response != nil && response.StatusCode != http.StatusOK {
+	case response != nil && response.StatusCode != http.StatusOK:
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
 
-	userResource, err := userResource(ctx, user, r.connector.skipSecondaryEmails)
+	// Activation is only valid from STAGED; an adopted user past that point is already
+	// activated and Okta rejects a second attempt.
+	if suppressActivationEmail && user.Status == userStatusStaged {
+		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, err)
+		}
+		if activateResp != nil && activateResp.StatusCode != http.StatusOK {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation returned non-200: %s", user.Id, activateResp.Status)
+		}
+		// ActivateUser returns a token, not the user. The account is fully provisioned
+		// by now and this read only refreshes Status, so a failure here keeps the
+		// create payload rather than discarding a successful provision.
+		activated, _, err := r.connector.client.User.GetUser(ctx, user.Id)
+		if err != nil {
+			ctxzap.Extract(ctx).Debug("okta-connectorv2: activated user could not be re-read; returning the created user",
+				zap.String("user_id", user.Id),
+				zap.Error(err),
+			)
+		} else {
+			user = activated
+		}
+	}
+
+	userResource, err := userResource(user, r.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	car := &v2.CreateAccountResponse_SuccessResult{
-		Resource: userResource,
+
+	if alreadyExists {
+		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: userResource}, nil, nil, nil
 	}
 
-	return car, nil, nil, nil
+	return &v2.CreateAccountResponse_SuccessResult{Resource: userResource}, nil, nil, nil
+}
+
+// applyProviderCredentials attaches the federated authentication provider to the
+// credentials sent to Okta. Federated users are mastered by an external IdP, so they
+// cannot also carry an Okta password.
+func applyProviderCredentials(
+	creds *okta.UserCredentials,
+	providerType string,
+	credentialOptions *v2.LocalCredentialOptions,
+) (*okta.UserCredentials, error) {
+	if providerType != providerTypeFederation {
+		return creds, nil
+	}
+
+	if credentialOptions.GetRandomPassword() != nil {
+		return nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a random password credential option", profileFieldProviderType, providerTypeFederation)
+	}
+
+	if creds == nil {
+		creds = &okta.UserCredentials{}
+	}
+	creds.Provider = &okta.AuthenticationProvider{
+		Type: providerTypeFederation,
+		Name: providerTypeFederation,
+	}
+
+	return creds, nil
 }
 
 func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.UserCredentials, error) {
@@ -452,17 +538,17 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 
 func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	pMap := accountInfo.Profile.AsMap()
-	firstName, ok := pMap["first_name"]
+	firstName, ok := pMap[profileFieldFirstName]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing first name in account info")
 	}
 
-	lastName, ok := pMap["last_name"]
+	lastName, ok := pMap[profileFieldLastName]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing last name in account info")
 	}
 
-	email, ok := pMap["email"]
+	email, ok := pMap[profileFieldEmail]
 	if !ok {
 		return nil, fmt.Errorf("okta-connectorv2: missing email in account info")
 	}
@@ -473,9 +559,9 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	}
 
 	profile := &okta.UserProfile{
-		"firstName":       firstName,
-		"lastName":        lastName,
-		"email":           email,
+		oktaAttrFirstName: firstName,
+		oktaAttrLastName:  lastName,
+		profileFieldEmail: email,
 		profileFieldLogin: login,
 	}
 
@@ -491,52 +577,107 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	return profile, nil
 }
 
-func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions) (*query.Params, error) {
+// getAccountCreationQueryParams builds Create User query params and whether a
+// follow-up ActivateUser(sendEmail=false) is required.
+func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions, providerType string) (*query.Params, bool, error) {
 	pMap := accountInfo.Profile.AsMap()
 	params := &query.Params{}
 
+	// Without provider=true Okta ignores credentials.provider.
+	if providerType == providerTypeFederation {
+		params.Provider = true
+	}
+
 	// create_inactive applies regardless of credential type
-	createInactive := false
-	switch v := pMap[profileFieldCreateInactive].(type) {
+	createInactive, err := parseBoolProfileField(pMap, profileFieldCreateInactive, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// send_activation_email defaults to true to preserve existing behavior
+	sendActivationEmail, err := parseBoolProfileField(pMap, profileFieldSendActivationEmail, true)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Validated on every credential path so an invalid value is never silently
+	// dropped, but only applied where Okta sets a password.
+	requirePasswordChanged, err := parseBoolProfileField(pMap, profileFieldPasswordChangeOnLoginRequired, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// create_inactive wins over send_activation_email / password_change_on_login_required:
+	// the user stays staged and no activation follow-up runs.
+	if createInactive {
+		params.Activate = ToPtr(false)
+		return params, false, nil
+	}
+
+	// nextLogin=changePassword is only applied on the random-password path, so the
+	// conflict with send_activation_email=false is only real there. On no-password,
+	// password_change_on_login_required remains inert (pre-existing behavior).
+	if !sendActivationEmail && requirePasswordChanged && credentialOptions.GetRandomPassword() != nil {
+		return nil, false, fmt.Errorf("okta-connectorv2: %s=false cannot be combined with %s=true", profileFieldSendActivationEmail, profileFieldPasswordChangeOnLoginRequired)
+	}
+
+	if !sendActivationEmail {
+		// Stage the user so no activation email is sent; the caller activates with sendEmail=false.
+		params.Activate = ToPtr(false)
+		return params, true, nil
+	}
+
+	if requirePasswordChanged && credentialOptions.GetRandomPassword() != nil {
+		params.NextLogin = "changePassword"
+		params.Activate = ToPtr(true)
+	}
+
+	return params, false, nil
+}
+
+// parseBoolProfileField reads a boolean account-creation field that C1 may send as a
+// bool or as its string form. Only an absent or null key falls back to defaultValue; a
+// key that is present with any other type is rejected, because silently defaulting
+// send_activation_email back to true would send the email the operator asked to suppress.
+func parseBoolProfileField(pMap map[string]any, key string, defaultValue bool) (bool, error) {
+	raw, present := pMap[key]
+	if !present || raw == nil {
+		return defaultValue, nil
+	}
+
+	switch v := raw.(type) {
 	case bool:
-		createInactive = v
+		return v, nil
 	case string:
 		parsed, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldCreateInactive, err)
+			return false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", key, err)
 		}
-		createInactive = parsed
-	case nil:
-		// absent = default false, activate=true is Okta's default
+		return parsed, nil
+	default:
+		return false, fmt.Errorf("okta-connectorv2: %s must be a boolean or its string form, got %T", key, raw)
+	}
+}
+
+// getProviderType returns "" (Okta default), OKTA, or FEDERATION from the profile.
+func getProviderType(accountInfo *v2.AccountInfo) (string, error) {
+	raw, ok := accountInfo.Profile.AsMap()[profileFieldProviderType]
+	if !ok || raw == nil {
+		return "", nil
 	}
 
-	if createInactive {
-		params.Activate = ToPtr(false)
-		return params, nil
+	providerType, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("okta-connectorv2: %s must be a string", profileFieldProviderType)
 	}
 
-	// random-password path: respect password_change_on_login_required
-	if credentialOptions.GetRandomPassword() != nil {
-		requirePasswordChanged := false
-		switch v := pMap[profileFieldPasswordChangeOnLoginRequired].(type) {
-		case bool:
-			requirePasswordChanged = v
-		case string:
-			parsed, err := strconv.ParseBool(v)
-			if err != nil {
-				return nil, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
-			}
-			requirePasswordChanged = parsed
-		case nil:
-			// absent = default false
-		}
-		if requirePasswordChanged {
-			params.NextLogin = "changePassword"
-			params.Activate = ToPtr(true)
-		}
+	providerType = strings.ToUpper(strings.TrimSpace(providerType))
+	switch providerType {
+	case "", providerTypeOkta, providerTypeFederation:
+		return providerType, nil
+	default:
+		return "", fmt.Errorf("okta-connectorv2: unsupported %s value %q (supported: %q, %q)", profileFieldProviderType, providerType, providerTypeOkta, providerTypeFederation)
 	}
-
-	return params, nil
 }
 
 func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
@@ -566,7 +707,7 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 		return nil, annos, nil
 	}
 
-	resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+	resource, err := userResource(user, o.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, annos, err
 	}

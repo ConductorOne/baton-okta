@@ -101,7 +101,7 @@ func TestRoleResourceTypeGrants(t *testing.T) {
 		resourceType: resourceTypeRole,
 		connector:    cliTest,
 	}
-	rs, err := getRoleResourceForTesting(ctxTest, "READ_ONLY_ADMIN", "test", "")
+	rs, err := getRoleResourceForTesting("READ_ONLY_ADMIN", "test", "")
 	require.Nil(t, err)
 
 	for token != empty {
@@ -137,7 +137,7 @@ func TestRoleResourceTypeGrant(t *testing.T) {
 	require.NotNil(t, data)
 
 	roleEntitlement = data[2]
-	resource, err := getRoleResourceForTesting(ctxTest, data[1], "Read-Only Administrator", "")
+	resource, err := getRoleResourceForTesting(data[1], "Read-Only Administrator", "")
 	require.Nil(t, err)
 
 	entitlement := getEntitlementForTesting(resource, grantPrincipalType, roleEntitlement)
@@ -167,7 +167,7 @@ func TestResourcSetRevoke(t *testing.T) {
 
 	// resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697
 	principalID := &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: "cr0kuwv5507zJCtSy697"}
-	resource, err := getResourceSetForTesting(ctxTest, "iamkuwy3gqcfNexfQ697", "resourceset_local", "resourceset_local Resource Set Binding ")
+	resource, err := getResourceSetForTesting("iamkuwy3gqcfNexfQ697", "resourceset_local", "resourceset_local Resource Set Binding ")
 	require.Nil(t, err)
 
 	gr := grant.NewGrant(resource, bindingEntitlement, principalID)
@@ -249,7 +249,7 @@ func TestResourceSetGrants(t *testing.T) {
 		clientV5:     cliTest.clientV5,
 	}
 
-	rs, err := getResourceSetForTesting(ctxTest, "iamju0t17k506Mo3x697", "test", "")
+	rs, err := getResourceSetForTesting("iamju0t17k506Mo3x697", "test", "")
 	require.Nil(t, err)
 
 	grants, _, err := o.Grants(ctxTest, rs, sdkResource.SyncOpAttrs{
@@ -277,7 +277,7 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 		clientV5:     cliTest.clientV5,
 	}
 
-	rs, err := getResourceSetBindingsResourceForTesting(ctxTest, "iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
+	rs, err := getResourceSetBindingsResourceForTesting("iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
 	require.Nil(t, err)
 
 	grants, _, err := o.Grants(ctxTest, rs, sdkResource.SyncOpAttrs{
@@ -299,7 +299,7 @@ func TestListResourceSetsBindings(t *testing.T) {
 	require.Nil(t, err)
 
 	resourceSetId := "iamju0t17k506Mo3x697"
-	res, _, err := listBindings(ctxTest, cliTest.client, resourceSetId, nil)
+	res, _, err := listBindings(ctxTest, cliTest.client, resourceSetId)
 	require.Nil(t, err)
 	require.NotNil(t, res)
 }
@@ -327,7 +327,7 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 	require.NotNil(t, data)
 
 	entitlementName = data[3]
-	resource, err := getResourceSetBindingsResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
+	resource, err := getResourceSetBindingsResourceForTesting(data[1]+":"+data[2], "", "")
 	require.Nil(t, err)
 
 	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
@@ -369,7 +369,7 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 	require.NotNil(t, data)
 
 	entitlementName = data[3]
-	resource, err := getResourceSetBindingsResourceForTesting(ctxTest, data[1]+":"+data[2], "", "")
+	resource, err := getResourceSetBindingsResourceForTesting(data[1]+":"+data[2], "", "")
 	require.Nil(t, err)
 
 	entitlement := getEntitlementForTesting(resource, resourceTypeResourceSetsBindings.Id, entitlementName)
@@ -418,24 +418,24 @@ func parseBindingEntitlementID(id string) (*v2.ResourceId, []string, error) {
 	return resourceId, parts, nil
 }
 
-func getRoleResourceForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
-	return roleResource(ctxTest, &okta.Role{
+func getRoleResourceForTesting(id, label, ctype string) (*v2.Resource, error) {
+	return roleResource(&okta.Role{
 		Id:    id,
 		Label: label,
 		Type:  ctype,
 	}, resourceTypeRole)
 }
 
-func getResourceSetBindingsResourceForTesting(ctxTest context.Context, id, label, description string) (*v2.Resource, error) {
-	return resourceSetsBindingsResource(ctxTest, &ResourceSets{
+func getResourceSetBindingsResourceForTesting(id, label, description string) (*v2.Resource, error) {
+	return resourceSetsBindingsResource(&ResourceSets{
 		ID:          id,
 		Label:       label,
 		Description: description,
 	}, nil)
 }
 
-func getResourceSetForTesting(ctxTest context.Context, id, label, ctype string) (*v2.Resource, error) {
-	return resourceSetsResource(ctxTest, &ResourceSets{
+func getResourceSetForTesting(id, label, ctype string) (*v2.Resource, error) {
+	return resourceSetsResource(&ResourceSets{
 		ID:          id,
 		Label:       label,
 		Description: ctype,

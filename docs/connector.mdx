@@ -41,6 +41,22 @@ The Okta connector supports [automatic account provisioning](/product/admin/acco
 
 This connector does not support account deprovisioning. You must deprovision accounts directly in Okta.
 
+#### Account creation profile fields
+
+When you configure account provisioning for Okta, C1 shows the following optional fields on the account creation form (in addition to first name, last name, email, and login):
+
+| Field | Values | Default | What it does |
+| :--- | :--- | :--- | :--- |
+| **Password Change Required on Login** | `True` / `False` | Off | When creating an account with a random password, requires the user to change that password on first login. |
+| **Create Inactive** | `True` / `False` | Off | Creates the user in Okta as staged (inactive) without activating them. |
+| **Send Activation Email** | Toggle | On | When turned off, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
+| **Provider Type** | `OKTA` / `FEDERATION` | Okta's default (local) provider | Set to `FEDERATION` to create a federated user with no local Okta password. Common in hub-and-spoke / Org2Org designs where the hub IdP owns credentials. |
+| **Additional Attributes** | Map of Okta profile keys | — | Extra Okta profile attributes (standard or custom schema) to set on the user. |
+
+<Note>
+**Provider Type** `FEDERATION` cannot be combined with a random-password credential option (federated users have no Okta password). **Send Activation Email** `False` cannot be combined with **Password Change Required on Login** `True` when creating with a random password (that combination cannot set Okta's change-password-on-login flag). With a no-password credential option, Password Change Required on Login has no effect and does not conflict. If **Create Inactive** is `True`, the connector leaves the user staged and does not run the activation step — Create Inactive takes precedence over Send Activation Email.
+</Note>
+
 Syncing standard and custom admin roles requires a super admin token. 
 
 [This connector can sync secrets](/product/admin/inventory) and display them on the **Inventory** page. 

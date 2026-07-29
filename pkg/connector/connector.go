@@ -84,7 +84,7 @@ var (
 	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          userResourceTypeID,
-		DisplayName: "User",
+		DisplayName: userResourceTypeDisplayName,
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: v1AnnotationsForResourceType(userResourceTypeID, true, capabilityPermissions("okta.users.read", "okta.users.manage")),
 	}
@@ -200,7 +200,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 		Annotations: annos,
 		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
 			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
-				"first_name": {
+				profileFieldFirstName: {
 					DisplayName: "First Name",
 					Required:    true,
 					Description: "This first name will be used for the user.",
@@ -210,7 +210,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "First name",
 					Order:       1,
 				},
-				"last_name": {
+				profileFieldLastName: {
 					DisplayName: "Last Name",
 					Required:    true,
 					Description: "This last name will be used for the user.",
@@ -220,7 +220,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "Last name",
 					Order:       2,
 				},
-				"email": {
+				profileFieldEmail: {
 					DisplayName: "Email",
 					Required:    true,
 					Description: "This will be the email of the user. If login is unset this is also the login.",
@@ -240,14 +240,14 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Placeholder: "Login",
 					Order:       4,
 				},
-				"password_change_on_login_required": {
+				profileFieldPasswordChangeOnLoginRequired: {
 					DisplayName: "Password Change Required on Login",
 					Required:    false,
 					Description: "When creating accounts with a random password setting this to 'true' will require the user to change their password on first login.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
-					Placeholder: "True/False",
+					Placeholder: placeholderBoolean,
 					Order:       5,
 				},
 				profileFieldCreateInactive: {
@@ -257,8 +257,29 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
-					Placeholder: "True/False",
+					Placeholder: placeholderBoolean,
 					Order:       6,
+				},
+				profileFieldSendActivationEmail: {
+					DisplayName: "Send Activation Email",
+					Required:    false,
+					Description: "When set to 'false', the Okta activation email is suppressed by creating the user staged and activating without sending an email. Defaults to 'true'.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_BoolField{
+						BoolField: &v2.ConnectorAccountCreationSchema_BoolField{
+							DefaultValue: ToPtr(true),
+						},
+					},
+					Order: 7,
+				},
+				profileFieldProviderType: {
+					DisplayName: "Provider Type",
+					Required:    false,
+					Description: "The authentication provider type for the user. Set to 'FEDERATION' to create a federated user (no Okta password). Defaults to 'OKTA'.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: providerTypeOkta,
+					Order:       8,
 				},
 				profileFieldAdditionalAttributes: {
 					DisplayName: "Additional Attributes",
@@ -267,7 +288,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Field: &v2.ConnectorAccountCreationSchema_Field_MapField{
 						MapField: &v2.ConnectorAccountCreationSchema_MapField{},
 					},
-					Order: 7,
+					Order: 9,
 				},
 			},
 		},
@@ -522,7 +543,7 @@ func (o *Okta) getBatchUserRolesFromCache(ctx context.Context, ss sessions.Sessi
 	// Convert all role sets to mapset.Sets.
 	result := make(map[string]mapset.Set[string], len(rolesMap))
 	for userId, roleSlice := range rolesMap {
-		result[userId] = mapset.NewSet[string](roleSlice...)
+		result[userId] = mapset.NewSet(roleSlice...)
 	}
 
 	return result, nil

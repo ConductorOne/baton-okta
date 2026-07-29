@@ -1,7 +1,8 @@
 package connector
 
 import (
-	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -28,7 +29,7 @@ func TestUserResource_HasV1Identifier(t *testing.T) {
 		Profile: &profile,
 	}
 
-	got, err := userResource(context.Background(), user, false)
+	got, err := userResource(user, false)
 	if err != nil {
 		t.Fatalf("userResource returned error: %v", err)
 	}
@@ -330,12 +331,15 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 	}.Build()
 
 	tests := []struct {
-		name        string
-		profile     map[string]interface{}
-		creds       *v2.LocalCredentialOptions
-		wantActivate *bool   // nil means we don't care / field should be unset
-		wantNextLogin string  // empty means field should be unset
-		wantErr     bool
+		name          string
+		profile       map[string]interface{}
+		creds         *v2.LocalCredentialOptions
+		providerType  string
+		wantActivate  *bool  // nil means we don't care / field should be unset
+		wantNextLogin string // empty means field should be unset
+		wantProvider  bool
+		wantSuppress  bool
+		wantErr       bool
 	}{
 		{
 			name:    "all defaults no-password",
@@ -364,8 +368,8 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 				"create_inactive":                   true,
 				"password_change_on_login_required": true,
 			},
-			creds:        randomPassword,
-			wantActivate: boolPtr(false),
+			creds:         randomPassword,
+			wantActivate:  boolPtr(false),
 			wantNextLogin: "",
 		},
 		{
@@ -397,6 +401,125 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			profile: map[string]interface{}{},
 			creds:   randomPassword,
 		},
+		{
+			name: "send_activation_email absent keeps default behavior",
+			profile: map[string]interface{}{
+				"send_activation_email": nil,
+			},
+			creds: noPassword,
+		},
+		{
+			name: "send_activation_email true explicit keeps default behavior",
+			profile: map[string]interface{}{
+				"send_activation_email": true,
+			},
+			creds: noPassword,
+		},
+		{
+			name: "send_activation_email false bool stages and suppresses",
+			profile: map[string]interface{}{
+				"send_activation_email": false,
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: true,
+		},
+		{
+			name: "send_activation_email false string stages and suppresses",
+			profile: map[string]interface{}{
+				"send_activation_email": "false",
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: true,
+		},
+		{
+			name: "create_inactive wins over send_activation_email false",
+			profile: map[string]interface{}{
+				"create_inactive":       true,
+				"send_activation_email": false,
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: false,
+		},
+		{
+			name: "send_activation_email invalid string",
+			profile: map[string]interface{}{
+				"send_activation_email": "nope",
+			},
+			creds:   noPassword,
+			wantErr: true,
+		},
+		{
+			name: "send_activation_email false conflicts with password_change",
+			profile: map[string]interface{}{
+				"send_activation_email":             false,
+				"password_change_on_login_required": true,
+			},
+			creds:   randomPassword,
+			wantErr: true,
+		},
+		{
+			name: "send_activation_email false ignores inert password_change for no-password",
+			profile: map[string]interface{}{
+				"send_activation_email":             false,
+				"password_change_on_login_required": true,
+			},
+			creds:        noPassword,
+			wantActivate: boolPtr(false),
+			wantSuppress: true,
+		},
+		{
+			name: "password_change_on_login_required invalid string with random-password",
+			profile: map[string]interface{}{
+				"password_change_on_login_required": "nope",
+			},
+			creds:   randomPassword,
+			wantErr: true,
+		},
+		{
+			name: "password_change_on_login_required invalid string for no-password",
+			profile: map[string]interface{}{
+				"password_change_on_login_required": "nope",
+			},
+			creds:   noPassword,
+			wantErr: true,
+		},
+		{
+			name: "password_change_on_login_required invalid string with create_inactive",
+			profile: map[string]interface{}{
+				"create_inactive":                   true,
+				"password_change_on_login_required": "nope",
+			},
+			creds:   randomPassword,
+			wantErr: true,
+		},
+		{
+			name:         "federation provider sets provider query param",
+			profile:      map[string]interface{}{},
+			creds:        noPassword,
+			providerType: providerTypeFederation,
+			wantProvider: true,
+		},
+		{
+			name:         "okta provider does not set provider query param",
+			profile:      map[string]interface{}{},
+			creds:        noPassword,
+			providerType: providerTypeOkta,
+			wantProvider: false,
+		},
+		{
+			name: "federation provider with send_activation_email false stages and sets provider",
+			profile: map[string]interface{}{
+				"send_activation_email": false,
+			},
+			creds:        noPassword,
+			providerType: providerTypeFederation,
+			wantActivate: boolPtr(false),
+			wantProvider: true,
+			wantSuppress: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -407,7 +530,7 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			}
 			accountInfo := &v2.AccountInfo{Profile: s}
 
-			got, err := getAccountCreationQueryParams(accountInfo, tt.creds)
+			got, suppress, err := getAccountCreationQueryParams(accountInfo, tt.creds, tt.providerType)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -435,6 +558,312 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			// Check NextLogin
 			if got != nil && got.NextLogin != tt.wantNextLogin {
 				t.Errorf("NextLogin = %q, want %q", got.NextLogin, tt.wantNextLogin)
+			}
+
+			// Check Provider query param
+			gotProvider := false
+			if got != nil {
+				if b, ok := got.Provider.(bool); ok {
+					gotProvider = b
+				}
+			}
+			if gotProvider != tt.wantProvider {
+				t.Errorf("Provider = %v, want %v", gotProvider, tt.wantProvider)
+			}
+
+			if suppress != tt.wantSuppress {
+				t.Errorf("suppress = %v, want %v", suppress, tt.wantSuppress)
+			}
+		})
+	}
+}
+
+func TestParseBoolProfileField(t *testing.T) {
+	t.Parallel()
+
+	const key = "flag"
+
+	tests := []struct {
+		name         string
+		pMap         map[string]any
+		defaultValue bool
+		want         bool
+		wantErr      bool
+	}{
+		{name: "absent returns default true", pMap: map[string]any{}, defaultValue: true, want: true},
+		{name: "absent returns default false", pMap: map[string]any{}, defaultValue: false, want: false},
+		{name: "nil returns default", pMap: map[string]any{key: nil}, defaultValue: true, want: true},
+		{name: "bool true", pMap: map[string]any{key: true}, defaultValue: false, want: true},
+		{name: "bool false overrides default true", pMap: map[string]any{key: false}, defaultValue: true, want: false},
+		{name: "string false overrides default true", pMap: map[string]any{key: "false"}, defaultValue: true, want: false},
+		{name: "string True", pMap: map[string]any{key: "True"}, defaultValue: false, want: true},
+		{name: "invalid string errors", pMap: map[string]any{key: "nope"}, defaultValue: true, wantErr: true},
+		{name: "present with unsupported type errors instead of defaulting", pMap: map[string]any{key: float64(1)}, defaultValue: true, wantErr: true},
+		{name: "present as list errors", pMap: map[string]any{key: []any{true}}, defaultValue: false, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseBoolProfileField(tt.pMap, key, tt.defaultValue)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("parseBoolProfileField() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderType(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile map[string]interface{}
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "absent defaults to empty",
+			profile: map[string]interface{}{},
+			want:    "",
+		},
+		{
+			name: "explicit nil defaults to empty",
+			profile: map[string]interface{}{
+				"provider_type": nil,
+			},
+			want: "",
+		},
+		{
+			name: "okta uppercase",
+			profile: map[string]interface{}{
+				"provider_type": "OKTA",
+			},
+			want: providerTypeOkta,
+		},
+		{
+			name: "federation lowercase normalized",
+			profile: map[string]interface{}{
+				"provider_type": "federation",
+			},
+			want: providerTypeFederation,
+		},
+		{
+			name: "federation with surrounding whitespace",
+			profile: map[string]interface{}{
+				"provider_type": "  FEDERATION  ",
+			},
+			want: providerTypeFederation,
+		},
+		{
+			name: "unsupported value rejected",
+			profile: map[string]interface{}{
+				"provider_type": "SOCIAL",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := structpb.NewStruct(tt.profile)
+			if err != nil {
+				t.Fatalf("structpb.NewStruct: %v", err)
+			}
+			accountInfo := &v2.AccountInfo{Profile: s}
+
+			got, err := getProviderType(accountInfo)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("getProviderType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestApplyProviderCredentials(t *testing.T) {
+	noPassword := v2.LocalCredentialOptions_builder{
+		NoPassword: &v2.LocalCredentialOptions_NoPassword{},
+	}.Build()
+
+	randomPassword := v2.LocalCredentialOptions_builder{
+		RandomPassword: &v2.LocalCredentialOptions_RandomPassword{Length: 12},
+	}.Build()
+
+	tests := []struct {
+		name         string
+		creds        *okta.UserCredentials
+		providerType string
+		credentials  *v2.LocalCredentialOptions
+		wantProvider bool
+		wantNilCreds bool
+		wantErr      bool
+	}{
+		{
+			name:         "no provider type leaves credentials untouched",
+			creds:        nil,
+			providerType: "",
+			credentials:  noPassword,
+			wantNilCreds: true,
+		},
+		{
+			name:         "okta provider type leaves credentials untouched",
+			creds:        &okta.UserCredentials{Password: &okta.PasswordCredential{Value: "secret"}},
+			providerType: providerTypeOkta,
+			credentials:  randomPassword,
+		},
+		{
+			name:         "federation allocates credentials when none exist",
+			creds:        nil,
+			providerType: providerTypeFederation,
+			credentials:  noPassword,
+			wantProvider: true,
+		},
+		{
+			name:         "federation sets provider on existing credentials",
+			creds:        &okta.UserCredentials{},
+			providerType: providerTypeFederation,
+			credentials:  noPassword,
+			wantProvider: true,
+		},
+		{
+			name:         "federation rejects random password",
+			creds:        &okta.UserCredentials{Password: &okta.PasswordCredential{Value: "secret"}},
+			providerType: providerTypeFederation,
+			credentials:  randomPassword,
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := applyProviderCredentials(tt.creds, tt.providerType, tt.credentials)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.wantNilCreds {
+				if got != nil {
+					t.Fatalf("credentials = %+v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("credentials are nil, want non-nil")
+			}
+
+			if !tt.wantProvider {
+				if got.Provider != nil {
+					t.Errorf("Provider = %+v, want nil", got.Provider)
+				}
+				return
+			}
+			if got.Provider == nil {
+				t.Fatal("Provider is nil, want FEDERATION")
+			}
+			if got.Provider.Type != providerTypeFederation {
+				t.Errorf("Provider.Type = %q, want %q", got.Provider.Type, providerTypeFederation)
+			}
+			if got.Provider.Name != providerTypeFederation {
+				t.Errorf("Provider.Name = %q, want %q", got.Provider.Name, providerTypeFederation)
+			}
+		})
+	}
+}
+
+func TestIsDuplicateLoginError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+		},
+		{
+			name: "not an okta error",
+			err:  errors.New("boom"),
+		},
+		{
+			name: "duplicate login",
+			err: &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "login: An object with this field already exists in the current organization"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "duplicate login wrapped",
+			err: fmt.Errorf("create user: %w", &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "login: An object with this field already exists in the current organization"},
+				},
+			}),
+			want: true,
+		},
+		{
+			name: "validation failure on another field is not a duplicate login",
+			err: &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "email: Does not match required pattern"},
+				},
+			},
+		},
+		{
+			name: "duplicate on another field is not a duplicate login",
+			err: &okta.Error{
+				ErrorCode: apiValidationFailedErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "employeeNumber: An object with this field already exists in the current organization"},
+				},
+			},
+		},
+		{
+			name: "validation failure with no causes",
+			err:  &okta.Error{ErrorCode: apiValidationFailedErrorCode},
+		},
+		{
+			name: "different error code",
+			err: &okta.Error{
+				ErrorCode: ResourceNotFoundExceptionErrorCode,
+				ErrorCauses: []map[string]interface{}{
+					{"errorSummary": "login: An object with this field already exists in the current organization"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isDuplicateLoginError(tt.err); got != tt.want {
+				t.Errorf("isDuplicateLoginError() = %v, want %v", got, tt.want)
 			}
 		})
 	}
