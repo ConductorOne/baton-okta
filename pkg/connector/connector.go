@@ -264,11 +264,12 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					DisplayName: "Send Activation Email",
 					Required:    false,
 					Description: "When set to 'false', the Okta activation email is suppressed by creating the user staged and activating without sending an email. Defaults to 'true'.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					Field: &v2.ConnectorAccountCreationSchema_Field_BoolField{
+						BoolField: &v2.ConnectorAccountCreationSchema_BoolField{
+							DefaultValue: ToPtr(true),
+						},
 					},
-					Placeholder: placeholderBoolean,
-					Order:       7,
+					Order: 7,
 				},
 				profileFieldProviderType: {
 					DisplayName: "Provider Type",
@@ -277,7 +278,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
-					Placeholder: "OKTA/FEDERATION",
+					Placeholder: providerTypeFederation,
 					Order:       8,
 				},
 				profileFieldAdditionalAttributes: {
@@ -542,7 +543,7 @@ func (o *Okta) getBatchUserRolesFromCache(ctx context.Context, ss sessions.Sessi
 	// Convert all role sets to mapset.Sets.
 	result := make(map[string]mapset.Set[string], len(rolesMap))
 	for userId, roleSlice := range rolesMap {
-		result[userId] = mapset.NewSet[string](roleSlice...)
+		result[userId] = mapset.NewSet(roleSlice...)
 	}
 
 	return result, nil

@@ -74,7 +74,7 @@ func TestAppResource_NHIType(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &okta.Application{Id: appID, Label: "Test App", Status: "ACTIVE", SignOnMode: tc.signOnMode}
-			resource, err := appResource(context.Background(), app)
+			resource, err := appResource(app)
 			if err != nil {
 				t.Fatalf("appResource returned error: %v", err)
 			}

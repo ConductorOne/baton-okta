@@ -16,7 +16,6 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
 
@@ -86,7 +85,7 @@ func (o *customRoleResourceType) Entitlements(
 
 // listGroupAssignedRoles. List all group role assignments
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentBGroup/#tag/RoleAssignmentBGroup/operation/listGroupAssignedRoles
-func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId string, qp *query.Params) ([]*Roles, *okta.Response, error) {
+func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId string) ([]*Roles, *okta.Response, error) {
 	apiPath, err := url.JoinPath(groupsUrl, groupId, "roles")
 	if err != nil {
 		return nil, nil, err
@@ -250,7 +249,7 @@ func (o *customRoleResourceType) listCustomRoles(
 
 	rv := make([]*v2.Resource, 0)
 	for _, role := range roles {
-		resource, err := roleResource(ctx, role, resourceTypeCustomRole)
+		resource, err := roleResource(role, resourceTypeCustomRole)
 		if err != nil {
 			return nil, "", annos, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 		}
@@ -279,7 +278,7 @@ func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.Resourc
 		}
 	}
 
-	resource, err := roleResource(ctx, role, resourceTypeCustomRole)
+	resource, err := roleResource(role, resourceTypeCustomRole)
 	if err != nil {
 		return nil, annos, err
 	}

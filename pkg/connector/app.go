@@ -83,7 +83,7 @@ func (o *appResourceType) List(
 	}
 
 	for _, app := range apps {
-		resource, err := appResource(ctx, app)
+		resource, err := appResource(app)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -260,7 +260,7 @@ func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, t
 		return nil, nil, err
 	}
 
-	applications, err := oktaAppsToOktaApplications(ctx, apps)
+	applications, err := oktaAppsToOktaApplications(apps)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta apps to applications: %w", err)
 	}
@@ -296,7 +296,7 @@ func listApplicationUsers(ctx context.Context, client *okta.Client, appID string
 	return applicationUsers, reqCtx, nil
 }
 
-func oktaAppsToOktaApplications(ctx context.Context, apps []okta.App) ([]*okta.Application, error) {
+func oktaAppsToOktaApplications(apps []okta.App) ([]*okta.Application, error) {
 	var applications []*okta.Application
 	for _, iapp := range apps {
 		var oktaApp okta.Application
@@ -316,7 +316,7 @@ func oktaAppsToOktaApplications(ctx context.Context, apps []okta.App) ([]*okta.A
 	return applications, nil
 }
 
-func oktaAppToOktaApplication(ctx context.Context, app okta.App) (*okta.Application, error) {
+func oktaAppToOktaApplication(app okta.App) (*okta.Application, error) {
 	var oktaApp okta.Application
 	b, err := json.Marshal(app)
 	if err != nil {
@@ -356,7 +356,7 @@ func nhiAppDetail(signOnMode string) (string, bool) {
 	return "okta.app." + strings.ToLower(signOnMode), true
 }
 
-func appResource(ctx context.Context, app *okta.Application) (*v2.Resource, error) {
+func appResource(app *okta.Application) (*v2.Resource, error) {
 	appProfile := map[string]interface{}{
 		"status": app.Status,
 	}
@@ -617,7 +617,7 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 		return nil, annos, nil
 	}
 
-	resource, err := appResource(ctx, app)
+	resource, err := appResource(app)
 	if err != nil {
 		return nil, annos, err
 	}
@@ -633,7 +633,7 @@ func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Appli
 
 	reqCtx := &responseContext{OktaResponse: resp}
 
-	oktaApp, err := oktaAppToOktaApplication(ctx, app)
+	oktaApp, err := oktaAppToOktaApplication(app)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta app to application: %w", err)
 	}

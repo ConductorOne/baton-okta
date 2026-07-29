@@ -1,7 +1,6 @@
 package connector
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -30,7 +29,7 @@ func TestUserResource_HasV1Identifier(t *testing.T) {
 		Profile: &profile,
 	}
 
-	got, err := userResource(context.Background(), user, false)
+	got, err := userResource(user, false)
 	if err != nil {
 		t.Fatalf("userResource returned error: %v", err)
 	}
@@ -574,6 +573,50 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 
 			if suppress != tt.wantSuppress {
 				t.Errorf("suppress = %v, want %v", suppress, tt.wantSuppress)
+			}
+		})
+	}
+}
+
+func TestParseBoolProfileField(t *testing.T) {
+	t.Parallel()
+
+	const key = "flag"
+
+	tests := []struct {
+		name         string
+		pMap         map[string]any
+		defaultValue bool
+		want         bool
+		wantErr      bool
+	}{
+		{name: "absent returns default true", pMap: map[string]any{}, defaultValue: true, want: true},
+		{name: "absent returns default false", pMap: map[string]any{}, defaultValue: false, want: false},
+		{name: "nil returns default", pMap: map[string]any{key: nil}, defaultValue: true, want: true},
+		{name: "bool true", pMap: map[string]any{key: true}, defaultValue: false, want: true},
+		{name: "bool false overrides default true", pMap: map[string]any{key: false}, defaultValue: true, want: false},
+		{name: "string false overrides default true", pMap: map[string]any{key: "false"}, defaultValue: true, want: false},
+		{name: "string True", pMap: map[string]any{key: "True"}, defaultValue: false, want: true},
+		{name: "invalid string errors", pMap: map[string]any{key: "nope"}, defaultValue: true, wantErr: true},
+		{name: "unsupported type returns default", pMap: map[string]any{key: float64(1)}, defaultValue: true, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseBoolProfileField(tt.pMap, key, tt.defaultValue)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("parseBoolProfileField() = %v, want %v", got, tt.want)
 			}
 		})
 	}

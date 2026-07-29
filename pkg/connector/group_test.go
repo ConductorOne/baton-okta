@@ -1,7 +1,6 @@
 package connector
 
 import (
-	"context"
 	"testing"
 
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -23,7 +22,6 @@ func TestGroupResource_TypeProfileKey(t *testing.T) {
 	}
 
 	o := &groupResourceType{}
-	ctx := context.Background()
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -36,7 +34,7 @@ func TestGroupResource_TypeProfileKey(t *testing.T) {
 				},
 			}
 
-			resource, err := o.groupResource(ctx, group)
+			resource, err := o.groupResource(group)
 			if err != nil {
 				t.Fatalf("groupResource returned error: %v", err)
 			}

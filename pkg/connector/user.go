@@ -17,11 +17,13 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -81,7 +83,7 @@ func (o *userResourceType) List(
 		if !shouldInclude {
 			continue
 		}
-		resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+		resource, err := userResource(user, o.connector.skipSecondaryEmails)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -263,7 +265,7 @@ func userBuilder(connector *Okta) *userResourceType {
 }
 
 // Create a new connector resource for a okta user.
-func userResource(ctx context.Context, user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
+func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
 	firstName, lastName := userName(user)
 
 	oktaProfile := *user.Profile
@@ -427,16 +429,17 @@ func (r *userResourceType) CreateAccount(
 	case isDuplicateLoginError(err):
 		login, ok := (*userProfile)[profileFieldLogin].(string)
 		if !ok || login == "" {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login already exists but is unusable for lookup: %w", err)
+			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, "okta-connectorv2: login already exists but is unusable for lookup", err)
 		}
 		existing, _, getErr := r.connector.client.User.GetUser(ctx, login)
 		if getErr != nil {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, getErr)
 		}
 		// Only a prior suppressed-activation attempt of ours can leave a STAGED user behind.
-		// Anything else is a genuine collision with an account we did not create.
+		// Anything else is a genuine collision with an account we did not create, so it has
+		// to reach a human as AlreadyExists rather than be silently adopted.
 		if !suppressActivationEmail || existing.Status != userStatusStaged {
-			return nil, nil, nil, err
+			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, fmt.Sprintf("okta-connectorv2: login %s already exists on user %s with status %s", login, existing.Id, existing.Status), err)
 		}
 		user = existing
 		alreadyExists = true
@@ -470,7 +473,7 @@ func (r *userResourceType) CreateAccount(
 		}
 	}
 
-	userResource, err := userResource(ctx, user, r.connector.skipSecondaryEmails)
+	userResource, err := userResource(user, r.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -586,49 +589,22 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	}
 
 	// create_inactive applies regardless of credential type
-	createInactive := false
-	switch v := pMap[profileFieldCreateInactive].(type) {
-	case bool:
-		createInactive = v
-	case string:
-		parsed, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldCreateInactive, err)
-		}
-		createInactive = parsed
-	case nil:
-		// absent = default false, activate=true is Okta's default
+	createInactive, err := parseBoolProfileField(pMap, profileFieldCreateInactive, false)
+	if err != nil {
+		return nil, false, err
 	}
 
 	// send_activation_email defaults to true to preserve existing behavior
-	sendActivationEmail := true
-	switch v := pMap[profileFieldSendActivationEmail].(type) {
-	case bool:
-		sendActivationEmail = v
-	case string:
-		parsed, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldSendActivationEmail, err)
-		}
-		sendActivationEmail = parsed
-	case nil:
-		// absent = default true
+	sendActivationEmail, err := parseBoolProfileField(pMap, profileFieldSendActivationEmail, true)
+	if err != nil {
+		return nil, false, err
 	}
 
 	// Validated on every credential path so an invalid value is never silently
 	// dropped, but only applied where Okta sets a password.
-	requirePasswordChanged := false
-	switch v := pMap[profileFieldPasswordChangeOnLoginRequired].(type) {
-	case bool:
-		requirePasswordChanged = v
-	case string:
-		parsed, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", profileFieldPasswordChangeOnLoginRequired, err)
-		}
-		requirePasswordChanged = parsed
-	case nil:
-		// absent = default false
+	requirePasswordChanged, err := parseBoolProfileField(pMap, profileFieldPasswordChangeOnLoginRequired, false)
+	if err != nil {
+		return nil, false, err
 	}
 
 	// create_inactive wins over send_activation_email / password_change_on_login_required:
@@ -657,6 +633,23 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	}
 
 	return params, false, nil
+}
+
+// parseBoolProfileField reads a boolean account-creation field that C1 may send as a
+// bool or as its string form, returning defaultValue when the key is absent.
+func parseBoolProfileField(pMap map[string]any, key string, defaultValue bool) (bool, error) {
+	switch v := pMap[key].(type) {
+	case bool:
+		return v, nil
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return false, fmt.Errorf("okta-connectorv2: invalid value for %s: %w", key, err)
+		}
+		return parsed, nil
+	default:
+		return defaultValue, nil
+	}
 }
 
 // getProviderType returns "" (Okta default), OKTA, or FEDERATION from the profile.
@@ -707,7 +700,7 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 		return nil, annos, nil
 	}
 
-	resource, err := userResource(ctx, user, o.connector.skipSecondaryEmails)
+	resource, err := userResource(user, o.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, annos, err
 	}

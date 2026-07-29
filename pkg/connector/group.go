@@ -76,7 +76,7 @@ func (o *groupResourceType) List(
 			l.Debug("okta-connectorv2: skipping APP_GROUP type group", zap.String("group_id", group.Id))
 			continue
 		}
-		resource, err := o.groupResource(ctx, group)
+		resource, err := o.groupResource(group)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -98,7 +98,7 @@ func (o *groupResourceType) Entitlements(
 	attrs sdkResource.SyncOpAttrs,
 ) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
-	rv = append(rv, o.groupEntitlement(ctx, resource))
+	rv = append(rv, o.groupEntitlement(resource))
 
 	return rv, nil, nil
 }
@@ -178,7 +178,7 @@ func (o *groupResourceType) Grants(
 
 		return rv, &sdkResource.SyncOpResults{NextPageToken: pageToken, Annotations: annos}, nil
 	case resourceTypeRole.Id:
-		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID, nil)
+		roles, resp, err := listGroupAssignedRoles(ctx, o.connector.client, groupID)
 		if err != nil {
 			if resp == nil {
 				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
@@ -216,12 +216,12 @@ func (o *groupResourceType) Grants(
 			// TODO(lauren) convert model helper
 			var roleResourceVal *v2.Resource
 			if role.Type == roleTypeCustom {
-				roleResourceVal, err = roleResource(ctx, &okta.Role{
+				roleResourceVal, err = roleResource(&okta.Role{
 					Id:    role.Role,
 					Label: role.Label,
 				}, resourceTypeCustomRole)
 			} else {
-				roleResourceVal, err = roleResource(ctx, &okta.Role{
+				roleResourceVal, err = roleResource(&okta.Role{
 					Id:    role.Role,
 					Label: role.Label,
 					Type:  role.Type,
@@ -326,7 +326,7 @@ func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, 
 	return users, reqCtx, nil
 }
 
-func (o *groupResourceType) groupResource(ctx context.Context, group *okta.Group) (*v2.Resource, error) {
+func (o *groupResourceType) groupResource(group *okta.Group) (*v2.Resource, error) {
 	traitOpts := []sdkResource.GroupTraitOption{
 		sdkResource.WithGroupSourceType(sdkResource.GroupSourceType(mapOktaGroupSourceType(group.Type))),
 		sdkResource.WithRawGroupSourceType(group.Type),
@@ -420,7 +420,7 @@ func getGroupAppsCount(group *okta.Group) (float64, bool) {
 	return getGroupStat(group, "appsCount")
 }
 
-func (o *groupResourceType) groupEntitlement(ctx context.Context, resource *v2.Resource) *v2.Entitlement {
+func (o *groupResourceType) groupEntitlement(resource *v2.Resource) *v2.Entitlement {
 	return sdkEntitlement.NewAssignmentEntitlement(resource, "member",
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 			Id: V1MembershipEntitlementID(resource.Id.GetResource()),
@@ -514,7 +514,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		}
 	}
 
-	resource, err := o.groupResource(ctx, group)
+	resource, err := o.groupResource(group)
 	if err != nil {
 		return nil, annos, err
 	}
@@ -628,7 +628,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 	// Check if anything actually changed (idempotency)
 	if profile.Name == existingGroup.Profile.Name && profile.Description == existingGroup.Profile.Description {
 		l.Debug("okta-connectorv2: group already has requested values, no update needed", zap.String("groupId", groupId))
-		resource, err := o.groupResource(ctx, existingGroup)
+		resource, err := o.groupResource(existingGroup)
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connectorv2: failed to build group resource: %w", err)
 		}
@@ -655,7 +655,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 
 	l.Info("updated Okta group", zap.String("groupId", updatedGroup.Id), zap.String(profileFieldName, profile.Name))
 
-	resource, err := o.groupResource(ctx, updatedGroup)
+	resource, err := o.groupResource(updatedGroup)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: group updated but failed to build resource: %w", err)
 	}
@@ -762,7 +762,7 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 		}
 	}
 
-	resource, err := o.groupResource(ctx, createdGroup)
+	resource, err := o.groupResource(createdGroup)
 	if err != nil {
 		l.Error("failed to build group resource after creation", zap.Error(err))
 		return nil, nil, fmt.Errorf("okta-connectorv2: group created but failed to build resource: %w", err)

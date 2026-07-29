@@ -49,7 +49,7 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 | :--- | :--- | :--- | :--- |
 | **Password Change Required on Login** | `True` / `False` | Off | When creating an account with a random password, requires the user to change that password on first login. |
 | **Create Inactive** | `True` / `False` | Off | Creates the user in Okta as staged (inactive) without activating them. |
-| **Send Activation Email** | `True` / `False` | `True` | When set to `False`, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
+| **Send Activation Email** | Toggle | On | When turned off, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
 | **Provider Type** | `OKTA` / `FEDERATION` | Okta's default (local) provider | Set to `FEDERATION` to create a federated user with no local Okta password. Common in hub-and-spoke / Org2Org designs where the hub IdP owns credentials. |
 | **Additional Attributes** | Map of Okta profile keys | — | Extra Okta profile attributes (standard or custom schema) to set on the user. |
 

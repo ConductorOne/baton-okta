@@ -70,7 +70,7 @@ Account creation is driven by `AccountCreationSchema` in `pkg/connector/connecto
 | `login` | no | email | Okta `profile.login` |
 | `password_change_on_login_required` | no | false | Sets `nextLogin=changePassword` when using random password |
 | `create_inactive` | no | false | `activate=false`; skips activation follow-up |
-| `send_activation_email` | no | true | When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
+| `send_activation_email` | no | true | Schema `BoolField` (accepts a bool or its string form). When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
 | `provider_type` | no | empty (Okta default local provider) | `OKTA` or `FEDERATION` (case-insensitive). `FEDERATION` sets `credentials.provider` + query `provider=true` |
 | `additionalAttributes` | no | — | Map merged into Okta profile; cannot override protected keys |
 

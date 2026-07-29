@@ -60,7 +60,6 @@ type RoleAssignments struct {
 }
 
 const (
-	apiPathListAdministrators              = "/api/internal/administrators"
 	apiPathListIamCustomRoles              = "/api/v1/iam/roles"
 	apiPathListAllUsersWithRoleAssignments = "/api/v1/iam/assignees/users"
 	ContentType                            = "application/json"
@@ -86,7 +85,7 @@ func (o *roleResourceType) List(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	rv, err = o.listSystemRoles(ctx, resourceID, token)
+	rv, err = o.listSystemRoles(resourceID, token)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list system roles: %w", err)
 	}
@@ -256,13 +255,12 @@ func (o *roleResourceType) Grants(
 }
 
 func (o *roleResourceType) listSystemRoles(
-	ctx context.Context,
 	_ *v2.ResourceId,
 	_ *pagination.Token,
 ) ([]*v2.Resource, error) {
 	rv := make([]*v2.Resource, 0, len(standardRoleTypes))
 	for _, role := range standardRoleTypes {
-		resource, err := roleResource(ctx, role, resourceTypeRole)
+		resource, err := roleResource(role, resourceTypeRole)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connectorv2: failed to create role resource: %w", err)
 		}
@@ -374,7 +372,7 @@ func StandardRoleTypeFromLabel(label string) *okta.Role {
 	return nil
 }
 
-func roleResource(ctx context.Context, role *okta.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
+func roleResource(role *okta.Role, ctype *v2.ResourceType) (*v2.Resource, error) {
 	var objectID = role.Type
 	if role.Type == "" && role.Id != "" {
 		objectID = role.Id
@@ -618,7 +616,7 @@ func (o *roleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 
 	for _, role := range standardRoleTypes {
 		if role.Type == resourceId.Resource {
-			resource, err := roleResource(ctx, role, resourceTypeRole)
+			resource, err := roleResource(role, resourceTypeRole)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -86,7 +86,7 @@ With `--provisioning` enabled, the connector supports:
 
 ### Account creation profile fields
 
-Optional keys in the account creation profile (see [docs/docs-info.md](docs/docs-info.md) for wire-level detail):
+Optional keys in the account creation profile (see [docs/connector.mdx](docs/connector.mdx) for field semantics and [docs/docs-info.md](docs/docs-info.md) for wire-level detail):
 
 | Key | Values | Notes |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ Example (federated user, no activation email):
 
 ```
 BATON_API_TOKEN='…' BATON_DOMAIN='domain-1234.okta.com' baton-okta --provisioning \
-  --create-account-profile '{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com","login":"ada@example.com","provider_type":"FEDERATION","send_activation_email":"false"}' \
+  --create-account-profile '{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com","login":"ada@example.com","provider_type":"FEDERATION","send_activation_email":false}' \
   --create-account-resource-type user
 ```
 
@@ -139,7 +139,7 @@ Revoking everything associated to a custom role (deletes the role's binding):
 
 ```
 BATON_API_TOKEN='oktaAPIToken' BATON_DOMAIN='domain-1234.okta.com' baton-okta \
-resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697
+--revoke-grant 'resource-set:iamkuwy3gqcfNexfQ697:bindings:custom-role:cr0kuwv5507zJCtSy697'
 ```
 
 # Documentation

@@ -40,7 +40,7 @@ func (rs *resourceSetsResourceType) ResourceType(ctx context.Context) *v2.Resour
 	return rs.resourceType
 }
 
-func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+func resourceSetsResource(rs *ResourceSets, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":                    rs.ID,
 		profileFieldLabel:       rs.Label,
@@ -57,7 +57,7 @@ func resourceSetsResource(ctx context.Context, rs *ResourceSets, parentResourceI
 	)
 }
 
-func resourceSetResource(ctx context.Context, rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+func resourceSetResource(rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":                    *rs.Id,
 		profileFieldLabel:       *rs.Label,
@@ -131,7 +131,7 @@ func (rs *resourceSetsResourceType) List(ctx context.Context, parentResourceID *
 	}
 
 	for _, resourceSet := range resourceSets {
-		resource, err := resourceSetsResource(ctx, &resourceSet, nil)
+		resource, err := resourceSetsResource(&resourceSet, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connectorv2: failed to create resource-sets: %w", err)
 		}
@@ -168,7 +168,6 @@ func listBindings(
 	ctx context.Context,
 	client *okta.Client,
 	resourceSetId string,
-	_ *query.Params,
 ) ([]Role, *okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
 	if err != nil {
@@ -203,7 +202,7 @@ func doRequest(ctx context.Context, url, httpMethod string, res interface{}, cli
 
 // deleteBinding. Delete a Role Resource Set Binding
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
-func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceSetId, roleId string, qp *query.Params) (*okta.Response, error) {
+func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceSetId, roleId string) (*okta.Response, error) {
 	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", roleId)
 	if err != nil {
 		return nil, err
@@ -225,14 +224,12 @@ func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceS
 func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
 	pToken := &attrs.PageToken
 	var rv []*v2.Grant
-	bag, page, err := parsePageToken(pToken.Token, resource.Id)
+	bag, _, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	qp := queryParams(pToken.Size, page)
-
-	roles, respCtx, err := listBindings(ctx, rs.client, resource.Id.Resource, qp)
+	roles, respCtx, err := listBindings(ctx, rs.client, resource.Id.Resource)
 	if err != nil {
 		return nil, nil, convertNotFoundError(err, "resource set not found")
 	}
@@ -286,7 +283,7 @@ func (rs *resourceSetsResourceType) Revoke(ctx context.Context, grant *v2.Grant)
 
 	resourceSetId := entitlement.Resource.Id.Resource
 	customRoleId := principal.Id.Resource
-	response, err := rs.deleteBinding(ctx, resourceSetId, customRoleId, nil)
+	response, err := rs.deleteBinding(ctx, resourceSetId, customRoleId)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to remove roles: %s", err.Error())
 	}
@@ -309,7 +306,7 @@ func (rs *resourceSetsResourceType) Get(ctx context.Context, resourceId *v2.Reso
 		return nil, nil, err
 	}
 
-	resource, err := resourceSetResource(ctx, resourceSet, parentResourceId)
+	resource, err := resourceSetResource(resourceSet, parentResourceId)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create resource-set: %w", err)
 	}

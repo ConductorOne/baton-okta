@@ -27,6 +27,11 @@ const (
 	userResourceTypeDisplayName = "User"
 )
 
+// oktaLogTargetTypeUser is the target type Okta uses on LogEvent objects. It happens to
+// match the resource type's display name, but it is a wire value, so renaming the display
+// name must not silently change the event-feed lookups.
+const oktaLogTargetTypeUser = "User"
+
 const (
 	profileFieldCreateInactive                = "create_inactive"
 	profileFieldAdditionalAttributes          = "additionalAttributes"
