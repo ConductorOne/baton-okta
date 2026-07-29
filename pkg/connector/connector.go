@@ -278,7 +278,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
-					Placeholder: providerTypeFederation,
+					Placeholder: providerTypeOkta,
 					Order:       8,
 				},
 				profileFieldAdditionalAttributes: {

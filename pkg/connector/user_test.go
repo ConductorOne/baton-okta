@@ -598,7 +598,8 @@ func TestParseBoolProfileField(t *testing.T) {
 		{name: "string false overrides default true", pMap: map[string]any{key: "false"}, defaultValue: true, want: false},
 		{name: "string True", pMap: map[string]any{key: "True"}, defaultValue: false, want: true},
 		{name: "invalid string errors", pMap: map[string]any{key: "nope"}, defaultValue: true, wantErr: true},
-		{name: "unsupported type returns default", pMap: map[string]any{key: float64(1)}, defaultValue: true, want: true},
+		{name: "present with unsupported type errors instead of defaulting", pMap: map[string]any{key: float64(1)}, defaultValue: true, wantErr: true},
+		{name: "present as list errors", pMap: map[string]any{key: []any{true}}, defaultValue: false, wantErr: true},
 	}
 
 	for _, tt := range tests {

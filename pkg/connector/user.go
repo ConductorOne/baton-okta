@@ -636,9 +636,16 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 }
 
 // parseBoolProfileField reads a boolean account-creation field that C1 may send as a
-// bool or as its string form, returning defaultValue when the key is absent.
+// bool or as its string form. Only an absent or null key falls back to defaultValue; a
+// key that is present with any other type is rejected, because silently defaulting
+// send_activation_email back to true would send the email the operator asked to suppress.
 func parseBoolProfileField(pMap map[string]any, key string, defaultValue bool) (bool, error) {
-	switch v := pMap[key].(type) {
+	raw, present := pMap[key]
+	if !present || raw == nil {
+		return defaultValue, nil
+	}
+
+	switch v := raw.(type) {
 	case bool:
 		return v, nil
 	case string:
@@ -648,7 +655,7 @@ func parseBoolProfileField(pMap map[string]any, key string, defaultValue bool) (
 		}
 		return parsed, nil
 	default:
-		return defaultValue, nil
+		return false, fmt.Errorf("okta-connectorv2: %s must be a boolean or its string form, got %T", key, raw)
 	}
 }
 
