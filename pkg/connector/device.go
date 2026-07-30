@@ -101,8 +101,7 @@ func (o *deviceResourceType) List(
 	return ret, &resource.SyncOpResults{NextPageToken: nextPageToken, Annotations: annos}, nil
 }
 
-// devicePlatformOSType maps Okta's device profile platform value to a DeviceOS_OsType.
-// Unmapped values (unknown platform) leave the type unset rather than guessing.
+// devicePlatformOSType leaves the type unset (rather than guessing) for a platform value it doesn't recognize.
 func devicePlatformOSType(platform string) v2.DeviceOS_OsType {
 	switch platform {
 	case "WINDOWS":
