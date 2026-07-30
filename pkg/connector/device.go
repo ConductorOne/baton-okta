@@ -9,6 +9,9 @@ import (
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 )
 
+// deviceListLimit is Okta's enforced maximum for the devices list endpoint's `limit` param.
+const deviceListLimit = 200
+
 type deviceResourceType struct {
 	resourceType *v2.ResourceType
 	clientV5     *oktav5.APIClient
@@ -48,7 +51,11 @@ func (o *deviceResourceType) List(
 	var resp *oktav5.APIResponse
 
 	if prevSerializedResp == "" {
-		devices, resp, err = o.clientV5.DeviceAPI.ListDevices(ctx).Execute()
+		limit := token.Size
+		if limit <= 0 || limit > deviceListLimit {
+			limit = deviceListLimit
+		}
+		devices, resp, err = o.clientV5.DeviceAPI.ListDevices(ctx).Limit(int32(limit)).Execute()
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to list devices: %w", err)
 		}
@@ -94,6 +101,25 @@ func (o *deviceResourceType) List(
 	return ret, &resource.SyncOpResults{NextPageToken: nextPageToken, Annotations: annos}, nil
 }
 
+// devicePlatformOSType maps Okta's device profile platform value to a DeviceOS_OsType.
+// Unmapped values (unknown platform) leave the type unset rather than guessing.
+func devicePlatformOSType(platform string) v2.DeviceOS_OsType {
+	switch platform {
+	case "WINDOWS":
+		return v2.DeviceOS_OS_TYPE_WINDOWS
+	case "MACOS":
+		return v2.DeviceOS_OS_TYPE_MACOS
+	case "IOS":
+		return v2.DeviceOS_OS_TYPE_IOS
+	case "ANDROID":
+		return v2.DeviceOS_OS_TYPE_ANDROID
+	case "CHROMEOS":
+		return v2.DeviceOS_OS_TYPE_CHROMEOS
+	default:
+		return v2.DeviceOS_OS_TYPE_UNSPECIFIED
+	}
+}
+
 func deviceResource(device *oktav5.DeviceList) (*v2.Resource, error) {
 	deviceID := device.GetId()
 
@@ -110,6 +136,7 @@ func deviceResource(device *oktav5.DeviceList) (*v2.Resource, error) {
 			resource.WithManagedDeviceModel(profile.GetModel()),
 			resource.WithManagedDeviceVendor(profile.GetManufacturer()),
 			resource.WithManagedDeviceOS(&v2.DeviceOS{
+				Type:    devicePlatformOSType(profile.GetPlatform()),
 				Name:    profile.GetPlatform(),
 				Version: profile.GetOsVersion(),
 			}),

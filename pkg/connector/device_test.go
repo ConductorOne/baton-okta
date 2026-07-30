@@ -62,6 +62,29 @@ func TestDeviceResource_WithProfile(t *testing.T) {
 	if trait.GetOs().GetVersion() != "14.5.0" {
 		t.Errorf("Os.Version = %q, want %q", trait.GetOs().GetVersion(), "14.5.0")
 	}
+	if trait.GetOs().GetType() != v2.DeviceOS_OS_TYPE_MACOS {
+		t.Errorf("Os.Type = %v, want %v", trait.GetOs().GetType(), v2.DeviceOS_OS_TYPE_MACOS)
+	}
+}
+
+func TestDevicePlatformOSType(t *testing.T) {
+	tests := []struct {
+		platform string
+		want     v2.DeviceOS_OsType
+	}{
+		{"WINDOWS", v2.DeviceOS_OS_TYPE_WINDOWS},
+		{"MACOS", v2.DeviceOS_OS_TYPE_MACOS},
+		{"IOS", v2.DeviceOS_OS_TYPE_IOS},
+		{"ANDROID", v2.DeviceOS_OS_TYPE_ANDROID},
+		{"CHROMEOS", v2.DeviceOS_OS_TYPE_CHROMEOS},
+		{"SOMETHING_NEW", v2.DeviceOS_OS_TYPE_UNSPECIFIED},
+		{"", v2.DeviceOS_OS_TYPE_UNSPECIFIED},
+	}
+	for _, tt := range tests {
+		if got := devicePlatformOSType(tt.platform); got != tt.want {
+			t.Errorf("devicePlatformOSType(%q) = %v, want %v", tt.platform, got, tt.want)
+		}
+	}
 }
 
 func TestDeviceResource_NoProfile(t *testing.T) {
