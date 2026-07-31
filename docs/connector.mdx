@@ -23,6 +23,10 @@ sidebarTitle: "Okta"
 | Devices | <Icon icon="square-check" iconType="solid"  color="#c937ae"/> |  |  |
 
 <Note>
+**Devices is opt-in.** This resource type is off by default. Enable it by selecting the **Device** resource type in the connector's sync configuration. Devices are synced read-only; the connector does not manage device-to-user assignments.
+</Note>
+
+<Note>
 The standard roles **Workflows Administrator**, **Access Certifications Administrator**, and **Access Requests Administrator** appear as Custom Roles in C1. Enable **Sync Custom Roles** to see them. The Okta API returns these roles through the same endpoint as custom roles.
 </Note>
 
@@ -276,7 +280,7 @@ Navigate to the **Okta API Scopes** tab and grant the scopes required for your u
    - `okta.roles.read` and `okta.apps.read` (required for sync)
    - `okta.users.manage`, `okta.groups.manage`, `okta.roles.manage`, `okta.apps.manage` (required for provisioning)
    - `okta.apiTokens.read` (required when **Sync secrets** is enabled)
-   - `okta.devices.read` (required when **Sync devices** is enabled)
+   - `okta.devices.read` (required when the **Device** resource type is enabled)
 
 <Note>
 After clicking **Grant** for each scope, refresh the page and visually verify that all granted scopes appear under "Granted scopes." Okta's API Services app config can silently discard incomplete saves. If scopes are missing, the connector will fail with `"You are not allowed any of the requested scopes"`.
@@ -375,9 +379,6 @@ Enter your credentials:
 **Optional.** Enable **Sync secrets** to display them on the [Inventory page](/product/admin/inventory).
 </Step>
 <Step>
-**Optional.** If desired, click the checkbox to **Sync devices** to include Okta devices in sync. This is off by default. Devices are synced read-only; the connector does not manage device assignments.
-</Step>
-<Step>
 **Optional.** Enter a list of user email domains that will be included in the connector's sync. If you do not specify any domains here, the connector will sync all available accounts regardless of email domain.
 </Step>
 <Step>
@@ -468,9 +469,6 @@ stringData:
 
   # Optional: include inactive (disabled) Okta applications in sync
   # BATON_SYNC_INACTIVE_APPS: true
-
-  # Optional: sync Okta devices (off by default)
-  # BATON_SYNC_DEVICES: true
 ```
 
 See the connector's README or run `--help` to see all available configuration flags and environment variables.

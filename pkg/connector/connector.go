@@ -20,6 +20,7 @@ import (
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
+	"google.golang.org/protobuf/proto"
 )
 
 // TODO: use isNotFoundError() since E0000008 is also a not found error
@@ -39,8 +40,8 @@ type Okta struct {
 	skipSecondaryEmails bool
 	skipAppGroups       bool
 	SyncSecrets         bool
-	SyncDevices         bool
 	userFilters         *userFilterConfig
+	opts                *cli.ConnectorOpts
 }
 
 type userFilterConfig struct {
@@ -55,7 +56,7 @@ func capabilityPermissions(perms ...string) *v2.CapabilityPermissions {
 	return cp
 }
 
-func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool, perms *v2.CapabilityPermissions) annotations.Annotations {
+func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool, perms *v2.CapabilityPermissions, extra ...proto.Message) annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Update(&v2.V1Identifier{
 		Id: resourceTypeID,
@@ -66,6 +67,7 @@ func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGran
 	}
 
 	annos.Update(perms)
+	annos.Append(extra...)
 
 	return annos
 }
@@ -121,7 +123,7 @@ var (
 		Id:          "device",
 		DisplayName: "Device",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_MANAGED_DEVICE},
-		Annotations: v1AnnotationsForResourceType("device", true, capabilityPermissions("okta.devices.read")),
+		Annotations: v1AnnotationsForResourceType("device", true, capabilityPermissions("okta.devices.read"), &v2.OptInRequired{}),
 	}
 	defaultScopes = []string{
 		"okta.users.read",
@@ -138,6 +140,18 @@ var (
 
 	// TODO (santhosh) Add required scopes for secrets sync
 )
+
+// shouldSyncDevices reports whether the opt-in device syncer should be registered
+// for this run. Metadata generation (nil opts) always advertises it so
+// baton_capabilities.json carries opt_in_required: true. A real sync registers it
+// only when the resource-type filter explicitly names it, so an empty filter
+// ("sync everything") leaves devices off by default.
+func (o *Okta) shouldSyncDevices() bool {
+	if o.opts == nil {
+		return true
+	}
+	return o.opts.SyncFilterIsExplicit() && o.opts.WillSyncResourceType(resourceTypeDevice.Id)
+}
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
@@ -166,7 +180,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		resourceSyncer = append(resourceSyncer, apiTokenBuilder(o.clientV5))
 	}
 
-	if o.SyncDevices {
+	if o.shouldSyncDevices() {
 		resourceSyncer = append(resourceSyncer, deviceBuilder(o.clientV5))
 	}
 
@@ -189,7 +203,7 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 		resourceTypes = append(resourceTypes, resourceTypeApiToken)
 	}
 
-	if c.SyncDevices {
+	if c.shouldSyncDevices() {
 		resourceTypes = append(resourceTypes, resourceTypeDevice)
 	}
 
@@ -409,7 +423,10 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
-		if cc.SyncDevices {
+		// Okta rejects the whole token request with invalid_scope if the OAuth app
+		// hasn't been granted okta.devices.read, so only request it when this run is
+		// actually opted into device sync.
+		if opts != nil && opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeDevice.Id) {
 			scopes = append(scopes, "okta.devices.read")
 		}
 
@@ -464,7 +481,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		skipAppGroups:       cc.SkipAppGroups,
 		SyncSecrets:         cc.SyncSecrets,
-		SyncDevices:         cc.SyncDevices,
+		opts:                opts,
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 		},

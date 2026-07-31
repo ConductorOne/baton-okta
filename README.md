@@ -74,7 +74,7 @@ By default, `baton-okta` will sync information for inactive applications. You ca
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 
-Devices are only synced when `--sync-devices` is provided (opt-in, default `false`). Device sync is read-only; the connector does not manage device-to-user assignments.
+Devices are an opt-in resource type: enable the **Device** resource type in the connector's sync configuration to include it. Device sync is read-only; the connector does not manage device-to-user assignments.
 
 We have also introduced resourceset-bindings (resourcesetID and custom roles ID) for provisioning custom roles and members.
 
@@ -206,7 +206,6 @@ Flags:
       --skip-secondary-emails                            Whether to skip syncing secondary emails or not ($BATON_SKIP_SECONDARY_EMAILS)
       --storage-engine string                            The storage engine to use when opening the sync c1z file: sqlite or pebble. Leave unset to use the baton-sdk default. ($BATON_STORAGE_ENGINE)
       --sync-custom-roles                                Whether to enable syncing custom roles or not ($BATON_SYNC_CUSTOM_ROLES)
-      --sync-devices                                     Whether to sync devices or not ($BATON_SYNC_DEVICES)
       --sync-inactive-apps                               Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
       --sync-resource-types strings                      The resource type IDs to sync ($BATON_SYNC_RESOURCE_TYPES)
       --sync-resources strings                           The resource IDs to sync ($BATON_SYNC_RESOURCES)

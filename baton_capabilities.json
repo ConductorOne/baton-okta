@@ -141,6 +141,9 @@
                 "permission": "okta.devices.read"
               }
             ]
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
           }
         ]
       },
@@ -153,7 +156,8 @@
             "permission": "okta.devices.read"
           }
         ]
-      }
+      },
+      "optInRequired": true
     },
     {
       "resourceType": {
