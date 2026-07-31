@@ -141,8 +141,7 @@ var (
 	// TODO (santhosh) Add required scopes for secrets sync
 )
 
-// nil opts means metadata generation, which must still advertise the type; a
-// real sync needs the filter to explicitly name it, so it's off by default.
+// nil opts means this is capabilities/metadata generation, not a real sync.
 func (o *Okta) shouldSyncDevices() bool {
 	if o.opts == nil {
 		return true
@@ -420,9 +419,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
-		// Requesting a scope the OAuth app hasn't been granted gets silently dropped
-		// from the token, which then 403s on the device endpoint, so only ask for it
-		// when this run actually opts into device sync.
+		// An ungranted scope silently drops from the token and only surfaces as a 403 on first use.
 		if opts != nil && opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeDevice.Id) {
 			scopes = append(scopes, "okta.devices.read")
 		}
