@@ -142,11 +142,15 @@ var (
 )
 
 // nil opts means this is capabilities/metadata generation, not a real sync.
-func (o *Okta) shouldSyncDevices() bool {
-	if o.opts == nil {
+func shouldSyncResourceType(opts *cli.ConnectorOpts, resourceTypeID string) bool {
+	if opts == nil {
 		return true
 	}
-	return o.opts.SyncFilterIsExplicit() && o.opts.WillSyncResourceType(resourceTypeDevice.Id)
+	return opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeID)
+}
+
+func (o *Okta) shouldSyncDevices() bool {
+	return shouldSyncResourceType(o.opts, resourceTypeDevice.Id)
 }
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
@@ -420,7 +424,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		}
 
 		// An ungranted scope silently drops from the token and only surfaces as a 403 on first use.
-		if opts != nil && opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeDevice.Id) {
+		if shouldSyncResourceType(opts, resourceTypeDevice.Id) {
 			scopes = append(scopes, "okta.devices.read")
 		}
 
