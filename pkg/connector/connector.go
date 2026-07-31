@@ -141,11 +141,8 @@ var (
 	// TODO (santhosh) Add required scopes for secrets sync
 )
 
-// shouldSyncDevices reports whether the opt-in device syncer should be registered
-// for this run. Metadata generation (nil opts) always advertises it so
-// baton_capabilities.json carries opt_in_required: true. A real sync registers it
-// only when the resource-type filter explicitly names it, so an empty filter
-// ("sync everything") leaves devices off by default.
+// nil opts means metadata generation, which must still advertise the type; a
+// real sync needs the filter to explicitly name it, so it's off by default.
 func (o *Okta) shouldSyncDevices() bool {
 	if o.opts == nil {
 		return true
@@ -423,9 +420,9 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
-		// Okta rejects the whole token request with invalid_scope if the OAuth app
-		// hasn't been granted okta.devices.read, so only request it when this run is
-		// actually opted into device sync.
+		// Requesting a scope the OAuth app hasn't been granted gets silently dropped
+		// from the token, which then 403s on the device endpoint, so only ask for it
+		// when this run actually opts into device sync.
 		if opts != nil && opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeDevice.Id) {
 			scopes = append(scopes, "okta.devices.read")
 		}
