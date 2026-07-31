@@ -149,10 +149,6 @@ func shouldSyncResourceType(opts *cli.ConnectorOpts, resourceTypeID string) bool
 	return opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeID)
 }
 
-func (o *Okta) shouldSyncDevices() bool {
-	return shouldSyncResourceType(o.opts, resourceTypeDevice.Id)
-}
-
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
 		roleBuilder(o.client, o),
@@ -180,7 +176,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		resourceSyncer = append(resourceSyncer, apiTokenBuilder(o.clientV5))
 	}
 
-	if o.shouldSyncDevices() {
+	if shouldSyncResourceType(o.opts, resourceTypeDevice.Id) {
 		resourceSyncer = append(resourceSyncer, deviceBuilder(o.clientV5))
 	}
 
@@ -203,7 +199,7 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 		resourceTypes = append(resourceTypes, resourceTypeApiToken)
 	}
 
-	if c.shouldSyncDevices() {
+	if shouldSyncResourceType(c.opts, resourceTypeDevice.Id) {
 		resourceTypes = append(resourceTypes, resourceTypeDevice)
 	}
 
