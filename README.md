@@ -68,10 +68,13 @@ baton resources
 - Custom-Roles
 - Resource-Sets
 - Resourceset-Bindings
+- Devices
 
 By default, `baton-okta` will sync information for inactive applications. You can exclude inactive applications setting the `--sync-inactive-apps` flag to `false`.
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
+
+Devices are an opt-in resource type: enable the **Device** resource type in the connector's sync configuration to include it. Device sync is read-only; the connector does not manage device-to-user assignments.
 
 We have also introduced resourceset-bindings (resourcesetID and custom roles ID) for provisioning custom roles and members.
 

@@ -20,6 +20,7 @@ import (
 	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
+	"google.golang.org/protobuf/proto"
 )
 
 // TODO: use isNotFoundError() since E0000008 is also a not found error
@@ -40,6 +41,7 @@ type Okta struct {
 	skipAppGroups       bool
 	SyncSecrets         bool
 	userFilters         *userFilterConfig
+	opts                *cli.ConnectorOpts
 }
 
 type userFilterConfig struct {
@@ -54,7 +56,7 @@ func capabilityPermissions(perms ...string) *v2.CapabilityPermissions {
 	return cp
 }
 
-func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool, perms *v2.CapabilityPermissions) annotations.Annotations {
+func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGrants bool, perms *v2.CapabilityPermissions, extra ...proto.Message) annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Update(&v2.V1Identifier{
 		Id: resourceTypeID,
@@ -65,6 +67,7 @@ func v1AnnotationsForResourceType(resourceTypeID string, skipEntitlementsAndGran
 	}
 
 	annos.Update(perms)
+	annos.Append(extra...)
 
 	return annos
 }
@@ -116,6 +119,12 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_SECRET},
 		Annotations: v1AnnotationsForResourceType("api-token", true, capabilityPermissions("okta.apiTokens.read")),
 	}
+	resourceTypeDevice = &v2.ResourceType{
+		Id:          "device",
+		DisplayName: "Device",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_MANAGED_DEVICE},
+		Annotations: v1AnnotationsForResourceType("device", true, capabilityPermissions("okta.devices.read"), &v2.OptInRequired{}),
+	}
 	defaultScopes = []string{
 		"okta.users.read",
 		"okta.groups.read",
@@ -131,6 +140,14 @@ var (
 
 	// TODO (santhosh) Add required scopes for secrets sync
 )
+
+// nil opts means this is capabilities/metadata generation, not a real sync.
+func shouldSyncResourceType(opts *cli.ConnectorOpts, resourceTypeID string) bool {
+	if opts == nil {
+		return true
+	}
+	return opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeID)
+}
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
@@ -159,6 +176,10 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		resourceSyncer = append(resourceSyncer, apiTokenBuilder(o.clientV5))
 	}
 
+	if shouldSyncResourceType(o.opts, resourceTypeDevice.Id) {
+		resourceSyncer = append(resourceSyncer, deviceBuilder(o.clientV5))
+	}
+
 	return resourceSyncer
 }
 
@@ -176,6 +197,10 @@ func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesS
 
 	if c.SyncSecrets {
 		resourceTypes = append(resourceTypes, resourceTypeApiToken)
+	}
+
+	if shouldSyncResourceType(c.opts, resourceTypeDevice.Id) {
+		resourceTypes = append(resourceTypes, resourceTypeDevice)
 	}
 
 	return &v2.ResourceTypesServiceListResourceTypesResponse{
@@ -394,6 +419,11 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			scopes = append(scopes, "okta.apiTokens.read")
 		}
 
+		// An ungranted scope silently drops from the token and only surfaces as a 403 on first use.
+		if shouldSyncResourceType(opts, resourceTypeDevice.Id) {
+			scopes = append(scopes, "okta.devices.read")
+		}
+
 		dpopClient, err := oktaauth.NewDPoPHTTPClient(ctx, oktaauth.Config{
 			Domain:        cc.Domain,
 			ClientID:      cc.OktaClientId,
@@ -445,6 +475,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		skipAppGroups:       cc.SkipAppGroups,
 		SyncSecrets:         cc.SyncSecrets,
+		opts:                opts,
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 		},
