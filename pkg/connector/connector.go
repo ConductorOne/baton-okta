@@ -154,6 +154,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
+		deviceBuilder(o.clientV5),
 	}
 
 	var filterEmailDomains []string
@@ -174,10 +175,6 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 	if o.SyncSecrets {
 		resourceSyncer = append(resourceSyncer, apiTokenBuilder(o.clientV5))
-	}
-
-	if shouldSyncResourceType(o.opts, resourceTypeDevice.Id) {
-		resourceSyncer = append(resourceSyncer, deviceBuilder(o.clientV5))
 	}
 
 	return resourceSyncer
