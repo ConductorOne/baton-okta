@@ -103,6 +103,7 @@ Precedence notes:
 
 - `create_inactive=true` wins over `send_activation_email` — the user stays staged; no activation follow-up runs.
 - `password_change_on_login_required` is inert on the no-password credential path (same as before this feature).
+- A key present with the wrong type fails the request instead of being ignored, so a mapping mistake surfaces rather than creating an account that is missing what was asked for. Only an absent or null key falls back to its default.
 
 Example (federated user, no activation email):
 

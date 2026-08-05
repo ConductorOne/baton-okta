@@ -72,7 +72,7 @@ Account creation is driven by `AccountCreationSchema` in `pkg/connector/connecto
 | `create_inactive` | no | false | `activate=false`; skips activation follow-up |
 | `send_activation_email` | no | true | Schema `BoolField` (accepts a bool or its string form). When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
 | `provider_type` | no | empty (Okta default local provider) | `OKTA` or `FEDERATION` (case-insensitive). `FEDERATION` sets `credentials.provider` + query `provider=true` |
-| `additionalAttributes` | no | — | Map merged into Okta profile; cannot override protected keys |
+| `additionalAttributes` | no | — | Map merged into Okta profile; cannot override protected keys. A value of any other type is rejected, not dropped |
 
 ### Wire format / Okta calls
 
@@ -82,7 +82,7 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 | :--- | :--- | :--- |
 | Create user | `POST /api/v1/users` | Query: `activate`, `provider`, optional `nextLogin` |
 | Activate user | `POST /api/v1/users/{id}/lifecycle/activate` | Query: `sendEmail=false` when suppressing activation email |
-| Get user | `GET /api/v1/users/{idOrLogin}` | Re-fetch after activate to pick up the post-activation status; best-effort, a failure keeps the created user. Also used to adopt an existing login on retry |
+| Get user | `GET /api/v1/users/{idOrLogin}` | Re-fetch after activate to pick up the post-activation status; best-effort, a failure keeps the created user. Also used to resolve an existing login on retry |
 
 ### Conflict / validation rules
 
@@ -90,15 +90,28 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 - `send_activation_email=false` + `password_change_on_login_required=true` + **random password** → error (staged+activate path cannot also set `nextLogin=changePassword`). On the no-password path, `password_change_on_login_required` is inert and does not conflict (pre-existing behavior).
 - `create_inactive=true` wins over `send_activation_email` / `password_change_on_login_required`: evaluated first, user stays staged, no activate call, and the conflict check above is skipped.
 - Without query `provider=true`, Okta **ignores** a `credentials.provider` block and creates a normal OKTA user (verified live).
+- A profile field present with the wrong type is always an error, never a silent fallback: booleans
+  (`create_inactive`, `send_activation_email`, `password_change_on_login_required`) must be a bool or
+  its string form, and `additionalAttributes` must be an object. Only an absent or null key falls back
+  to the default, because creating the account without what the caller asked for would report success
+  for a different outcome. The C1 mapping screen does not validate the mapped expression's type, so a
+  CEL expression returning the wrong type is caught here.
 
 ### Retry semantics
 
 The suppressed-email flow spans three calls, so a failure can leave the user created but not
 activated. On retry, Okta rejects the create with `E0000001` and an `errorCauses` entry naming
 `login`. The connector adopts that user **only when** `send_activation_email=false` was requested
-**and** the existing user is still `STAGED` (the stranded partial-create case), then activates and
-returns `AlreadyExistsResult`. A duplicate login against an already-ACTIVE (or otherwise non-STAGED)
-account is returned as the original create error — it is a genuine collision, not a retry.
+**and** the existing user is still `STAGED`, and returns `AlreadyExistsResult`. A duplicate login
+against an already-ACTIVE (or otherwise non-STAGED) account is returned as the original create
+error — it is a genuine collision, not a retry.
+
+An **adopted** user's lifecycle is never changed: only a user staged by the same call is activated.
+`STAGED` does not identify a stranded attempt — `create_inactive=true` and an admin-staged user look
+identical — so activating on adoption would override an explicit "keep this account inactive"
+decision. The trade-off is that a retry after a failed activation reports `AlreadyExistsResult` with
+the user still `STAGED`; finishing activation is then an explicit operation (`enable_user`, or
+activation in Okta), not a side effect of a repeated create.
 
 ### Org2Org / hub-spoke
 
