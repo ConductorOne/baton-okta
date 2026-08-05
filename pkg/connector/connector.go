@@ -146,7 +146,7 @@ func shouldSyncResourceType(opts *cli.ConnectorOpts, resourceTypeID string) bool
 	if opts == nil {
 		return true
 	}
-	return opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeID)
+	return opts.WillSyncResourceType(resourceTypeID)
 }
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
