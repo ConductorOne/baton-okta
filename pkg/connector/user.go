@@ -482,12 +482,13 @@ func (r *userResourceType) CreateAccount(
 }
 
 // shouldActivateAfterCreate reports whether the staged user must be activated with the
-// activation email suppressed. Only a user staged by this very call qualifies: an adopted
-// account may have been staged deliberately (create_inactive) or by an Okta admin, and
-// activating it would override an explicit decision to keep it inactive. Activation is
-// also only valid from STAGED, so a user past that point is left alone.
-func shouldActivateAfterCreate(suppressActivationEmail, adopted bool, status string) bool {
-	return suppressActivationEmail && !adopted && status == userStatusStaged
+// activation email suppressed. Only a user staged by this very call qualifies: an
+// already-existing account (alreadyExists) may have been staged deliberately
+// (create_inactive) or by an Okta admin, and activating it would override an explicit
+// decision to keep it inactive. Activation is also only valid from STAGED, so a user
+// past that point is left alone.
+func shouldActivateAfterCreate(suppressActivationEmail, alreadyExists bool, status string) bool {
+	return suppressActivationEmail && !alreadyExists && status == userStatusStaged
 }
 
 // applyProviderCredentials attaches the federated authentication provider to the

@@ -701,11 +701,11 @@ func TestShouldActivateAfterCreate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		suppress     bool
-		adopted      bool
-		status       string
-		wantActivate bool
+		name          string
+		suppress      bool
+		alreadyExists bool
+		status        string
+		wantActivate  bool
 	}{
 		{
 			name:         "user staged by this call is activated",
@@ -714,10 +714,10 @@ func TestShouldActivateAfterCreate(t *testing.T) {
 			wantActivate: true,
 		},
 		{
-			name:     "adopted staged user is left untouched",
-			suppress: true,
-			adopted:  true,
-			status:   userStatusStaged,
+			name:          "already-existing staged user is left untouched",
+			suppress:      true,
+			alreadyExists: true,
+			status:        userStatusStaged,
 		},
 		{
 			name:     "activation not requested",
@@ -730,10 +730,10 @@ func TestShouldActivateAfterCreate(t *testing.T) {
 			status:   userStatusActive,
 		},
 		{
-			name:     "adopted active user is left untouched",
-			suppress: true,
-			adopted:  true,
-			status:   userStatusActive,
+			name:          "already-existing active user is left untouched",
+			suppress:      true,
+			alreadyExists: true,
+			status:        userStatusActive,
 		},
 	}
 
@@ -741,8 +741,8 @@ func TestShouldActivateAfterCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := shouldActivateAfterCreate(tt.suppress, tt.adopted, tt.status); got != tt.wantActivate {
-				t.Errorf("shouldActivateAfterCreate(%v, %v, %q) = %v, want %v", tt.suppress, tt.adopted, tt.status, got, tt.wantActivate)
+			if got := shouldActivateAfterCreate(tt.suppress, tt.alreadyExists, tt.status); got != tt.wantActivate {
+				t.Errorf("shouldActivateAfterCreate(%v, %v, %q) = %v, want %v", tt.suppress, tt.alreadyExists, tt.status, got, tt.wantActivate)
 			}
 		})
 	}
