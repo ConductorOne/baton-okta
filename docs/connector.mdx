@@ -68,6 +68,10 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 **Provider Type** `FEDERATION` cannot be combined with a random-password credential option (federated users have no Okta password). **Send Activation Email** `False` cannot be combined with **Password Change Required on Login** `True` when creating with a random password (that combination cannot set Okta's change-password-on-login flag). With a no-password credential option, Password Change Required on Login has no effect and does not conflict. If **Create Inactive** is `True`, the connector leaves the user staged and does not run the activation step — Create Inactive takes precedence over Send Activation Email.
 </Note>
 
+<Note>
+If you map one of these fields to an expression, make sure the expression returns the field's type: **Additional Attributes** must return a map, and the `True` / `False` fields must return a boolean. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
+</Note>
+
 Syncing standard and custom admin roles requires a super admin token. 
 
 [This connector can sync secrets](/product/admin/inventory) and display them on the **Inventory** page. 

@@ -254,13 +254,36 @@ func TestGetUserProfile(t *testing.T) {
 			wantAbsent: []string{"city"},
 		},
 		{
-			name: "additionalAttributes wrong type silently ignored",
+			name: "additionalAttributes wrong type rejected",
 			profile: map[string]interface{}{
 				"first_name":           "Ada",
 				"last_name":            "Lovelace",
 				"email":                "ada@example.com",
 				"login":                "ada@example.com",
 				"additionalAttributes": "not-a-map",
+			},
+			wantErr: true,
+		},
+		{
+			name: "additionalAttributes null is treated as absent",
+			profile: map[string]interface{}{
+				"first_name":           "Ada",
+				"last_name":            "Lovelace",
+				"email":                "ada@example.com",
+				"login":                "ada@example.com",
+				"additionalAttributes": nil,
+			},
+			wantKeys:   []string{"firstName", "lastName", "email", "login"},
+			wantAbsent: []string{"additionalAttributes"},
+		},
+		{
+			name: "additionalAttributes empty object is accepted",
+			profile: map[string]interface{}{
+				"first_name":           "Ada",
+				"last_name":            "Lovelace",
+				"email":                "ada@example.com",
+				"login":                "ada@example.com",
+				"additionalAttributes": map[string]interface{}{},
 			},
 			wantKeys:   []string{"firstName", "lastName", "email", "login"},
 			wantAbsent: []string{"additionalAttributes"},
@@ -618,6 +641,57 @@ func TestParseBoolProfileField(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("parseBoolProfileField() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseObjectProfileField(t *testing.T) {
+	t.Parallel()
+
+	const key = "additionalAttributes"
+
+	tests := []struct {
+		name    string
+		pMap    map[string]any
+		want    map[string]interface{}
+		wantErr bool
+	}{
+		{name: "absent yields no attributes", pMap: map[string]any{}},
+		{name: "nil yields no attributes", pMap: map[string]any{key: nil}},
+		{name: "empty object yields no attributes", pMap: map[string]any{key: map[string]interface{}{}}, want: map[string]interface{}{}},
+		{
+			name: "object is returned",
+			pMap: map[string]any{key: map[string]interface{}{"city": "London"}},
+			want: map[string]interface{}{"city": "London"},
+		},
+		{name: "string errors instead of being dropped", pMap: map[string]any{key: "city=London"}, wantErr: true},
+		{name: "number errors", pMap: map[string]any{key: float64(1)}, wantErr: true},
+		{name: "bool errors", pMap: map[string]any{key: true}, wantErr: true},
+		{name: "list errors", pMap: map[string]any{key: []any{"city"}}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseObjectProfileField(tt.pMap, key)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseObjectProfileField() = %v, want %v", got, tt.want)
+			}
+			for k, v := range tt.want {
+				if got[k] != v {
+					t.Errorf("key %q = %v, want %v", k, got[k], v)
+				}
 			}
 		})
 	}

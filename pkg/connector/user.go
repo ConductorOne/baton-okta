@@ -17,13 +17,11 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -379,14 +377,6 @@ func (r *userResourceType) CreateAccount(
 	annotations.Annotations,
 	error,
 ) {
-	if raw, exists := accountInfo.Profile.AsMap()[profileFieldAdditionalAttributes]; exists {
-		if _, ok := raw.(map[string]interface{}); !ok {
-			ctxzap.Extract(ctx).Debug("okta-connectorv2: additionalAttributes was present but not a map; ignoring",
-				zap.String("observed_type", fmt.Sprintf("%T", raw)),
-			)
-		}
-	}
-
 	userProfile, err := getUserProfile(accountInfo)
 	if err != nil {
 		return nil, nil, nil, err
@@ -421,37 +411,54 @@ func (r *userResourceType) CreateAccount(
 		Credentials: creds,
 	}, params)
 
-	// An earlier suppressed-activation attempt can leave the user created but not yet
-	// activated. Adopt only that stranded STAGED account so a retry converges; any other
-	// duplicate login is a genuine collision and must surface as an error.
-	alreadyExists := false
+	// The login already belongs to an Okta user, so return that account rather than
+	// failing the duplicate forever. Its lifecycle is left untouched: a STAGED collision
+	// is indistinguishable from an account someone deliberately staged (create_inactive,
+	// or an Okta admin), so activating it here would override that decision.
+	// The conflict already proved the account exists — if the follow-up lookup fails or
+	// cannot resolve a Resource, still return AlreadyExistsResult (without Resource) and
+	// let the next sync correlate it.
 	switch {
 	case isDuplicateLoginError(err):
+		l := ctxzap.Extract(ctx)
 		login, ok := (*userProfile)[profileFieldLogin].(string)
 		if !ok || login == "" {
-			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, "okta-connectorv2: login already exists but is unusable for lookup", err)
+			l.Debug("okta-connectorv2: login already exists but is unusable for lookup")
+			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
 		existing, _, getErr := r.connector.client.User.GetUser(ctx, login)
 		if getErr != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, getErr)
+			l.Debug("okta-connectorv2: login already exists but fetch failed",
+				zap.String("login", login),
+				zap.Error(getErr),
+			)
+			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
-		// Only a prior suppressed-activation attempt of ours can leave a STAGED user behind.
-		// Anything else is a genuine collision with an account we did not create, so it has
-		// to reach a human as AlreadyExists rather than be silently adopted.
-		if !suppressActivationEmail || existing.Status != userStatusStaged {
-			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, fmt.Sprintf("okta-connectorv2: login %s already exists on user %s with status %s", login, existing.Id, existing.Status), err)
+		if existing == nil {
+			l.Debug("okta-connectorv2: login already exists but user was not found",
+				zap.String("login", login),
+			)
+			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
-		user = existing
-		alreadyExists = true
+		l.Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
+			zap.String("user_id", existing.Id),
+			zap.String("login", login),
+			zap.String("status", existing.Status),
+		)
+		existingResource, err := userResource(existing, r.connector.skipSecondaryEmails)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: existingResource}, nil, nil, nil
 	case err != nil:
 		return nil, nil, nil, err
 	case response != nil && response.StatusCode != http.StatusOK:
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
 
-	// Activation is only valid from STAGED; an adopted user past that point is already
-	// activated and Okta rejects a second attempt.
-	if suppressActivationEmail && user.Status == userStatusStaged {
+	// Only a user this call just created reaches this point, and a suppressed create
+	// always staged it, so no status check is needed.
+	if suppressActivationEmail {
 		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, err)
@@ -476,10 +483,6 @@ func (r *userResourceType) CreateAccount(
 	userResource, err := userResource(user, r.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-
-	if alreadyExists {
-		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: userResource}, nil, nil, nil
 	}
 
 	return &v2.CreateAccountResponse_SuccessResult{Resource: userResource}, nil, nil, nil
@@ -565,13 +568,15 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 		profileFieldLogin: login,
 	}
 
-	if additional, ok := pMap[profileFieldAdditionalAttributes].(map[string]interface{}); ok {
-		for k, v := range additional {
-			if protectedOktaProfileFields[k] {
-				return nil, fmt.Errorf("okta-connectorv2: additionalAttributes cannot override protected field %q", k)
-			}
-			(*profile)[k] = v
+	additional, err := parseObjectProfileField(pMap, profileFieldAdditionalAttributes)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range additional {
+		if protectedOktaProfileFields[k] {
+			return nil, fmt.Errorf("okta-connectorv2: additionalAttributes cannot override protected field %q", k)
 		}
+		(*profile)[k] = v
 	}
 
 	return profile, nil
@@ -633,6 +638,24 @@ func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOption
 	}
 
 	return params, false, nil
+}
+
+// parseObjectProfileField reads an account-creation field declared as a map in the
+// creation schema. Only an absent or null key yields no attributes; a key present with
+// any other type is rejected rather than dropped, because creating the account without
+// the attributes the caller asked for reports success for a different outcome.
+func parseObjectProfileField(pMap map[string]any, key string) (map[string]interface{}, error) {
+	raw, present := pMap[key]
+	if !present || raw == nil {
+		return nil, nil
+	}
+
+	obj, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("okta-connectorv2: %s must be an object, got %T", key, raw)
+	}
+
+	return obj, nil
 }
 
 // parseBoolProfileField reads a boolean account-creation field that C1 may send as a
