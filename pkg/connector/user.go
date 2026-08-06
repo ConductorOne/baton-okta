@@ -413,13 +413,10 @@ func (r *userResourceType) CreateAccount(
 		Credentials: creds,
 	}, params)
 
-	// A suppressed-activation attempt can leave the user created but not yet activated.
-	// Adopt a STAGED account so a retry converges instead of failing on the duplicate
-	// login forever; any other duplicate login is a genuine collision and must surface as
-	// an error. STAGED does not prove the account is a stranded attempt of ours —
-	// create_inactive and admin-staged users are indistinguishable — so an adopted user's
-	// lifecycle is left untouched below.
-	alreadyExists := false
+	// The login already belongs to an Okta user, so return that account rather than
+	// failing the duplicate forever. Its lifecycle is left untouched: a STAGED collision
+	// is indistinguishable from an account someone deliberately staged (create_inactive,
+	// or an Okta admin), so activating it here would override that decision.
 	switch {
 	case isDuplicateLoginError(err):
 		login, ok := (*userProfile)[profileFieldLogin].(string)
@@ -430,24 +427,25 @@ func (r *userResourceType) CreateAccount(
 		if getErr != nil {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, getErr)
 		}
-		// A collision with a user past STAGED is an account we did not create, so it has to
-		// reach a human as AlreadyExists rather than be silently adopted.
-		if !suppressActivationEmail || existing.Status != userStatusStaged {
-			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, fmt.Sprintf("okta-connectorv2: login %s already exists on user %s with status %s", login, existing.Id, existing.Status), err)
-		}
-		ctxzap.Extract(ctx).Debug("okta-connectorv2: adopted an existing staged user; leaving its status unchanged",
+		ctxzap.Extract(ctx).Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
 			zap.String("user_id", existing.Id),
 			zap.String("login", login),
+			zap.String("status", existing.Status),
 		)
-		user = existing
-		alreadyExists = true
+		existingResource, err := userResource(existing, r.connector.skipSecondaryEmails)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: existingResource}, nil, nil, nil
 	case err != nil:
 		return nil, nil, nil, err
 	case response != nil && response.StatusCode != http.StatusOK:
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
 
-	if shouldActivateAfterCreate(suppressActivationEmail, alreadyExists, user.Status) {
+	// Only a user this call just created reaches this point, and a suppressed create
+	// always staged it, so no status check is needed.
+	if suppressActivationEmail {
 		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, err)
@@ -474,21 +472,7 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	if alreadyExists {
-		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: userResource}, nil, nil, nil
-	}
-
 	return &v2.CreateAccountResponse_SuccessResult{Resource: userResource}, nil, nil, nil
-}
-
-// shouldActivateAfterCreate reports whether the staged user must be activated with the
-// activation email suppressed. Only a user staged by this very call qualifies: an
-// already-existing account (alreadyExists) may have been staged deliberately
-// (create_inactive) or by an Okta admin, and activating it would override an explicit
-// decision to keep it inactive. Activation is also only valid from STAGED, so a user
-// past that point is left alone.
-func shouldActivateAfterCreate(suppressActivationEmail, alreadyExists bool, status string) bool {
-	return suppressActivationEmail && !alreadyExists && status == userStatusStaged
 }
 
 // applyProviderCredentials attaches the federated authentication provider to the

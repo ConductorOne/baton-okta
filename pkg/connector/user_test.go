@@ -697,57 +697,6 @@ func TestParseObjectProfileField(t *testing.T) {
 	}
 }
 
-func TestShouldActivateAfterCreate(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name          string
-		suppress      bool
-		alreadyExists bool
-		status        string
-		wantActivate  bool
-	}{
-		{
-			name:         "user staged by this call is activated",
-			suppress:     true,
-			status:       userStatusStaged,
-			wantActivate: true,
-		},
-		{
-			name:          "already-existing staged user is left untouched",
-			suppress:      true,
-			alreadyExists: true,
-			status:        userStatusStaged,
-		},
-		{
-			name:     "activation not requested",
-			status:   userStatusStaged,
-			suppress: false,
-		},
-		{
-			name:     "already active user is not re-activated",
-			suppress: true,
-			status:   userStatusActive,
-		},
-		{
-			name:          "already-existing active user is left untouched",
-			suppress:      true,
-			alreadyExists: true,
-			status:        userStatusActive,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := shouldActivateAfterCreate(tt.suppress, tt.alreadyExists, tt.status); got != tt.wantActivate {
-				t.Errorf("shouldActivateAfterCreate(%v, %v, %q) = %v, want %v", tt.suppress, tt.alreadyExists, tt.status, got, tt.wantActivate)
-			}
-		})
-	}
-}
-
 func TestGetProviderType(t *testing.T) {
 	tests := []struct {
 		name    string
