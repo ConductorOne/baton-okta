@@ -37,8 +37,10 @@ baton resources
 Notes for OAuth setup:
 
 - `BATON_AUTH_METHOD=private-key-group` is required when authenticating via OAuth — without it the CLI defaults to the API Token field group and refuses to start with `field api-token of type string is marked as required but it has a zero-value`.
-- The private key must be in **PKCS#1** PEM format (`-----BEGIN RSA PRIVATE KEY-----`). If `openssl genrsa` produced a PKCS#8 key (`-----BEGIN PRIVATE KEY-----`), convert it with `openssl rsa -in key.pem -out key.pkcs1.pem -traditional`.
-- See [`docs/connector.mdx`](docs/connector.mdx) for the complete Okta-side setup, including the required **disable DPoP** and admin-role assignment steps.
+- The private key must be a PEM-encoded **RSA** key. Both **PKCS#1** (`-----BEGIN RSA PRIVATE KEY-----`) and **PKCS#8** (`-----BEGIN PRIVATE KEY-----`, what `openssl genrsa` produces by default) are accepted, so no conversion step is needed. Elliptic-curve keys are rejected — Okta's DPoP implementation requires RSA.
+- **DPoP is supported** and needs no Okta-side change: leave the app's **Proof of Possession** setting at Okta's default. Earlier revisions of this file and of `docs/connector.mdx` told you to disable DPoP; that instruction described the pre-DPoP connector and was removed in CXH-2198.
+- The API Services app **must be assigned an admin role** on its **Admin Roles** tab. Granting OAuth scopes is not sufficient. Without a role, most endpoints return `403`, but `GET /api/v1/users` returns `200` with an empty list — so the sync succeeds and finds zero accounts.
+- See [`docs/connector.mdx`](docs/connector.mdx) for the complete Okta-side setup and [`docs/docs-info.md`](docs/docs-info.md) for the internal detail on key handling, DPoP, and scopes.
 
 ## docker
 
