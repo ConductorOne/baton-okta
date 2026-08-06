@@ -101,8 +101,10 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 
 The suppressed-email flow spans three calls, so a failure can leave the user created but not
 activated. On retry, Okta rejects the create with `E0000001` and an `errorCauses` entry naming
-`login`. Any duplicate login returns `AlreadyExistsResult` carrying the existing Okta user,
-whatever its status, so the caller converges on that account instead of failing forever.
+`login`. Any duplicate login returns `AlreadyExistsResult` — with the existing Okta user when
+the follow-up fetch succeeds, or without a Resource when the lookup fails — so the caller
+converges on that account (or the next sync correlates it) instead of failing forever. The
+existing user's status does not matter.
 
 The existing user's lifecycle is never changed — activation runs only for a user this same call
 created. `STAGED` does not identify a stranded attempt: `create_inactive=true` and an admin-staged

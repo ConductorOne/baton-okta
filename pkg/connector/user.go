@@ -17,13 +17,11 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -417,17 +415,32 @@ func (r *userResourceType) CreateAccount(
 	// failing the duplicate forever. Its lifecycle is left untouched: a STAGED collision
 	// is indistinguishable from an account someone deliberately staged (create_inactive,
 	// or an Okta admin), so activating it here would override that decision.
+	// The conflict already proved the account exists — if the follow-up lookup fails or
+	// cannot resolve a Resource, still return AlreadyExistsResult (without Resource) and
+	// let the next sync correlate it.
 	switch {
 	case isDuplicateLoginError(err):
+		l := ctxzap.Extract(ctx)
 		login, ok := (*userProfile)[profileFieldLogin].(string)
 		if !ok || login == "" {
-			return nil, nil, nil, uhttp.WrapErrors(codes.AlreadyExists, "okta-connectorv2: login already exists but is unusable for lookup", err)
+			l.Debug("okta-connectorv2: login already exists but is unusable for lookup")
+			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
 		existing, _, getErr := r.connector.client.User.GetUser(ctx, login)
 		if getErr != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: login %s already exists but fetch failed: %w", login, getErr)
+			l.Debug("okta-connectorv2: login already exists but fetch failed",
+				zap.String("login", login),
+				zap.Error(getErr),
+			)
+			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
-		ctxzap.Extract(ctx).Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
+		if existing == nil {
+			l.Debug("okta-connectorv2: login already exists but user was not found",
+				zap.String("login", login),
+			)
+			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
+		}
+		l.Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
 			zap.String("user_id", existing.Id),
 			zap.String("login", login),
 			zap.String("status", existing.Status),
