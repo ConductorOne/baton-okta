@@ -109,8 +109,10 @@ created. `STAGED` does not identify a stranded attempt: `create_inactive=true` a
 account look identical, so activating on a duplicate would override an explicit "keep this account
 inactive" decision. The trade-off is that a retry after a failed activation reports
 `AlreadyExistsResult` with the user still `STAGED`, and finishing activation has to happen in Okta.
-The `enable_user` action does not cover this case: it unsuspends a `SUSPENDED` user and rejects any
-other status, `STAGED` included.
+The `enable_user` action does not cover this case: it only unsuspends a `SUSPENDED` user. On any other
+status (including `STAGED`) Okta returns "Cannot unsuspend a user that is not suspended", and the
+action swallows that into a success response (`Account … was already enabled`) without changing the
+user — so the account stays `STAGED`.
 
 ### Org2Org / hub-spoke
 
