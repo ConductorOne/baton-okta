@@ -45,9 +45,16 @@ Notes for OAuth setup:
 ## docker
 
 ```
-docker run --rm -v $(pwd):/out -e BATON_API_TOKEN=oktaAPIToken -e BATON_DOMAIN=domain-1234.okta.com ghcr.io/conductorone/baton-okta:latest -f "/out/sync.c1z"
+docker run --rm -v $(pwd):/out -e BATON_API_TOKEN=oktaAPIToken -e BATON_DOMAIN=domain-1234.okta.com public.ecr.aws/conductorone/baton-okta:latest -f "/out/sync.c1z"
 docker run --rm -v $(pwd):/out ghcr.io/conductorone/baton:latest -f "/out/sync.c1z" resources
 ```
+
+The two images come from different registries, deliberately. Connector images are published
+to **ECR Public** (`public.ecr.aws/conductorone/baton-okta`), which is also what the
+Kubernetes manifests in [`docs/connector.mdx`](docs/connector.mdx) use. The `baton` CLI image
+is published only to **GHCR** (`ghcr.io/conductorone/baton`) — there is no
+`public.ecr.aws/conductorone/baton` repository, so do not "tidy" that second line to match
+the first.
 
 ## source
 
