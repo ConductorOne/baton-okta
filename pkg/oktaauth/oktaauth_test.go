@@ -209,6 +209,32 @@ func TestTokenSource_RejectsNonRSA(t *testing.T) {
 	}
 }
 
+func TestNewDPoPHTTPClient_BuildsTokenURL(t *testing.T) {
+	key := generateRSAKey(t)
+	client, err := NewDPoPHTTPClient(t.Context(), Config{
+		Domain:        "example.okta.com",
+		ClientID:      "c",
+		PrivateKeyID:  "k",
+		PrivateKeyPEM: pemPKCS8(t, key),
+		Scopes:        []string{"okta.users.read"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewDPoPHTTPClient: %v", err)
+	}
+
+	transport, ok := client.Transport.(*dpopRoundTripper)
+	if !ok {
+		t.Fatalf("transport type = %T, want *dpopRoundTripper", client.Transport)
+	}
+	tokenSource, ok := transport.tokenSource.(*tokenSource)
+	if !ok {
+		t.Fatalf("token source type = %T, want *tokenSource", transport.tokenSource)
+	}
+	if got, want := tokenSource.cfg.tokenURL, "https://example.okta.com/oauth2/v1/token"; got != want {
+		t.Fatalf("token URL = %q, want %q", got, want)
+	}
+}
+
 func TestTokenSource_BearerTokenAccepted(t *testing.T) {
 	key := generateRSAKey(t)
 	h := &tokenHandler{tokenType: "Bearer"}
@@ -317,10 +343,10 @@ func TestParseRSAPrivateKey(t *testing.T) {
 	ecKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
 	cases := []struct {
-		name      string
-		pem       string
-		wantErr   string
-		wantOK    bool
+		name    string
+		pem     string
+		wantErr string
+		wantOK  bool
 	}{
 		{name: "PKCS1", pem: pemPKCS1(t, rsaKey), wantOK: true},
 		{name: "PKCS1_literal_newlines", pem: strings.ReplaceAll(pemPKCS1(t, rsaKey), "\n", `\n`), wantOK: true},

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -72,7 +73,11 @@ func NewDPoPHTTPClient(ctx context.Context, cfg Config, baseClient *http.Client)
 		return nil, fmt.Errorf("oktaauth: build dpop proofer: %w", err)
 	}
 
-	tokenURL := fmt.Sprintf("https://%s%s", strings.TrimSuffix(cfg.Domain, "/"), tokenPath)
+	orgURL := (&url.URL{Scheme: "https", Host: cfg.Domain}).String()
+	tokenURL, err := url.JoinPath(orgURL, tokenPath)
+	if err != nil {
+		return nil, fmt.Errorf("oktaauth: build token URL: %w", err)
+	}
 
 	tokenNonceStore := dpop_oauth2.NewNonceStore()
 	resourceNonceStore := dpop_oauth2.NewNonceStore()

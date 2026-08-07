@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 
 	cfg "github.com/conductorone/baton-okta/pkg/config"
@@ -26,6 +27,8 @@ import (
 // TODO: use isNotFoundError() since E0000008 is also a not found error
 const ResourceNotFoundExceptionErrorCode = "E0000007"
 const AccessDeniedErrorCode = "E0000006"
+
+const oktaURLScheme = "https"
 
 // oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request.
 const oktaSDKAuthSentinel = "dpop-managed"
@@ -353,11 +356,43 @@ func safeCacheInt32(val int) (int32, error) {
 	return int32(val), nil
 }
 
+// parseOktaOrgURL returns a canonical HTTPS URL for the configured Okta domain.
+func parseOktaOrgURL(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("okta-connectorv2: domain is required")
+	}
+
+	toParse := raw
+	if !strings.Contains(raw, "://") {
+		toParse = (&url.URL{Scheme: oktaURLScheme, Host: strings.TrimSuffix(raw, "/")}).String()
+	}
+	parsed, err := url.Parse(toParse)
+	if err != nil {
+		return nil, fmt.Errorf("okta-connectorv2: domain must be an HTTPS hostname (e.g. acmeco.okta.com), got %q: %w", raw, err)
+	}
+	if parsed.Scheme != oktaURLScheme || parsed.Hostname() == "" ||
+		parsed.User != nil || parsed.Port() != "" ||
+		(parsed.Path != "" && parsed.Path != "/") ||
+		parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("okta-connectorv2: domain must be an HTTPS hostname (e.g. acmeco.okta.com), got %q", raw)
+	}
+
+	return &url.URL{Scheme: oktaURLScheme, Host: parsed.Hostname()}, nil
+}
+
 func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
 	var (
 		oktaClient *okta.Client
 		scopes     = defaultScopes
 	)
+
+	orgURL, err := parseOktaOrgURL(cc.Domain)
+	if err != nil {
+		return nil, nil, err
+	}
+	domain := orgURL.Hostname()
+
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
 		return nil, nil, err
@@ -385,7 +420,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		fallthrough
 	case cfg.ApiTokenGroup:
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
+			okta.WithOrgUrl(orgURL.String()),
 			okta.WithToken(cc.ApiToken),
 			okta.WithHttpClientPtr(client),
 			okta.WithCache(cc.Cache),
@@ -397,7 +432,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		}
 
 		config, err := oktav5.NewConfiguration(
-			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
+			oktav5.WithOrgUrl(orgURL.String()),
 			oktav5.WithToken(cc.ApiToken),
 			oktav5.WithHttpClientPtr(client),
 			oktav5.WithCache(cc.Cache),
@@ -422,7 +457,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		}
 
 		dpopClient, err := oktaauth.NewDPoPHTTPClient(ctx, oktaauth.Config{
-			Domain:        cc.Domain,
+			Domain:        domain,
 			ClientID:      cc.OktaClientId,
 			PrivateKeyPEM: cc.OktaPrivateKey,
 			PrivateKeyID:  cc.OktaPrivateKeyId,
@@ -434,7 +469,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 
 		// Bearer mode lets the oktaauth transport own auth; bypasses v5's native PrivateKey/DPoP path.
 		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
+			okta.WithOrgUrl(orgURL.String()),
 			okta.WithAuthorizationMode("Bearer"),
 			okta.WithToken(oktaSDKAuthSentinel),
 			okta.WithHttpClientPtr(dpopClient),
@@ -447,7 +482,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		}
 
 		config, err := oktav5.NewConfiguration(
-			oktav5.WithOrgUrl(fmt.Sprintf("https://%s", cc.Domain)),
+			oktav5.WithOrgUrl(orgURL.String()),
 			oktav5.WithAuthorizationMode("Bearer"),
 			oktav5.WithToken(oktaSDKAuthSentinel),
 			oktav5.WithHttpClientPtr(dpopClient),
@@ -465,7 +500,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 	return &Okta{
 		client:              oktaClient,
 		clientV5:            oktaClientV5,
-		domain:              cc.Domain,
+		domain:              domain,
 		apiToken:            cc.ApiToken,
 		syncInactiveApps:    cc.SyncInactiveApps,
 		SyncCustomRoles:     cc.SyncCustomRoles,
