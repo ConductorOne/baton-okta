@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,32 @@ const (
 	userStatusRecovery        = "RECOVERY"
 	userStatusStaged          = "STAGED"
 )
+
+// oktaEnabledStatuses drives enable_user / disable_user only. Credential problems
+// (RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT) stay here — enable does not clear them.
+// Sync still maps STAGED → RESOURCE_STATUS_ENABLED; that contract is unchanged.
+var oktaEnabledStatuses = []string{
+	userStatusActive,
+	userStatusProvisioned,
+	userStatusRecovery,
+	userStatusPasswordExpired,
+	userStatusLockedOut,
+}
+
+// oktaDisabledStatuses: nobody can sign in (never activated, suspended, or deactivated).
+var oktaDisabledStatuses = []string{
+	userStatusStaged,
+	userStatusSuspended,
+	userStatusDeprovisioned,
+}
+
+func isEnabledOktaStatus(oktaStatus string) bool {
+	return slices.Contains(oktaEnabledStatuses, oktaStatus)
+}
+
+func isDisabledOktaStatus(oktaStatus string) bool {
+	return slices.Contains(oktaDisabledStatuses, oktaStatus)
+}
 
 type userResourceType struct {
 	resourceType *v2.ResourceType
@@ -738,10 +765,19 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	return resource, annos, nil
 }
 
-// getUser retrieves the Okta user with the specified ID.
-// It returns the Okta user and a responseContext containing the HTTP response; if the user is not found or the request fails, an error is returned.
-// The underlying request omits credentials and related fields from the response to reduce payload size.
+// getUser retrieves the Okta user with the specified ID (may use the SDK GET cache).
+// The request omits credentials and related fields to reduce payload size.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
+	return fetchUser(ctx, client, oktaUserID, false)
+}
+
+// getUserUncached bypasses the SDK GET cache. Lifecycle POSTs do not invalidate
+// GET /users/{id}, so status reads that decide or report state must not use the cache.
+func getUserUncached(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
+	return fetchUser(ctx, client, oktaUserID, true)
+}
+
+func fetchUser(ctx context.Context, client *okta.Client, oktaUserID string, bypassCache bool) (*okta.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
 		return nil, nil, err
@@ -764,6 +800,11 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 
 	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
 	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
+
+	if bypassCache {
+		// rq is a clone, so RefreshNext cannot leak to other requests.
+		rq = rq.RefreshNext()
+	}
 
 	resp, err := rq.Do(ctx, req, &oktaUsers)
 	if err != nil {
@@ -820,5 +861,27 @@ func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) 
 	}
 
 	l.Info("user unsuspended", zap.String("user_id", oktaUserID))
+	return nil
+}
+
+// activateUser activates oktaUserID with sendEmail=false (STAGED → ACTIVE/PROVISIONED).
+// Callers must re-read because the resulting status depends on the account provider and credentials.
+func activateUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	l := ctxzap.Extract(ctx)
+	l.Debug("activating user", zap.String("user_id", oktaUserID))
+
+	if oktaUserID == "" {
+		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
+	}
+
+	_, resp, err := client.User.ActivateUser(ctx, oktaUserID, query.NewQueryParams(query.WithSendEmail(false)))
+	if err != nil {
+		return fmt.Errorf("okta-connectorv2: failed to activate user: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("okta-connectorv2: failed to activate user: %s", resp.Status)
+	}
+
+	l.Info("user activated", zap.String("user_id", oktaUserID))
 	return nil
 }

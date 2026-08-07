@@ -82,8 +82,8 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
-| enable_user | `user_id` (string, required) | Unsuspends a suspended Okta user account |
-| disable_user     | `user_id` (string, required) | Suspends an active Okta user account |
+| enable_user | `user_id` (string, required) | Enables an Okta user account: unsuspends a suspended account, and activates a staged one without sending an activation email. Returns success without calling Okta when the account is already enabled. |
+| disable_user     | `user_id` (string, required) | Suspends an Okta user account. Returns success without calling Okta when the account is already suspended, deactivated, or still staged. |
 | create | `name` (string, required), `description` (string), `userMembers` (resource ID list) | Creates a new Okta group with optional initial members |
 | modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
 
