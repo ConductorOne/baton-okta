@@ -119,13 +119,6 @@ func planUserLifecycle(oktaStatus string, enabled bool) (lifecyclePlan, lifecycl
 	return planUnsupported, nil
 }
 
-func isRequestedOktaStatus(oktaStatus string, enabled bool) bool {
-	if enabled {
-		return isEnabledOktaStatus(oktaStatus)
-	}
-	return isDisabledOktaStatus(oktaStatus)
-}
-
 // enableUser activates a STAGED account or unsuspends a SUSPENDED one. Requires user_id.
 // Already-enabled accounts succeed without calling Okta.
 func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
@@ -138,9 +131,9 @@ func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structp
 	return o.applyUserLifecycle(ctx, args, false)
 }
 
-// applyUserLifecycle reads status, applies the required Okta transition, and confirms it.
-// Okta lifecycle endpoints each accept one source status; success names the status
-// the account actually reached. enabled=true enables; enabled=false disables.
+// applyUserLifecycle reads status and applies the required Okta transition.
+// Okta lifecycle endpoints each accept one source status. enabled=true enables;
+// enabled=false disables.
 func (o *Okta) applyUserLifecycle(ctx context.Context, args *structpb.Struct, enabled bool) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
@@ -179,38 +172,15 @@ func (o *Okta) applyUserLifecycle(ctx context.Context, args *structpb.Struct, en
 	}
 
 	if err := transition(ctx, o.client, oktaUserID); err != nil {
-		// Concurrent change may reject the call while the account is already satisfied.
-		finalStatus, statusErr := o.userStatus(ctx, oktaUserID)
-		if statusErr != nil || !isRequestedOktaStatus(finalStatus, enabled) {
-			return nil, nil, err
-		}
-		l.Debug("lifecycle call failed but the account is in the requested state",
-			zap.String("action", verb),
-			zap.String("oktaUserID", oktaUserID),
-			zap.String("okta_status", finalStatus),
-			zap.Error(err),
-		)
-		return createSuccessResponse(fmt.Sprintf("Account %s was already %s (Okta status %s)", oktaUserID, pastTense, finalStatus)), nil, nil
-	}
-
-	finalStatus, err := o.userStatus(ctx, oktaUserID)
-	if err != nil {
 		return nil, nil, err
 	}
-	if !isRequestedOktaStatus(finalStatus, enabled) {
-		return nil, nil, status.Errorf(
-			codes.Internal,
-			"okta-connectorv2: %s of user %s returned success but the account is in Okta status %s",
-			verb, oktaUserID, finalStatus,
-		)
-	}
 
-	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully %s (Okta status %s)", oktaUserID, pastTense, finalStatus)), nil, nil
+	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully %s", oktaUserID, pastTense)), nil, nil
 }
 
-// userStatus returns the live Okta lifecycle status (uncached).
+// userStatus returns the Okta lifecycle status used to plan the action.
 func (o *Okta) userStatus(ctx context.Context, oktaUserID string) (string, error) {
-	user, _, err := getUserUncached(ctx, o.client, oktaUserID)
+	user, _, err := getUser(ctx, o.client, oktaUserID)
 	if err != nil {
 		return "", fmt.Errorf("okta-connectorv2: failed to find user %s: %w", oktaUserID, err)
 	}

@@ -172,11 +172,12 @@ and `activate` only to `STAGED`. What each status does:
 | `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call |
 | `DEPROVISIONED` | error — reactivating a deactivated account is a separate decision | already disabled, no call |
 
-Both actions re-read the account after the call and report the resulting Okta status in the
-response message. A call that Okta rejects is returned as an error unless the re-read shows the
-account is in the requested state anyway (a concurrent change). Neither action reports success
-about an account it did not verify: `enable_user` on a `STAGED` account used to return
-`Account … was already enabled` while the account stayed `STAGED` and unusable.
+Both actions plan from a single status GET, then trust a successful lifecycle call — they do
+not re-read the account afterward. C1 runs each action in a fresh lambda, so adding vendor-SDK
+cache bypass just to support a confirm GET is unnecessary; the mutation response is the proof.
+A call Okta rejects is returned as an error. Neither action invents success from a string-matched
+vendor error: `enable_user` on a `STAGED` account used to return `Account … was already enabled`
+while the account stayed `STAGED` and unusable.
 
 `RECOVERY`, `PASSWORD_EXPIRED` and `LOCKED_OUT` are credential problems on an account that is
 enabled, so `enable_user` reports them as already enabled rather than clearing them — neither
@@ -184,7 +185,7 @@ unlocking nor a password reset is part of this action.
 
 `activate` sends no email, matching the `send_activation_email=false` create path. An `OKTA`
 account without a password typically lands in `PROVISIONED`, while a `FEDERATION` account can land
-in `ACTIVE`; the response message names the status Okta actually returns.
+in `ACTIVE`; the action success message no longer names that post-transition status.
 
 ---
 

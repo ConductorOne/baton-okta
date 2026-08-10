@@ -768,16 +768,6 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 // getUser retrieves the Okta user with the specified ID (may use the SDK GET cache).
 // The request omits credentials and related fields to reduce payload size.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
-	return fetchUser(ctx, client, oktaUserID, false)
-}
-
-// getUserUncached bypasses the SDK GET cache. Lifecycle POSTs do not invalidate
-// GET /users/{id}, so status reads that decide or report state must not use the cache.
-func getUserUncached(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
-	return fetchUser(ctx, client, oktaUserID, true)
-}
-
-func fetchUser(ctx context.Context, client *okta.Client, oktaUserID string, bypassCache bool) (*okta.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
 		return nil, nil, err
@@ -800,11 +790,6 @@ func fetchUser(ctx context.Context, client *okta.Client, oktaUserID string, bypa
 
 	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
 	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
-
-	if bypassCache {
-		// rq is a clone, so RefreshNext cannot leak to other requests.
-		rq = rq.RefreshNext()
-	}
 
 	resp, err := rq.Do(ctx, req, &oktaUsers)
 	if err != nil {
@@ -865,7 +850,7 @@ func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) 
 }
 
 // activateUser activates oktaUserID with sendEmail=false (STAGED → ACTIVE/PROVISIONED).
-// Callers must re-read because the resulting status depends on the account provider and credentials.
+// The ActivateUser response has no User status; callers that need the landing status must GET.
 func activateUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
 	l := ctxzap.Extract(ctx)
 	l.Debug("activating user", zap.String("user_id", oktaUserID))
