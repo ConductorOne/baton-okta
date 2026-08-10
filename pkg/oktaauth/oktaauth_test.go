@@ -210,28 +210,45 @@ func TestTokenSource_RejectsNonRSA(t *testing.T) {
 }
 
 func TestNewDPoPHTTPClient_BuildsTokenURL(t *testing.T) {
+	t.Parallel()
 	key := generateRSAKey(t)
-	client, err := NewDPoPHTTPClient(t.Context(), Config{
-		Domain:        "example.okta.com",
-		ClientID:      "c",
-		PrivateKeyID:  "k",
-		PrivateKeyPEM: pemPKCS8(t, key),
-		Scopes:        []string{"okta.users.read"},
-	}, nil)
-	if err != nil {
-		t.Fatalf("NewDPoPHTTPClient: %v", err)
+
+	tests := []struct {
+		name   string
+		domain string
+		want   string
+	}{
+		{name: "bare host", domain: "example.okta.com", want: "https://example.okta.com/oauth2/v1/token"},
+		{name: "trailing slash", domain: "example.okta.com/", want: "https://example.okta.com/oauth2/v1/token"},
+		{name: "host with port", domain: "example.okta.com:8443", want: "https://example.okta.com:8443/oauth2/v1/token"},
 	}
 
-	transport, ok := client.Transport.(*dpopRoundTripper)
-	if !ok {
-		t.Fatalf("transport type = %T, want *dpopRoundTripper", client.Transport)
-	}
-	tokenSource, ok := transport.tokenSource.(*tokenSource)
-	if !ok {
-		t.Fatalf("token source type = %T, want *tokenSource", transport.tokenSource)
-	}
-	if got, want := tokenSource.cfg.tokenURL, "https://example.okta.com/oauth2/v1/token"; got != want {
-		t.Fatalf("token URL = %q, want %q", got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			client, err := NewDPoPHTTPClient(t.Context(), Config{
+				Domain:        tt.domain,
+				ClientID:      "c",
+				PrivateKeyID:  "k",
+				PrivateKeyPEM: pemPKCS8(t, key),
+				Scopes:        []string{"okta.users.read"},
+			}, nil)
+			if err != nil {
+				t.Fatalf("NewDPoPHTTPClient: %v", err)
+			}
+
+			transport, ok := client.Transport.(*dpopRoundTripper)
+			if !ok {
+				t.Fatalf("transport type = %T, want *dpopRoundTripper", client.Transport)
+			}
+			tokenSource, ok := transport.tokenSource.(*tokenSource)
+			if !ok {
+				t.Fatalf("token source type = %T, want *tokenSource", transport.tokenSource)
+			}
+			if got := tokenSource.cfg.tokenURL; got != tt.want {
+				t.Fatalf("token URL = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

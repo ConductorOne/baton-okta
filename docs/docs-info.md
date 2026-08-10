@@ -34,7 +34,7 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
 ## Connector credentials
 
 1. What credentials are needed?
-   - **Domain** (`--domain` / `$BATON_DOMAIN`) — Okta org host, e.g. `acmeco.okta.com` or `integrator-123.okta.com`. A value that includes `https://` (or a trailing slash) is normalised to the hostname before the client is built.
+   - **Domain** (`--domain` / `$BATON_DOMAIN`) — Okta org host, e.g. `acmeco.okta.com` or `integrator-123.okta.com`. A value that includes `https://` (or a trailing slash) is normalised before the client is built; an explicit port is preserved (e.g. local mocks). Path, query, fragment, and userinfo are rejected.
    - **API Token** (`--api-token` / `$BATON_API_TOKEN`) — SSWS token, **or**
    - **OAuth private key** — `--auth-method=private-key-group` plus `--okta-client-id`, `--okta-private-key-id`, `--okta-private-key` (PEM-encoded RSA key; PKCS#1 or PKCS#8, see [OAuth private key handling](#oauth-private-key-handling))
 

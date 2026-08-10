@@ -216,7 +216,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 
 	var annos annotations.Annotations
 	annos.Update(&v2.ExternalLink{
-		Url: c.domain,
+		Url: (&url.URL{Scheme: oktaURLScheme, Host: c.domain}).String(),
 	})
 
 	return &v2.ConnectorMetadata{
@@ -357,6 +357,7 @@ func safeCacheInt32(val int) (int32, error) {
 }
 
 // parseOktaOrgURL returns a canonical HTTPS URL for the configured Okta domain.
+// An explicit port is preserved (e.g. local mocks); path, query, fragment, and userinfo are rejected.
 func parseOktaOrgURL(raw string) (*url.URL, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -372,13 +373,13 @@ func parseOktaOrgURL(raw string) (*url.URL, error) {
 		return nil, fmt.Errorf("okta-connectorv2: domain must be an HTTPS hostname (e.g. acmeco.okta.com), got %q: %w", raw, err)
 	}
 	if parsed.Scheme != oktaURLScheme || parsed.Hostname() == "" ||
-		parsed.User != nil || parsed.Port() != "" ||
+		parsed.User != nil ||
 		(parsed.Path != "" && parsed.Path != "/") ||
 		parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, fmt.Errorf("okta-connectorv2: domain must be an HTTPS hostname (e.g. acmeco.okta.com), got %q", raw)
 	}
 
-	return &url.URL{Scheme: oktaURLScheme, Host: parsed.Hostname()}, nil
+	return &url.URL{Scheme: oktaURLScheme, Host: parsed.Host}, nil
 }
 
 func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
@@ -391,7 +392,8 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 	if err != nil {
 		return nil, nil, err
 	}
-	domain := orgURL.Hostname()
+	// Host keeps an explicit port when present (Hostname() would drop it).
+	domain := orgURL.Host
 
 	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {

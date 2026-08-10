@@ -73,7 +73,9 @@ func NewDPoPHTTPClient(ctx context.Context, cfg Config, baseClient *http.Client)
 		return nil, fmt.Errorf("oktaauth: build dpop proofer: %w", err)
 	}
 
-	orgURL := (&url.URL{Scheme: "https", Host: cfg.Domain}).String()
+	// Trim a trailing slash so a Domain of "example.okta.com/" does not become
+	// Host "example.okta.com/" → percent-escaped "example.okta.com%2F" in String().
+	orgURL := (&url.URL{Scheme: "https", Host: strings.TrimSuffix(cfg.Domain, "/")}).String()
 	tokenURL, err := url.JoinPath(orgURL, tokenPath)
 	if err != nil {
 		return nil, fmt.Errorf("oktaauth: build token URL: %w", err)

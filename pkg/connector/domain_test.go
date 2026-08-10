@@ -28,7 +28,8 @@ func TestParseOktaOrgURL(t *testing.T) {
 		{name: "query", raw: "https://acmeco.okta.com?redirect=evil.example", wantErr: "domain must be an HTTPS hostname"},
 		{name: "fragment", raw: "https://acmeco.okta.com#fragment", wantErr: "domain must be an HTTPS hostname"},
 		{name: "userinfo", raw: "https://user@acmeco.okta.com", wantErr: "domain must be an HTTPS hostname"},
-		{name: "port", raw: "https://acmeco.okta.com:8443", wantErr: "domain must be an HTTPS hostname"},
+		{name: "https with port", raw: "https://acmeco.okta.com:8443", want: "https://acmeco.okta.com:8443"},
+		{name: "bare host with port", raw: "acmeco.okta.com:8443", want: "https://acmeco.okta.com:8443"},
 		{name: "double scheme", raw: "https://https://acmeco.okta.com", wantErr: "domain must be an HTTPS hostname"},
 		{name: "garbage", raw: "://", wantErr: "domain must be an HTTPS hostname"},
 	}
