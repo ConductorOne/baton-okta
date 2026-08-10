@@ -286,12 +286,11 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 					DisplayName: "Send Activation Email",
 					Required:    false,
 					Description: "When set to 'false', the Okta activation email is suppressed by creating the user staged and activating without sending an email. Defaults to 'true'.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_BoolField{
-						BoolField: &v2.ConnectorAccountCreationSchema_BoolField{
-							DefaultValue: ToPtr(true),
-						},
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
-					Order: 7,
+					Placeholder: placeholderBoolean,
+					Order:       7,
 				},
 				profileFieldProviderType: {
 					DisplayName: "Provider Type",

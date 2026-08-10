@@ -103,26 +103,27 @@ Optional keys in the account creation profile (see [docs/connector.mdx](docs/con
 | Key | Values | Notes |
 | --- | --- | --- |
 | `provider_type` | `OKTA` / `FEDERATION` | `FEDERATION` creates a federated user (no Okta password). Use with the **no-password** credential option. |
-| `send_activation_email` | `true` / `false` | Default `true`. When `false`, activates without sending Okta's activation email. |
-| `create_inactive` | `true` / `false` | Create as staged; skips activation. |
-| `password_change_on_login_required` | `true` / `false` | Only applied with random password. Conflicts with `send_activation_email=false` on that path only. |
+| `send_activation_email` | `"true"` / `"false"` (string; bool also accepted at runtime) | Default `true`. Account-creation schema is `StringField` (same as the siblings below). When `false`, activates without sending Okta's activation email. |
+| `create_inactive` | `"true"` / `"false"` (string; bool also accepted at runtime) | Schema `StringField`. Create as staged; skips activation. |
+| `password_change_on_login_required` | `"true"` / `"false"` (string; bool also accepted at runtime) | Schema `StringField`. Only applied with random password. Conflicts with `send_activation_email=false` on that path only. |
 | `additionalAttributes` | object | Extra Okta profile attributes. |
 
 Precedence notes:
 
 - `create_inactive=true` wins over `send_activation_email` — the user stays staged; no activation follow-up runs.
 - `password_change_on_login_required` is inert on the no-password credential path (same as before this feature).
-- A key present with the wrong type fails the request instead of being ignored, so a mapping mistake surfaces rather than creating an account that is missing what was asked for. Only an absent or null key falls back to its default.
+- All three boolean-ish profile keys share the same `StringField` schema shape so C1 string mappings are consistent. A key present with the wrong type fails the request instead of being ignored. Only an absent or null key falls back to its default.
 
-Example (federated user, no activation email):
+Example (no activation email; string form matching C1 string mappings):
 
 ```
 BATON_API_TOKEN='…' BATON_DOMAIN='domain-1234.okta.com' baton-okta --provisioning \
-  --create-account-profile '{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com","login":"ada@example.com","provider_type":"FEDERATION","send_activation_email":false}' \
+  --create-account-profile '{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com","login":"ada@example.com","send_activation_email":"false"}' \
+  --create-account-login ada@example.com \
   --create-account-resource-type user
 ```
 
-Note: the CLI's default credential path uses a random password. `provider_type=FEDERATION` requires a **no-password** credential option (as C1 uses for that flow). Validate FEDERATION creates via the C1 UI or a caller that passes no-password credentials.
+For a federated user, add `"provider_type":"FEDERATION"`. Note: the CLI's default credential path uses a random password. `provider_type=FEDERATION` requires a **no-password** credential option (as C1 uses for that flow). Validate FEDERATION creates via the C1 UI or a caller that passes no-password credentials.
 
 ### Resourceset-bindings, custom roles and members (Users or Groups)
 
