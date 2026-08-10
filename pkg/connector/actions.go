@@ -129,19 +129,19 @@ func isRequestedOktaStatus(oktaStatus string, enabled bool) bool {
 // enableUser activates a STAGED account or unsuspends a SUSPENDED one. Requires user_id.
 // Already-enabled accounts succeed without calling Okta.
 func (o *Okta) enableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
-	return o.setUserEnabled(ctx, args, true)
+	return o.applyUserLifecycle(ctx, args, true)
 }
 
 // disableUser suspends the subject Okta account. Requires user_id. Accounts nobody can
 // sign in to succeed without calling Okta.
 func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
-	return o.setUserEnabled(ctx, args, false)
+	return o.applyUserLifecycle(ctx, args, false)
 }
 
-// setUserEnabled reads status, applies the required Okta transition, and confirms it.
+// applyUserLifecycle reads status, applies the required Okta transition, and confirms it.
 // Okta lifecycle endpoints each accept one source status; success names the status
-// the account actually reached.
-func (o *Okta) setUserEnabled(ctx context.Context, args *structpb.Struct, enabled bool) (*structpb.Struct, annotations.Annotations, error) {
+// the account actually reached. enabled=true enables; enabled=false disables.
+func (o *Okta) applyUserLifecycle(ctx context.Context, args *structpb.Struct, enabled bool) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
 	oktaUserID, err := extractFieldAsString(args, "user_id")
