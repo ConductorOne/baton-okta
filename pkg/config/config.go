@@ -14,7 +14,7 @@ var (
 	domain = field.StringField("domain",
 		field.WithDisplayName("Okta domain"),
 		field.WithRequired(true),
-		field.WithDescription("The URL for the Okta organization"),
+		field.WithDescription("Okta organization hostname, optionally prefixed with https://"),
 		field.WithPlaceholder("e.g. acmeco.okta.com"),
 	)
 	apiToken = field.StringField("api-token",

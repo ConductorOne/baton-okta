@@ -190,7 +190,7 @@ Flags:
       --cache-ttl int                                    Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
       --client-id string                                 The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
       --client-secret string                             The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
-      --domain string                                    required: The URL for the Okta organization ($BATON_DOMAIN)
+      --domain string                                    required: Okta organization hostname, optionally prefixed with https:// ($BATON_DOMAIN)
       --external-resource-c1z string                     The path to the c1z file to sync external baton resources with ($BATON_EXTERNAL_RESOURCE_C1Z)
       --external-resource-entitlement-id-filter string   The entitlement that external users, groups must have access to sync external baton resources ($BATON_EXTERNAL_RESOURCE_ENTITLEMENT_ID_FILTER)
   -f, --file string                                      The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
