@@ -39,7 +39,8 @@ const (
 
 // oktaEnabledStatuses drives enable_user / disable_user only. Credential problems
 // (RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT) stay here — enable does not clear them.
-// Sync still maps STAGED → RESOURCE_STATUS_ENABLED; that contract is unchanged.
+// Sync maps the same "cannot sign in yet / anymore" set to RESOURCE_STATUS_DISABLED
+// (STAGED, SUSPENDED, DEPROVISIONED) so C1 status matches lifecycle actions.
 var oktaEnabledStatuses = []string{
 	userStatusActive,
 	userStatusProvisioned,
@@ -357,9 +358,12 @@ func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, erro
 	// TODO: change userStatusDeprovisioned to STATUS_DELETED once we show deleted stuff in baton & the UI
 	// case userStatusDeprovisioned:
 	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
-	case userStatusSuspended, userStatusDeprovisioned:
+	// STAGED is pre-activation in Okta (cannot sign in) — same DISABLED bucket as SUSPENDED /
+	// DEPROVISIONED, aligned with enable_user/disable_user. PROVISIONED stays ENABLED: the
+	// account was activated and is only pending user action (password / email).
+	case userStatusStaged, userStatusSuspended, userStatusDeprovisioned:
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_DISABLED, user.Status))
-	case userStatusActive, userStatusProvisioned, userStatusStaged, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
+	case userStatusActive, userStatusProvisioned, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_ENABLED, user.Status))
 	default:
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_UNSPECIFIED, user.Status))

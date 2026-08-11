@@ -53,6 +53,57 @@ func TestUserResource_HasV1Identifier(t *testing.T) {
 	}
 }
 
+func TestUserResource_StatusMapping(t *testing.T) {
+	t.Parallel()
+
+	profile := okta.UserProfile{
+		"firstName": "Test",
+		"lastName":  "User",
+		"email":     "test.user@example.com",
+		"login":     "test.user@example.com",
+	}
+
+	tests := []struct {
+		oktaStatus string
+		want       v2.Status_ResourceStatus
+	}{
+		{oktaStatus: userStatusStaged, want: v2.Status_RESOURCE_STATUS_DISABLED},
+		{oktaStatus: userStatusSuspended, want: v2.Status_RESOURCE_STATUS_DISABLED},
+		{oktaStatus: userStatusDeprovisioned, want: v2.Status_RESOURCE_STATUS_DISABLED},
+		{oktaStatus: userStatusActive, want: v2.Status_RESOURCE_STATUS_ENABLED},
+		{oktaStatus: userStatusProvisioned, want: v2.Status_RESOURCE_STATUS_ENABLED},
+		{oktaStatus: userStatusRecovery, want: v2.Status_RESOURCE_STATUS_ENABLED},
+		{oktaStatus: userStatusPasswordExpired, want: v2.Status_RESOURCE_STATUS_ENABLED},
+		{oktaStatus: userStatusLockedOut, want: v2.Status_RESOURCE_STATUS_ENABLED},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.oktaStatus, func(t *testing.T) {
+			t.Parallel()
+
+			user := &okta.User{
+				Id:      "00uteststatus",
+				Status:  tt.oktaStatus,
+				Profile: &profile,
+			}
+			got, err := userResource(user, false)
+			if err != nil {
+				t.Fatalf("userResource: %v", err)
+			}
+			status := got.GetStatus()
+			if status == nil {
+				t.Fatal("user resource missing status")
+			}
+			if status.GetStatus() != tt.want {
+				t.Fatalf("status = %v, want %v (details %q)", status.GetStatus(), tt.want, status.GetDetails())
+			}
+			if status.GetDetails() != tt.oktaStatus {
+				t.Fatalf("status details = %q, want Okta status %q", status.GetDetails(), tt.oktaStatus)
+			}
+		})
+	}
+}
+
 func Test_shouldIncludeUserByEmails(t *testing.T) {
 	type args struct {
 		userEmails         []string

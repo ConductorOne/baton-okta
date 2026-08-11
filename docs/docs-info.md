@@ -172,14 +172,14 @@ and `activate` only to `STAGED`. What each status does:
 | `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call |
 | `DEPROVISIONED` | error — reactivating a deactivated account is a separate decision | already disabled, no call |
 
-**Sync vs actions on `STAGED` (intentional divergence).** Sync still maps `STAGED` →
-`RESOURCE_STATUS_ENABLED` in `userResource` — that contract predates this PR and is unchanged
-(flipping it to disabled would re-key status for existing tenants). Lifecycle actions use a
-different lens: "can someone sign in / which Okta endpoint applies?" A staged account cannot
-sign in, so `disable_user` treats it as already disabled (no-op) while `enable_user` activates
-it. Operators can therefore see the resource as enabled in C1 while `disable_user` reports
-already-disabled and only `enable_user` moves the account out of `STAGED`. That wrinkle is
-expected; do not "fix" it by changing the sync mapping in an actions PR.
+**Sync status for `STAGED`.** Sync maps `STAGED` → `RESOURCE_STATUS_DISABLED` (same bucket as
+`SUSPENDED` / `DEPROVISIONED`). In Okta, staged means the account was created but not activated —
+nobody can sign in until `activate`. That matches lifecycle actions (`disable_user` is a no-op;
+`enable_user` activates) and the customer-facing create-inactive wording ("staged (inactive)").
+The previous sync mapping of `STAGED` → `ENABLED` came from an early default ("only
+suspended/deprovisioned are disabled") and was never an Okta-accurate design; aligning sync
+here is a visible status flip for any tenant that still has staged users. `PROVISIONED` stays
+`ENABLED`: activation already happened and the account is only pending user action.
 
 Both actions plan from a single status GET, then trust a successful lifecycle call — they do
 not re-read the account afterward. C1 runs each action in a fresh lambda, so adding vendor-SDK
