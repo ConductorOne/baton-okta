@@ -172,6 +172,15 @@ and `activate` only to `STAGED`. What each status does:
 | `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call |
 | `DEPROVISIONED` | error — reactivating a deactivated account is a separate decision | already disabled, no call |
 
+**Sync vs actions on `STAGED` (intentional divergence).** Sync still maps `STAGED` →
+`RESOURCE_STATUS_ENABLED` in `userResource` — that contract predates this PR and is unchanged
+(flipping it to disabled would re-key status for existing tenants). Lifecycle actions use a
+different lens: "can someone sign in / which Okta endpoint applies?" A staged account cannot
+sign in, so `disable_user` treats it as already disabled (no-op) while `enable_user` activates
+it. Operators can therefore see the resource as enabled in C1 while `disable_user` reports
+already-disabled and only `enable_user` moves the account out of `STAGED`. That wrinkle is
+expected; do not "fix" it by changing the sync mapping in an actions PR.
+
 Both actions plan from a single status GET, then trust a successful lifecycle call — they do
 not re-read the account afterward. C1 runs each action in a fresh lambda, so adding vendor-SDK
 cache bypass just to support a confirm GET is unnecessary; the mutation response is the proof.
