@@ -98,6 +98,8 @@ With `--provisioning` enabled, the connector supports:
 
 Okta `STAGED` users (created but not activated — cannot sign in to Okta) sync as disabled in C1, aligned with those lifecycle actions. See [docs/docs-info.md](docs/docs-info.md#lifecycle-actions) and [docs/connector.mdx](docs/connector.mdx).
 
+### Account creation profile fields
+
 Optional keys in the account creation profile (see [docs/connector.mdx](docs/connector.mdx) for field semantics and [docs/docs-info.md](docs/docs-info.md) for wire-level detail):
 
 | Key | Values | Notes |
