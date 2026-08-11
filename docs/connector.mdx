@@ -69,6 +69,10 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 </Note>
 
 <Note>
+Okta **Staged** users sync as disabled in C1. In Okta, staged means the account was created but not activated yet, so nobody can sign in. That matches the lifecycle actions: `disable_user` is a no-op on staged accounts, and `enable_user` activates them. After you upgrade a connector that previously reported staged users as enabled, the next sync flips those resources to disabled — review any automations that key off user enabled/disabled status.
+</Note>
+
+<Note>
 If you map one of these fields to an expression, make sure the expression returns the field's type: **Additional Attributes** must return a map, and the `True` / `False` fields must return a boolean. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
 </Note>
 

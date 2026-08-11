@@ -56,13 +56,6 @@ func TestUserResource_HasV1Identifier(t *testing.T) {
 func TestUserResource_StatusMapping(t *testing.T) {
 	t.Parallel()
 
-	profile := okta.UserProfile{
-		"firstName": "Test",
-		"lastName":  "User",
-		"email":     "test.user@example.com",
-		"login":     "test.user@example.com",
-	}
-
 	tests := []struct {
 		oktaStatus string
 		want       v2.Status_ResourceStatus
@@ -81,6 +74,14 @@ func TestUserResource_StatusMapping(t *testing.T) {
 		t.Run(tt.oktaStatus, func(t *testing.T) {
 			t.Parallel()
 
+			// Per-subtest profile: userResource mutates the map, so a shared
+			// profile would race under t.Parallel().
+			profile := okta.UserProfile{
+				"firstName": "Test",
+				"lastName":  "User",
+				"email":     "test.user@example.com",
+				"login":     "test.user@example.com",
+			}
 			user := &okta.User{
 				Id:      "00uteststatus",
 				Status:  tt.oktaStatus,

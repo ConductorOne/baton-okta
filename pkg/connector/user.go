@@ -354,16 +354,16 @@ func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, erro
 		options = append(options, resource.WithEmployeeID(employeeIDs.ToSlice()...))
 	}
 
-	switch user.Status {
+	switch {
 	// TODO: change userStatusDeprovisioned to STATUS_DELETED once we show deleted stuff in baton & the UI
 	// case userStatusDeprovisioned:
 	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
 	// STAGED is pre-activation in Okta (cannot sign in) — same DISABLED bucket as SUSPENDED /
-	// DEPROVISIONED, aligned with enable_user/disable_user. PROVISIONED stays ENABLED: the
-	// account was activated and is only pending user action (password / email).
-	case userStatusStaged, userStatusSuspended, userStatusDeprovisioned:
+	// DEPROVISIONED via isDisabledOktaStatus, aligned with enable_user/disable_user.
+	// PROVISIONED stays ENABLED (isEnabledOktaStatus): activated, pending user action only.
+	case isDisabledOktaStatus(user.Status):
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_DISABLED, user.Status))
-	case userStatusActive, userStatusProvisioned, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
+	case isEnabledOktaStatus(user.Status):
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_ENABLED, user.Status))
 	default:
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_UNSPECIFIED, user.Status))
