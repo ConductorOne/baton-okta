@@ -95,7 +95,7 @@
     {
       "name": "domain",
       "displayName": "Okta domain",
-      "description": "The URL for the Okta organization",
+      "description": "Okta organization hostname, optionally prefixed with https://",
       "placeholder": "e.g. acmeco.okta.com",
       "isRequired": true,
       "stringField": {

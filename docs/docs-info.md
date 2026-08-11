@@ -34,7 +34,7 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
 ## Connector credentials
 
 1. What credentials are needed?
-   - **Domain** (`--domain` / `$BATON_DOMAIN`) — Okta org host, e.g. `acmeco.okta.com` or `integrator-123.okta.com`
+   - **Domain** (`--domain` / `$BATON_DOMAIN`) — Okta org host, e.g. `acmeco.okta.com` or `integrator-123.okta.com`. A value that includes `https://` (or a trailing slash) is normalised before the client is built; an explicit port is preserved (e.g. local mocks). Path, query, fragment, and userinfo are rejected.
    - **API Token** (`--api-token` / `$BATON_API_TOKEN`) — SSWS token, **or**
    - **OAuth private key** — `--auth-method=private-key-group` plus `--okta-client-id`, `--okta-private-key-id`, `--okta-private-key` (PEM-encoded RSA key; PKCS#1 or PKCS#8, see [OAuth private key handling](#oauth-private-key-handling))
 
@@ -97,9 +97,9 @@ Account creation is driven by `AccountCreationSchema` in `pkg/connector/connecto
 | `last_name` | yes | — | Okta `profile.lastName` |
 | `email` | yes | — | Okta `profile.email`; also login fallback |
 | `login` | no | email | Okta `profile.login` |
-| `password_change_on_login_required` | no | false | Sets `nextLogin=changePassword` when using random password |
-| `create_inactive` | no | false | `activate=false`; skips activation follow-up |
-| `send_activation_email` | no | true | Schema `BoolField` (accepts a bool or its string form). When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
+| `password_change_on_login_required` | no | false | Schema `StringField` (True/False placeholder). Sets `nextLogin=changePassword` when using random password |
+| `create_inactive` | no | false | Schema `StringField` (True/False placeholder). `activate=false`; skips activation follow-up |
+| `send_activation_email` | no | true | Schema `StringField` (True/False placeholder; same shape as the two siblings above). Accepts a bool or its string form at runtime. When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
 | `provider_type` | no | empty (Okta default local provider) | `OKTA` or `FEDERATION` (case-insensitive). `FEDERATION` sets `credentials.provider` + query `provider=true` |
 | `additionalAttributes` | no | — | Map merged into Okta profile; cannot override protected keys. A value of any other type is rejected, not dropped |
 
@@ -172,14 +172,31 @@ and `activate` only to `STAGED`. What each status does:
 | `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call |
 | `DEPROVISIONED` | error — reactivating a deactivated account is a separate decision | already disabled, no call |
 
-**Sync status for `STAGED`.** Sync maps `STAGED` → `RESOURCE_STATUS_DISABLED` (same bucket as
-`SUSPENDED` / `DEPROVISIONED`). In Okta, staged means the account was created but not activated —
-nobody can sign in until `activate`. That matches lifecycle actions (`disable_user` is a no-op;
-`enable_user` activates) and the customer-facing create-inactive wording ("staged (inactive)").
-The previous sync mapping of `STAGED` → `ENABLED` came from an early default ("only
-suspended/deprovisioned are disabled") and was never an Okta-accurate design; aligning sync
-here is a visible status flip for any tenant that still has staged users. `PROVISIONED` stays
-`ENABLED`: activation already happened and the account is only pending user action.
+**Sync status for `STAGED` (Okta sign-in, not C1).** Sync maps `STAGED` →
+`RESOURCE_STATUS_DISABLED` (same bucket as `SUSPENDED` / `DEPROVISIONED`). In Okta,
+staged means the account was created but not activated — nobody can sign in to **Okta**
+until `activate`. That is an Okta lifecycle state; it is not about signing in to ConductorOne.
+Aligning sync with lifecycle actions removes the old confusion where sync reported staged as
+enabled while `disable_user` treated it as already disabled and `enable_user` was the path
+that actually activates. Customer-facing create-inactive wording already calls this
+"staged (inactive)".
+
+How a user leaves `STAGED`: Okta `POST /lifecycle/activate` (our `enable_user` with
+`sendEmail=false`). After activation the account is typically `ACTIVE` or `PROVISIONED`.
+`PROVISIONED` stays `ENABLED` in sync — activation already happened; the account is only
+pending the user's first login / credential setup.
+
+Why accounts are staged in the first place:
+- `create_inactive=true` on CreateAccount (intentional — leave inactive, no activate call)
+- an Okta admin created the user without activating
+- an incomplete create left them staged
+
+Default CreateAccount does **not** leave users staged: the connector activates (or sends the
+activation email). The raw Okta status string remains on the resource details, so staged stays
+distinguishable from suspended/deprovisioned. The previous sync mapping of `STAGED` → `ENABLED`
+came from an early default ("only suspended/deprovisioned are disabled") and was never an
+Okta-accurate design; aligning sync here is a visible status flip for any tenant that still
+has staged users.
 
 Both actions plan from a single status GET, then trust a successful lifecycle call — they do
 not re-read the account afterward. C1 runs each action in a fresh lambda, so adding vendor-SDK

@@ -60,7 +60,7 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 | :--- | :--- | :--- | :--- |
 | **Password Change Required on Login** | `True` / `False` | Off | When creating an account with a random password, requires the user to change that password on first login. |
 | **Create Inactive** | `True` / `False` | Off | Creates the user in Okta as staged (inactive) without activating them. |
-| **Send Activation Email** | Toggle | On | When turned off, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
+| **Send Activation Email** | `True` / `False` | `True` | When set to `False`, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
 | **Provider Type** | `OKTA` / `FEDERATION` | Okta's default (local) provider | Set to `FEDERATION` to create a federated user with no local Okta password. Common in hub-and-spoke / Org2Org designs where the hub IdP owns credentials. |
 | **Additional Attributes** | Map of Okta profile keys | — | Extra Okta profile attributes (standard or custom schema) to set on the user. |
 
@@ -69,11 +69,13 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 </Note>
 
 <Note>
-Okta **Staged** users sync as disabled in C1. In Okta, staged means the account was created but not activated yet, so nobody can sign in. That matches the lifecycle actions: `disable_user` is a no-op on staged accounts, and `enable_user` activates them. After you upgrade a connector that previously reported staged users as enabled, the next sync flips those resources to disabled — review any automations that key off user enabled/disabled status.
+**Okta Staged status (sign-in to Okta, not C1).** In Okta, **Staged** means the account was created but not activated yet, so the user cannot sign in to Okta. That is an Okta lifecycle state — it is not about signing in to ConductorOne. Staged users sync as **disabled** in C1 so sync matches the lifecycle actions: `disable_user` is a no-op on staged accounts, and `enable_user` activates them (`/lifecycle/activate` without sending another activation email). After activation the account becomes **Active** or **Provisioned** (Provisioned only means they have not completed first login yet).
+
+Default **Create Account** does not leave users staged: the connector activates them or sends Okta's activation email. Users stay staged only when **Create Inactive** is `True`, an Okta admin created them without activating, or an incomplete create left them there. The raw Okta status string stays on the resource details, so Staged remains distinguishable from Suspended or Deprovisioned. After you upgrade a connector that previously reported staged users as enabled, the next sync flips those resources to disabled — review any automations that key off user enabled/disabled status.
 </Note>
 
 <Note>
-If you map one of these fields to an expression, make sure the expression returns the field's type: **Additional Attributes** must return a map, and the `True` / `False` fields must return a boolean. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
+**Password Change Required on Login**, **Create Inactive**, and **Send Activation Email** are all string fields with a `True` / `False` placeholder (same schema shape). Map them as the strings `"true"` / `"false"` (case-insensitive). The connector also accepts a real boolean at runtime, but provisioning mappings that treat these three fields the same way are the supported pattern. **Additional Attributes** must return a map. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
 </Note>
 
 Syncing standard and custom admin roles requires a super admin token. 
@@ -372,7 +374,7 @@ Find the **Settings** area of the page and click **Edit**.
 Select your authentication method: **API Token** or **OAuth 2.0 Private Key**.
 </Step>
 <Step>
-Enter your Okta domain (the URL of your Okta instance is `<YOUR DOMAIN>.okta.com`) into the **Okta domain** field.
+Enter your Okta domain hostname, e.g. `<YOUR DOMAIN>.okta.com`, into the **Okta domain** field. The `https://` prefix is optional.
 </Step>
 <Step>
 Enter your credentials:
