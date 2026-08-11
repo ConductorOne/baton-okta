@@ -97,9 +97,9 @@ Account creation is driven by `AccountCreationSchema` in `pkg/connector/connecto
 | `last_name` | yes | — | Okta `profile.lastName` |
 | `email` | yes | — | Okta `profile.email`; also login fallback |
 | `login` | no | email | Okta `profile.login` |
-| `password_change_on_login_required` | no | false | Sets `nextLogin=changePassword` when using random password |
-| `create_inactive` | no | false | `activate=false`; skips activation follow-up |
-| `send_activation_email` | no | true | Schema `BoolField` (accepts a bool or its string form). When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
+| `password_change_on_login_required` | no | false | Schema `StringField` (True/False placeholder). Sets `nextLogin=changePassword` when using random password |
+| `create_inactive` | no | false | Schema `StringField` (True/False placeholder). `activate=false`; skips activation follow-up |
+| `send_activation_email` | no | true | Schema `StringField` (True/False placeholder; same shape as the two siblings above). Accepts a bool or its string form at runtime. When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
 | `provider_type` | no | empty (Okta default local provider) | `OKTA` or `FEDERATION` (case-insensitive). `FEDERATION` sets `credentials.provider` + query `provider=true` |
 | `additionalAttributes` | no | — | Map merged into Okta profile; cannot override protected keys. A value of any other type is rejected, not dropped |
 

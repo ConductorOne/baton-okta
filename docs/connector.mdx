@@ -60,7 +60,7 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 | :--- | :--- | :--- | :--- |
 | **Password Change Required on Login** | `True` / `False` | Off | When creating an account with a random password, requires the user to change that password on first login. |
 | **Create Inactive** | `True` / `False` | Off | Creates the user in Okta as staged (inactive) without activating them. |
-| **Send Activation Email** | Toggle | On | When turned off, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
+| **Send Activation Email** | `True` / `False` | `True` | When set to `False`, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
 | **Provider Type** | `OKTA` / `FEDERATION` | Okta's default (local) provider | Set to `FEDERATION` to create a federated user with no local Okta password. Common in hub-and-spoke / Org2Org designs where the hub IdP owns credentials. |
 | **Additional Attributes** | Map of Okta profile keys | — | Extra Okta profile attributes (standard or custom schema) to set on the user. |
 
@@ -69,7 +69,7 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 </Note>
 
 <Note>
-If you map one of these fields to an expression, make sure the expression returns the field's type: **Additional Attributes** must return a map, and the `True` / `False` fields must return a boolean. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
+**Password Change Required on Login**, **Create Inactive**, and **Send Activation Email** are all string fields with a `True` / `False` placeholder (same schema shape). Map them as the strings `"true"` / `"false"` (case-insensitive). The connector also accepts a real boolean at runtime, but provisioning mappings that treat these three fields the same way are the supported pattern. **Additional Attributes** must return a map. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
 </Note>
 
 Syncing standard and custom admin roles requires a super admin token. 
