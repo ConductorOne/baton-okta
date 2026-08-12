@@ -69,6 +69,12 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 </Note>
 
 <Note>
+**Okta Staged status (sign-in to Okta, not C1).** In Okta, **Staged** means the account was created but not activated yet, so the user cannot sign in to Okta. That is an Okta lifecycle state — it is not about signing in to ConductorOne. Staged users sync as **disabled** in C1 so sync matches the lifecycle actions: `disable_user` is a no-op on staged accounts, and `enable_user` activates them (`/lifecycle/activate` without sending another activation email). After activation the account becomes **Active** or **Provisioned** (Provisioned only means they have not completed first login yet).
+
+Default **Create Account** does not leave users staged: the connector activates them or sends Okta's activation email. Users stay staged only when **Create Inactive** is `True`, an Okta admin created them without activating, or an incomplete create left them there. The raw Okta status string stays on the resource details, so Staged remains distinguishable from Suspended or Deprovisioned. After you upgrade a connector that previously reported staged users as enabled, the next sync flips those resources to disabled — review any automations that key off user enabled/disabled status.
+</Note>
+
+<Note>
 **Password Change Required on Login**, **Create Inactive**, and **Send Activation Email** are all string fields with a `True` / `False` placeholder (same schema shape). Map them as the strings `"true"` / `"false"` (case-insensitive). The connector also accepts a real boolean at runtime, but provisioning mappings that treat these three fields the same way are the supported pattern. **Additional Attributes** must return a map. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
 </Note>
 
@@ -82,8 +88,8 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
-| enable_user | `user_id` (string, required) | Unsuspends a suspended Okta user account |
-| disable_user     | `user_id` (string, required) | Suspends an active Okta user account |
+| enable_user | `user_id` (string, required) | Enables an Okta user account: unsuspends a suspended account, and activates a staged one without sending an activation email. Returns success without calling Okta when the account is already enabled. Does **not** reactivate a deactivated (`DEPROVISIONED`) account — that returns an error. Okta's activate API can do that transition, but this action treats reactivation of a deactivated user as a separate decision from enable. |
+| disable_user     | `user_id` (string, required) | Suspends an Okta user account. Returns success without calling Okta when the account is already suspended, deactivated, or still staged. |
 | create | `name` (string, required), `description` (string), `userMembers` (resource ID list) | Creates a new Okta group with optional initial members |
 | modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,33 @@ const (
 	userStatusRecovery        = "RECOVERY"
 	userStatusStaged          = "STAGED"
 )
+
+// oktaEnabledStatuses drives enable_user / disable_user only. Credential problems
+// (RECOVERY, PASSWORD_EXPIRED, LOCKED_OUT) stay here — enable does not clear them.
+// Sync maps the same "cannot sign in yet / anymore" set to RESOURCE_STATUS_DISABLED
+// (STAGED, SUSPENDED, DEPROVISIONED) so C1 status matches lifecycle actions.
+var oktaEnabledStatuses = []string{
+	userStatusActive,
+	userStatusProvisioned,
+	userStatusRecovery,
+	userStatusPasswordExpired,
+	userStatusLockedOut,
+}
+
+// oktaDisabledStatuses: nobody can sign in (never activated, suspended, or deactivated).
+var oktaDisabledStatuses = []string{
+	userStatusStaged,
+	userStatusSuspended,
+	userStatusDeprovisioned,
+}
+
+func isEnabledOktaStatus(oktaStatus string) bool {
+	return slices.Contains(oktaEnabledStatuses, oktaStatus)
+}
+
+func isDisabledOktaStatus(oktaStatus string) bool {
+	return slices.Contains(oktaDisabledStatuses, oktaStatus)
+}
 
 type userResourceType struct {
 	resourceType *v2.ResourceType
@@ -326,13 +354,16 @@ func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, erro
 		options = append(options, resource.WithEmployeeID(employeeIDs.ToSlice()...))
 	}
 
-	switch user.Status {
+	switch {
 	// TODO: change userStatusDeprovisioned to STATUS_DELETED once we show deleted stuff in baton & the UI
 	// case userStatusDeprovisioned:
 	// options = append(options, resource.WithDetailedStatus(v2.UserTrait_Status_STATUS_DELETED, user.Status))
-	case userStatusSuspended, userStatusDeprovisioned:
+	// STAGED is pre-activation in Okta (cannot sign in) — same DISABLED bucket as SUSPENDED /
+	// DEPROVISIONED via isDisabledOktaStatus, aligned with enable_user/disable_user.
+	// PROVISIONED stays ENABLED (isEnabledOktaStatus): activated, pending user action only.
+	case isDisabledOktaStatus(user.Status):
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_DISABLED, user.Status))
-	case userStatusActive, userStatusProvisioned, userStatusStaged, userStatusPasswordExpired, userStatusRecovery, userStatusLockedOut:
+	case isEnabledOktaStatus(user.Status):
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_ENABLED, user.Status))
 	default:
 		resourceOpts = append(resourceOpts, resource.WithResourceStatus(v2.Status_RESOURCE_STATUS_UNSPECIFIED, user.Status))
@@ -738,9 +769,8 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	return resource, annos, nil
 }
 
-// getUser retrieves the Okta user with the specified ID.
-// It returns the Okta user and a responseContext containing the HTTP response; if the user is not found or the request fails, an error is returned.
-// The underlying request omits credentials and related fields from the response to reduce payload size.
+// getUser retrieves the Okta user with the specified ID (may use the SDK GET cache).
+// The request omits credentials and related fields to reduce payload size.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
@@ -820,5 +850,27 @@ func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) 
 	}
 
 	l.Info("user unsuspended", zap.String("user_id", oktaUserID))
+	return nil
+}
+
+// activateUser activates oktaUserID with sendEmail=false (STAGED → ACTIVE/PROVISIONED).
+// The ActivateUser response has no User status; callers that need the landing status must GET.
+func activateUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	l := ctxzap.Extract(ctx)
+	l.Debug("activating user", zap.String("user_id", oktaUserID))
+
+	if oktaUserID == "" {
+		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
+	}
+
+	_, resp, err := client.User.ActivateUser(ctx, oktaUserID, query.NewQueryParams(query.WithSendEmail(false)))
+	if err != nil {
+		return fmt.Errorf("okta-connectorv2: failed to activate user: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("okta-connectorv2: failed to activate user: %s", resp.Status)
+	}
+
+	l.Info("user activated", zap.String("user_id", oktaUserID))
 	return nil
 }

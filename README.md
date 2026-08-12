@@ -94,7 +94,9 @@ With `--provisioning` enabled, the connector supports:
 - **Account creation** — create Okta users via C1 account provisioning / `--create-account-profile`
 - **Group / app / role grant and revoke**
 - **Group create, modify, and delete** (group delete via `--delete-resource`)
-- **enable_user / disable_user** lifecycle actions
+- **enable_user / disable_user** lifecycle actions — `enable_user` unsuspends a `SUSPENDED` account and activates a `STAGED` one (no activation email); `disable_user` suspends an enabled account
+
+Okta `STAGED` users (created but not activated — cannot sign in to Okta) sync as disabled in C1, aligned with those lifecycle actions. See [docs/docs-info.md](docs/docs-info.md#lifecycle-actions) and [docs/connector.mdx](docs/connector.mdx).
 
 ### Account creation profile fields
 

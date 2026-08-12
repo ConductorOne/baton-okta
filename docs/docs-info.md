@@ -22,7 +22,7 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
    - **Role assignment** — Grant/Revoke for assignable roles
    - **Custom-role bindings** — Grant/Revoke on resource-set bindings when custom roles are enabled
    - **Group create / modify / delete** — Resource actions + `ResourceDeleter` for groups
-   - **enable_user / disable_user** — Lifecycle actions (unsuspend / suspend)
+   - **enable_user / disable_user** — Lifecycle actions (activate / unsuspend / suspend, see [Lifecycle actions](#lifecycle-actions))
 
    **Note:** Account **deprovisioning** (hard delete of users) is not implemented. Soft disable is via `disable_user`.
 
@@ -139,11 +139,13 @@ The existing user's lifecycle is never changed — activation runs only for a us
 created. `STAGED` does not identify a stranded attempt: `create_inactive=true` and an admin-staged
 account look identical, so activating on a duplicate would override an explicit "keep this account
 inactive" decision. The trade-off is that a retry after a failed activation reports
-`AlreadyExistsResult` with the user still `STAGED`, and finishing activation has to happen in Okta.
-The `enable_user` action does not cover this case: it only unsuspends a `SUSPENDED` user. On any other
-status (including `STAGED`) Okta returns "Cannot unsuspend a user that is not suspended", and the
-action swallows that into a success response (`Account … was already enabled`) without changing the
-user — so the account stays `STAGED`.
+`AlreadyExistsResult` with the user still `STAGED`.
+
+Finishing that activation is an explicit operation: run the `enable_user` action against the
+account, which activates a `STAGED` user with `sendEmail=false` (see
+[Lifecycle actions](#lifecycle-actions)). A repeated create will not do it, by design — only an
+operator asking to enable that specific account can, because a create cannot tell a stranded
+attempt from a deliberately inactive account.
 
 ### Org2Org / hub-spoke
 
@@ -154,6 +156,62 @@ Spoke users are often created as `FEDERATION` (hub owns credentials) with `send_
 - FEDERATION user after staged create + activate(`sendEmail=false`) → typically **ACTIVE**.
 - OKTA user with **no password** after the same flow → typically **PROVISIONED** (same as default create without password).
 - OKTA user **with** password after activate(`sendEmail=false`) → typically **ACTIVE**.
+
+---
+
+## Lifecycle actions
+
+`enable_user` and `disable_user` both read the account's current Okta status first, because each
+Okta lifecycle endpoint accepts a single source status — `unsuspend` only applies to `SUSPENDED`
+and `activate` only to `STAGED`. What each status does:
+
+| Okta status | `enable_user` | `disable_user` |
+|---|---|---|
+| `ACTIVE`, `PROVISIONED`, `RECOVERY`, `PASSWORD_EXPIRED`, `LOCKED_OUT` | already enabled, no call | `POST /lifecycle/suspend` |
+| `SUSPENDED` | `POST /lifecycle/unsuspend` | already disabled, no call |
+| `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call |
+| `DEPROVISIONED` | error — reactivating a deactivated account is a separate decision | already disabled, no call |
+
+**Sync status for `STAGED` (Okta sign-in, not C1).** Sync maps `STAGED` →
+`RESOURCE_STATUS_DISABLED` (same bucket as `SUSPENDED` / `DEPROVISIONED`). In Okta,
+staged means the account was created but not activated — nobody can sign in to **Okta**
+until `activate`. That is an Okta lifecycle state; it is not about signing in to ConductorOne.
+Aligning sync with lifecycle actions removes the old confusion where sync reported staged as
+enabled while `disable_user` treated it as already disabled and `enable_user` was the path
+that actually activates. Customer-facing create-inactive wording already calls this
+"staged (inactive)".
+
+How a user leaves `STAGED`: Okta `POST /lifecycle/activate` (our `enable_user` with
+`sendEmail=false`). After activation the account is typically `ACTIVE` or `PROVISIONED`.
+`PROVISIONED` stays `ENABLED` in sync — activation already happened; the account is only
+pending the user's first login / credential setup.
+
+Why accounts are staged in the first place:
+- `create_inactive=true` on CreateAccount (intentional — leave inactive, no activate call)
+- an Okta admin created the user without activating
+- an incomplete create left them staged
+
+Default CreateAccount does **not** leave users staged: the connector activates (or sends the
+activation email). The raw Okta status string remains on the resource details, so staged stays
+distinguishable from suspended/deprovisioned. The previous sync mapping of `STAGED` → `ENABLED`
+came from an early default ("only suspended/deprovisioned are disabled") and was never an
+Okta-accurate design; aligning sync here is a visible status flip for any tenant that still
+has staged users.
+
+Both actions plan from a single status GET, then trust a successful lifecycle call — they do
+not re-read the account afterward. C1 runs each action in a fresh lambda, so adding vendor-SDK
+cache bypass just to support a confirm GET is unnecessary; the mutation response is the proof.
+A call Okta rejects is returned as an error. Neither action invents success from a string-matched
+vendor error: `enable_user` on a `STAGED` account used to return `Account … was already enabled`
+while the account stayed `STAGED` and unusable.
+
+`RECOVERY`, `PASSWORD_EXPIRED` and `LOCKED_OUT` are credential problems on an account that is
+enabled, so `enable_user` reports them as already enabled rather than clearing them — neither
+unlocking nor a password reset is part of this action.
+
+`activate` sends no email, matching the `send_activation_email=false` create path. An `OKTA`
+account without a password typically lands in `PROVISIONED`, while a `FEDERATION` account can land
+in `ACTIVE`; the action success message no longer names that post-transition status.
 
 ---
 
