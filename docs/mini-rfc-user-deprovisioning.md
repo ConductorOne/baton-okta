@@ -75,9 +75,11 @@ Both new actions return:
 4. If status is not `DEPROVISIONED`, call `DeactivateUser` with `sendEmail=false`.
 5. If deactivation loses a race, re-read the user. Continue when the user is now `DEPROVISIONED`; succeed when it is now missing; otherwise preserve the original mutation error.
 6. Call `DeactivateOrDeleteUser` once the user is deprovisioned.
-7. Treat a not-found delete response as success because another actor completed the requested terminal state.
+7. Only `204 No Content` confirms permanent deletion. If Okta returns another successful status such as `202 Accepted`, perform one fresh status read and issue the required second DELETE only after Okta reports `DEPROVISIONED`.
+8. If deactivation is still incomplete, or a second DELETE still does not return 204, return a retryable error rather than claiming the user is gone.
+9. Treat a not-found delete response as success because another actor completed the requested terminal state.
 
-The Okta SDK treats every 2xx response as success, so connector code must not reject valid 202/204 responses with a hard-coded `200 OK` check.
+The Okta SDK treats every 2xx response as transport success. The connector adds the operation-specific 204 check because DELETE on a non-deprovisioned user can mean “deactivation accepted,” not “user permanently removed.”
 
 ### State matrix
 
@@ -117,16 +119,19 @@ Required cases:
 2. Deprovisioned user deletion skips deactivate.
 3. Missing user deletion is idempotent and performs no mutation.
 4. A deletion race that returns not-found during deactivate or delete succeeds.
-5. Deactivate action changes an active user and no-ops a deprovisioned user.
-6. Deactivate action returns `NotFound` for a missing user.
-7. Action schemas are globally registered with resource-ID arguments, return fields, and the intended action types.
-8. Invalid resource IDs fail before network access.
-9. Generated capabilities match `baton_capabilities.json`.
-10. Connector tests, build, lint, and metadata validation pass.
+5. A non-204 DELETE is completed with a fresh status read and second DELETE, or returns a retryable error without claiming success.
+6. Reconciliation preserves the original mutation error when the fresh status does not prove success or the status read fails.
+7. Deactivate action changes an active user and no-ops a deprovisioned user.
+8. Deactivate action returns `NotFound` for a missing user.
+9. Action schemas are globally registered with resource-ID arguments, return fields, and the intended action types.
+10. Invalid resource IDs fail before network access.
+11. Generated capabilities match `baton_capabilities.json`.
+12. Connector tests, build, lint, and metadata validation pass.
 
 ## Documentation and rollout
 
 - Update `README.md`, `docs/connector.mdx`, and `docs/docs-info.md` to distinguish suspend, deactivate, and delete.
 - Document destructive behavior, retry semantics, required `okta.users.manage` scope, and workflow action arguments.
 - Regenerate `baton_capabilities.json` from the built connector rather than editing it by hand.
-- No migration is required: existing enable/disable workflows retain their current schemas and semantics; the two new actions are additive.
+- Call out the behavioral rollout explicitly: before this change, C1's standard Okta account-deprovisioning path was unsupported; after this change, invoking that path permanently deletes the Okta user after deactivation. This is the requested CXH-1999 contract, so it is not hidden behind a connector-specific flag.
+- Existing `enable_user` / `disable_user` workflows retain their schemas and reversible semantics. The explicit `deactivate_user` and `delete_user` actions are additive.

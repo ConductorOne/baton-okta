@@ -898,7 +898,9 @@ func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID 
 }
 
 // permanentlyDeleteUser guarantees that the user is absent. Okta requires a
-// user to be DEPROVISIONED before DELETE permanently removes it.
+// user to be DEPROVISIONED before DELETE permanently removes it. A successful
+// non-204 DELETE only accepted a lifecycle transition, so confirm status and
+// issue the required second DELETE rather than reporting a false success.
 func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
 	_, missing, err := ensureUserDeactivated(ctx, client, oktaUserID)
 	if err != nil {
@@ -908,11 +910,46 @@ func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID 
 		return false, nil
 	}
 
-	if err := deleteUser(ctx, client, oktaUserID); err != nil {
+	deleted, err := deleteUser(ctx, client, oktaUserID)
+	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return false, nil
 		}
 		return false, err
+	}
+	if deleted {
+		return true, nil
+	}
+
+	currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return true, nil
+		}
+		return false, err
+	}
+	if currentStatus != userStatusDeprovisioned {
+		return false, status.Errorf(
+			codes.Unavailable,
+			"okta-connectorv2: delete accepted for user %s, but deactivation is not complete (status %s); retry",
+			oktaUserID,
+			currentStatus,
+		)
+	}
+
+	deleted, err = deleteUser(ctx, client, oktaUserID)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return true, nil
+		}
+		return false, err
+	}
+	if !deleted {
+		return false, status.Errorf(
+			codes.Unavailable,
+			"okta-connectorv2: Okta accepted a second delete for user %s without confirming permanent deletion; retry",
+			oktaUserID,
+		)
 	}
 	return true, nil
 }
@@ -965,9 +1002,12 @@ func deactivateUser(ctx context.Context, client *okta.Client, oktaUserID string)
 	return nil
 }
 
-func deleteUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+// deleteUser returns true only when Okta confirms permanent deletion with
+// 204 No Content. Other successful statuses mean the request was accepted but
+// don't prove that the user is absent.
+func deleteUser(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
 	if oktaUserID == "" {
-		return status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+		return false, status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
 	}
 
 	resp, err := client.User.DeactivateOrDeleteUser(ctx, oktaUserID, nil)
@@ -975,11 +1015,22 @@ func deleteUser(ctx context.Context, client *okta.Client, oktaUserID string) err
 		defer resp.Body.Close()
 	}
 	if err != nil {
-		return fmt.Errorf("okta-connectorv2: failed to delete user: %w", handleOktaResponseError(resp, err))
+		return false, fmt.Errorf("okta-connectorv2: failed to delete user: %w", handleOktaResponseError(resp, err))
+	}
+	if resp == nil {
+		return false, status.Error(codes.Internal, "okta-connectorv2: delete user returned no response")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		ctxzap.Extract(ctx).Debug(
+			"Okta accepted delete without confirming permanent deletion",
+			zap.String("user_id", oktaUserID),
+			zap.Int("status_code", resp.StatusCode),
+		)
+		return false, nil
 	}
 
 	ctxzap.Extract(ctx).Info("deleted Okta user", zap.String("user_id", oktaUserID))
-	return nil
+	return true, nil
 }
 
 // suspendUser suspends the Okta user identified by oktaUserID.

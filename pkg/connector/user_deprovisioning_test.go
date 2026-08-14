@@ -145,6 +145,34 @@ func TestUserResourceDelete(t *testing.T) {
 		}
 	})
 
+	t.Run("accepted delete is completed with a second delete", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusAccepted},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
+		)
+
+		builder := userBuilder(&Okta{client: client})
+		if _, err := builder.Delete(t.Context(), userResourceID(), nil); err != nil {
+			t.Fatalf("Delete() error: %v", err)
+		}
+	})
+
+	t.Run("accepted delete without completed deactivation is retryable", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusAccepted},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+		)
+
+		builder := userBuilder(&Okta{client: client})
+		_, err := builder.Delete(t.Context(), userResourceID(), nil)
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Delete() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
+
 	t.Run("stale cached status is bypassed", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
@@ -203,6 +231,52 @@ func TestUserResourceDelete(t *testing.T) {
 		builder := userBuilder(&Okta{client: client})
 		if _, err := builder.Delete(t.Context(), userResourceID(), nil); err != nil {
 			t.Fatalf("Delete() error: %v", err)
+		}
+	})
+}
+
+func TestEnsureUserDeactivatedPreservesMutationError(t *testing.T) {
+	t.Run("reconcile sees a non-deprovisioned status", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+			oktaRequestStep{
+				method:     http.MethodPost,
+				path:       "/api/v1/users/" + testOktaUserID + "/lifecycle/deactivate",
+				query:      map[string]string{"sendEmail": "false"},
+				statusCode: http.StatusBadRequest,
+				body:       oktaLifecycleErrorResponse(),
+			},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+		)
+
+		changed, missing, err := ensureUserDeactivated(t.Context(), client, testOktaUserID)
+		if err == nil || changed || missing {
+			t.Fatalf("ensureUserDeactivated() = changed %t, missing %t, error %v; want false, false, mutation error", changed, missing, err)
+		}
+		if !strings.Contains(err.Error(), "failed to deactivate user") {
+			t.Fatalf("ensureUserDeactivated() error = %v, want original deactivate error", err)
+		}
+	})
+
+	t.Run("reconcile read fails", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+			oktaRequestStep{
+				method:     http.MethodPost,
+				path:       "/api/v1/users/" + testOktaUserID + "/lifecycle/deactivate",
+				query:      map[string]string{"sendEmail": "false"},
+				statusCode: http.StatusBadRequest,
+				body:       oktaLifecycleErrorResponse(),
+			},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusInternalServerError, body: oktaLifecycleErrorResponse()},
+		)
+
+		changed, missing, err := ensureUserDeactivated(t.Context(), client, testOktaUserID)
+		if err == nil || changed || missing {
+			t.Fatalf("ensureUserDeactivated() = changed %t, missing %t, error %v; want false, false, mutation error", changed, missing, err)
+		}
+		if status.Code(err) == codes.Unavailable || !strings.Contains(err.Error(), "failed to deactivate user") {
+			t.Fatalf("ensureUserDeactivated() error = %v, want original deactivate error rather than reconcile error", err)
 		}
 	})
 }
