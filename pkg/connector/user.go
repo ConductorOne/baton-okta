@@ -23,18 +23,22 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
-	unknownProfileValue       = "unknown"
-	userStatusSuspended       = "SUSPENDED"
-	userStatusDeprovisioned   = "DEPROVISIONED"
-	userStatusActive          = "ACTIVE"
-	userStatusLockedOut       = "LOCKED_OUT"
-	userStatusPasswordExpired = "PASSWORD_EXPIRED"
-	userStatusProvisioned     = "PROVISIONED"
-	userStatusRecovery        = "RECOVERY"
-	userStatusStaged          = "STAGED"
+	unknownProfileValue                 = "unknown"
+	userStatusSuspended                 = "SUSPENDED"
+	userStatusDeprovisioned             = "DEPROVISIONED"
+	userStatusActive                    = "ACTIVE"
+	userStatusLockedOut                 = "LOCKED_OUT"
+	userStatusPasswordExpired           = "PASSWORD_EXPIRED"
+	userStatusProvisioned               = "PROVISIONED"
+	userStatusRecovery                  = "RECOVERY"
+	userStatusStaged                    = "STAGED"
+	userDeprovisionConfirmationAttempts = 4
+	userDeprovisionConfirmationInterval = 500 * time.Millisecond
 )
 
 // oktaEnabledStatuses drives enable_user / disable_user only. Credential problems
@@ -68,6 +72,8 @@ type userResourceType struct {
 	resourceType *v2.ResourceType
 	connector    *Okta
 }
+
+var _ connectorbuilder.ResourceDeleterV2Limited = (*userResourceType)(nil)
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
@@ -769,9 +775,20 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	return resource, annos, nil
 }
 
-// getUser retrieves the Okta user with the specified ID (may use the SDK GET cache).
-// The request omits credentials and related fields to reduce payload size.
+// getUser retrieves the Okta user with the specified ID (and may use the SDK
+// GET cache). The request omits credentials and related fields to reduce the
+// payload.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
+	return getUserWithCachePolicy(ctx, client, oktaUserID, false)
+}
+
+// getUserFresh bypasses the SDK GET cache for lifecycle reconciliation after
+// a failed mutation.
+func getUserFresh(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
+	return getUserWithCachePolicy(ctx, client, oktaUserID, true)
+}
+
+func getUserWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID string, fresh bool) (*okta.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
 		return nil, nil, err
@@ -784,6 +801,9 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
 	oktaUsers := &okta.User{}
 	rq := client.CloneRequestExecutor()
+	if fresh {
+		rq.RefreshNext()
+	}
 	req, err := rq.
 		WithAccept(ContentType).
 		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
@@ -801,6 +821,246 @@ func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta
 	}
 
 	return oktaUsers, &responseContext{OktaResponse: resp}, nil
+}
+
+func (o *userResourceType) Delete(ctx context.Context, resourceID *v2.ResourceId, _ *v2.ResourceId) (annotations.Annotations, error) {
+	oktaUserID, err := oktaUserIDFromResourceID(resourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	deleted, err := permanentlyDeleteUser(ctx, o.connector.client, oktaUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	l := ctxzap.Extract(ctx)
+	if deleted {
+		l.Info("deprovisioned and deleted Okta user", zap.String("user_id", oktaUserID))
+	} else {
+		l.Info("Okta user was already deleted", zap.String("user_id", oktaUserID))
+	}
+	return nil, nil
+}
+
+func oktaUserIDFromResourceID(resourceID *v2.ResourceId) (string, error) {
+	if resourceID == nil {
+		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user resource ID is required")
+	}
+	if resourceID.GetResourceType() != resourceTypeUser.Id {
+		return "", status.Errorf(
+			codes.InvalidArgument,
+			"okta-connectorv2: expected resource type %q, got %q",
+			resourceTypeUser.Id,
+			resourceID.GetResourceType(),
+		)
+	}
+	if resourceID.GetResource() == "" {
+		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+	}
+	return resourceID.GetResource(), nil
+}
+
+// ensureUserDeactivated transitions an existing user to DEPROVISIONED. It
+// bypasses the SDK GET cache because a stale DEPROVISIONED status could turn
+// Okta's first DELETE call into deactivation while the connector reports a
+// permanent deletion. The booleans report whether this call changed the status
+// and whether the user is already absent; callers decide whether absence
+// satisfies their contract.
+func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID string) (bool, bool, error) {
+	currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return false, true, nil
+		}
+		return false, false, err
+	}
+	if currentStatus == userStatusDeprovisioned {
+		return false, false, nil
+	}
+
+	if err := deactivateUser(ctx, client, oktaUserID); err != nil {
+		// Reconcile concurrent lifecycle changes without relying on vendor error
+		// text. Only a confirmed terminal state converts the mutation error to
+		// success.
+		reconciledStatus, reconcileErr := getUserStatusFresh(ctx, client, oktaUserID)
+		if reconcileErr != nil {
+			if status.Code(reconcileErr) == codes.NotFound {
+				return false, true, nil
+			}
+			return false, false, err
+		}
+		if reconciledStatus == userStatusDeprovisioned {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+
+	missing, err := waitForUserDeprovisioned(ctx, client, oktaUserID)
+	if err != nil {
+		return false, false, err
+	}
+	if missing {
+		return false, true, nil
+	}
+	return true, false, nil
+}
+
+func waitForUserDeprovisioned(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
+	for attempt := 1; attempt <= userDeprovisionConfirmationAttempts; attempt++ {
+		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return true, nil
+			}
+			return false, err
+		}
+		if currentStatus == userStatusDeprovisioned {
+			return false, nil
+		}
+		if attempt == userDeprovisionConfirmationAttempts {
+			return false, status.Errorf(
+				codes.Unavailable,
+				"okta-connectorv2: user %s is not yet deprovisioned (status %s); retry",
+				oktaUserID,
+				currentStatus,
+			)
+		}
+
+		timer := time.NewTimer(userDeprovisionConfirmationInterval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return false, ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	return false, status.Error(codes.Internal, "okta-connectorv2: deprovision confirmation loop exited unexpectedly")
+}
+
+// permanentlyDeleteUser guarantees that the user is absent. Okta returns 204
+// both when DELETE merely deactivates a non-DEPROVISIONED user and when it
+// permanently deletes a DEPROVISIONED user, so status codes alone cannot prove
+// the postcondition. ensureUserDeactivated confirms the prerequisite; a fresh
+// GET after each DELETE proves absence. One second DELETE handles a lifecycle
+// race without an unbounded retry loop.
+func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
+	_, missing, err := ensureUserDeactivated(ctx, client, oktaUserID)
+	if err != nil {
+		return false, err
+	}
+	if missing {
+		return false, nil
+	}
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		if err := deleteUser(ctx, client, oktaUserID); err != nil {
+			if status.Code(err) == codes.NotFound {
+				return true, nil
+			}
+			return false, err
+		}
+
+		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return true, nil
+			}
+			return false, err
+		}
+		if currentStatus != userStatusDeprovisioned {
+			return false, status.Errorf(
+				codes.Unavailable,
+				"okta-connectorv2: user %s still exists after delete (status %s); retry",
+				oktaUserID,
+				currentStatus,
+			)
+		}
+	}
+
+	return false, status.Errorf(
+		codes.Unavailable,
+		"okta-connectorv2: user %s still exists after two delete requests; retry",
+		oktaUserID,
+	)
+}
+
+func getUserStatus(ctx context.Context, client *okta.Client, oktaUserID string) (string, error) {
+	return getUserStatusWithCachePolicy(ctx, client, oktaUserID, false)
+}
+
+func getUserStatusFresh(ctx context.Context, client *okta.Client, oktaUserID string) (string, error) {
+	return getUserStatusWithCachePolicy(ctx, client, oktaUserID, true)
+}
+
+func getUserStatusWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID string, fresh bool) (string, error) {
+	if oktaUserID == "" {
+		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+	}
+
+	var (
+		user *okta.User
+		err  error
+	)
+	if fresh {
+		user, _, err = getUserFresh(ctx, client, oktaUserID)
+	} else {
+		user, _, err = getUser(ctx, client, oktaUserID)
+	}
+	if err != nil {
+		return "", fmt.Errorf("okta-connectorv2: failed to find user %s: %w", oktaUserID, err)
+	}
+	if user == nil {
+		return "", status.Errorf(codes.NotFound, "okta-connectorv2: user %s not found", oktaUserID)
+	}
+	return user.Status, nil
+}
+
+func deactivateUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	if oktaUserID == "" {
+		return status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+	}
+
+	resp, err := client.User.DeactivateUser(ctx, oktaUserID, query.NewQueryParams(query.WithSendEmail(false)))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		return fmt.Errorf("okta-connectorv2: failed to deactivate user: %w", handleOktaResponseError(resp, err))
+	}
+
+	ctxzap.Extract(ctx).Info("deactivated Okta user", zap.String("user_id", oktaUserID))
+	return nil
+}
+
+func deleteUser(ctx context.Context, client *okta.Client, oktaUserID string) error {
+	if oktaUserID == "" {
+		return status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+	}
+
+	resp, err := client.User.DeactivateOrDeleteUser(ctx, oktaUserID, nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		return fmt.Errorf("okta-connectorv2: failed to delete user: %w", handleOktaResponseError(resp, err))
+	}
+	if resp == nil {
+		return status.Error(codes.Internal, "okta-connectorv2: delete user returned no response")
+	}
+
+	ctxzap.Extract(ctx).Debug(
+		"Okta accepted delete request",
+		zap.String("user_id", oktaUserID),
+		zap.Int("status_code", resp.StatusCode),
+	)
+	return nil
 }
 
 // suspendUser suspends the Okta user identified by oktaUserID.
