@@ -192,8 +192,6 @@ Credential-problem statuses (`RECOVERY`, `PASSWORD_EXPIRED`, and `LOCKED_OUT`) r
 
 Deactivation and deletion require `okta.users.manage`. Deactivation is destructive because Okta deprovisions the user from assigned apps, potentially destroying downstream email or files. Permanent deletion cannot be recovered. Workflow authors should put approval gates around these actions when policy requires them.
 
-The detailed implementation and retry contract are recorded in [the mini RFC](mini-rfc-user-deprovisioning.md).
-
 ---
 ## Resource reference (API doc links)
 
