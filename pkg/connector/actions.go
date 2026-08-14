@@ -105,7 +105,7 @@ var deactivateUserActionSchema = &v2.BatonActionSchema{
 		},
 	},
 	ActionType: []v2.ActionType{
-		v2.ActionType_ACTION_TYPE_ACCOUNT,
+		v2.ActionType_ACTION_TYPE_RESOURCE_DISABLE,
 	},
 }
 
@@ -141,11 +141,12 @@ var deleteUserActionSchema = &v2.BatonActionSchema{
 		},
 	},
 	ActionType: []v2.ActionType{
-		v2.ActionType_ACTION_TYPE_ACCOUNT,
+		v2.ActionType_ACTION_TYPE_RESOURCE_DELETE,
 	},
 }
 
 var _ connectorbuilder.GlobalActionProvider = (*Okta)(nil)
+var _ connectorbuilder.ResourceActionProvider = (*userResourceType)(nil)
 
 func (o *Okta) GlobalActions(ctx context.Context, registry actions.ActionRegistry) error {
 	if err := registry.Register(ctx, enableUser, o.enableUser); err != nil {
@@ -154,11 +155,15 @@ func (o *Okta) GlobalActions(ctx context.Context, registry actions.ActionRegistr
 	if err := registry.Register(ctx, disableUser, o.disableUser); err != nil {
 		return fmt.Errorf("okta-connectorv2: register disable_user action: %w", err)
 	}
+	return nil
+}
+
+func (o *userResourceType) ResourceActions(ctx context.Context, registry actions.ActionRegistry) error {
 	if err := registry.Register(ctx, deactivateUserActionSchema, o.deactivateUserAction); err != nil {
-		return fmt.Errorf("okta-connectorv2: register deactivate_user action: %w", err)
+		return fmt.Errorf("okta-connectorv2: register deactivate_user resource action: %w", err)
 	}
 	if err := registry.Register(ctx, deleteUserActionSchema, o.deleteUserAction); err != nil {
-		return fmt.Errorf("okta-connectorv2: register delete_user action: %w", err)
+		return fmt.Errorf("okta-connectorv2: register delete_user resource action: %w", err)
 	}
 	return nil
 }
@@ -214,13 +219,13 @@ func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structp
 
 // deactivateUserAction deprovisions the selected Okta user but retains the
 // DEPROVISIONED user object for an explicit later deletion.
-func (o *Okta) deactivateUserAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+func (o *userResourceType) deactivateUserAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	oktaUserID, err := userIDFromResourceActionArgs(args)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	deactivated, missing, err := ensureUserDeactivated(ctx, o.client, oktaUserID)
+	deactivated, missing, err := ensureUserDeactivated(ctx, o.connector.client, oktaUserID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -235,13 +240,13 @@ func (o *Okta) deactivateUserAction(ctx context.Context, args *structpb.Struct) 
 
 // deleteUserAction guarantees permanent deletion, including Okta's required
 // deactivation transition.
-func (o *Okta) deleteUserAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+func (o *userResourceType) deleteUserAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	oktaUserID, err := userIDFromResourceActionArgs(args)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	deleted, err := permanentlyDeleteUser(ctx, o.client, oktaUserID)
+	deleted, err := permanentlyDeleteUser(ctx, o.connector.client, oktaUserID)
 	if err != nil {
 		return nil, nil, err
 	}

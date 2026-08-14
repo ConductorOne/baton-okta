@@ -96,7 +96,7 @@ With `--provisioning` enabled, the connector supports:
 - **Group / app / role grant and revoke**
 - **Group create, modify, and delete** (group delete via `--delete-resource`)
 - **enable_user / disable_user** lifecycle actions — `enable_user` unsuspends a `SUSPENDED` account and activates a `STAGED` one (no activation email); `disable_user` suspends an enabled account
-- **deactivate_user / delete_user** workflow actions — explicitly deprovision or permanently delete a selected Okta user
+- **deactivate_user / delete_user** user resource actions — explicitly deprovision or permanently delete a selected Okta user from a workflow
 
 `disable_user` is intentionally reversible suspension. `deactivate_user` is destructive deprovisioning that retains the Okta user record, while `delete_user` and C1 account deprovisioning ensure deactivation and then permanently remove it. Okta `STAGED` users (created but not activated — cannot sign in to Okta) sync as disabled in C1. See [docs/docs-info.md](docs/docs-info.md#lifecycle-and-deprovisioning-actions) and [docs/connector.mdx](docs/connector.mdx).
 
