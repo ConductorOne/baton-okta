@@ -28,15 +28,17 @@ import (
 )
 
 const (
-	unknownProfileValue       = "unknown"
-	userStatusSuspended       = "SUSPENDED"
-	userStatusDeprovisioned   = "DEPROVISIONED"
-	userStatusActive          = "ACTIVE"
-	userStatusLockedOut       = "LOCKED_OUT"
-	userStatusPasswordExpired = "PASSWORD_EXPIRED"
-	userStatusProvisioned     = "PROVISIONED"
-	userStatusRecovery        = "RECOVERY"
-	userStatusStaged          = "STAGED"
+	unknownProfileValue                 = "unknown"
+	userStatusSuspended                 = "SUSPENDED"
+	userStatusDeprovisioned             = "DEPROVISIONED"
+	userStatusActive                    = "ACTIVE"
+	userStatusLockedOut                 = "LOCKED_OUT"
+	userStatusPasswordExpired           = "PASSWORD_EXPIRED"
+	userStatusProvisioned               = "PROVISIONED"
+	userStatusRecovery                  = "RECOVERY"
+	userStatusStaged                    = "STAGED"
+	userDeprovisionConfirmationAttempts = 4
+	userDeprovisionConfirmationInterval = 500 * time.Millisecond
 )
 
 // oktaEnabledStatuses drives enable_user / disable_user only. Credential problems
@@ -894,15 +896,60 @@ func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID 
 		return false, false, err
 	}
 
+	missing, err := waitForUserDeprovisioned(ctx, client, oktaUserID)
+	if err != nil {
+		return false, false, err
+	}
+	if missing {
+		return false, true, nil
+	}
 	return true, false, nil
+}
+
+func waitForUserDeprovisioned(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
+	for attempt := 1; attempt <= userDeprovisionConfirmationAttempts; attempt++ {
+		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return true, nil
+			}
+			return false, err
+		}
+		if currentStatus == userStatusDeprovisioned {
+			return false, nil
+		}
+		if attempt == userDeprovisionConfirmationAttempts {
+			return false, status.Errorf(
+				codes.Unavailable,
+				"okta-connectorv2: user %s is not yet deprovisioned (status %s); retry",
+				oktaUserID,
+				currentStatus,
+			)
+		}
+
+		timer := time.NewTimer(userDeprovisionConfirmationInterval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return false, ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	return false, status.Error(codes.Internal, "okta-connectorv2: deprovision confirmation loop exited unexpectedly")
 }
 
 // permanentlyDeleteUser guarantees that the user is absent. Okta returns 204
 // both when DELETE merely deactivates a non-DEPROVISIONED user and when it
 // permanently deletes a DEPROVISIONED user, so status codes alone cannot prove
-// the postcondition. Confirm DEPROVISIONED immediately before DELETE and verify
-// absence afterward. One second DELETE handles a lifecycle race without an
-// unbounded retry loop.
+// the postcondition. ensureUserDeactivated confirms the prerequisite; a fresh
+// GET after each DELETE proves absence. One second DELETE handles a lifecycle
+// race without an unbounded retry loop.
 func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
 	_, missing, err := ensureUserDeactivated(ctx, client, oktaUserID)
 	if err != nil {
@@ -910,22 +957,6 @@ func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID 
 	}
 	if missing {
 		return false, nil
-	}
-
-	currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return false, nil
-		}
-		return false, err
-	}
-	if currentStatus != userStatusDeprovisioned {
-		return false, status.Errorf(
-			codes.Unavailable,
-			"okta-connectorv2: user %s is not yet deprovisioned (status %s); retry",
-			oktaUserID,
-			currentStatus,
-		)
 	}
 
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -936,7 +967,7 @@ func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID 
 			return false, err
 		}
 
-		currentStatus, err = getUserStatusFresh(ctx, client, oktaUserID)
+		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				return true, nil

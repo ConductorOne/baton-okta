@@ -135,9 +135,24 @@ func TestUserResourceDelete(t *testing.T) {
 		}
 	})
 
+	t.Run("asynchronous deactivation is confirmed before delete", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID + "/lifecycle/deactivate", query: map[string]string{"sendEmail": "false"}, statusCode: http.StatusOK},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+		)
+
+		builder := userBuilder(&Okta{client: client})
+		if _, err := builder.Delete(t.Context(), userResourceID(), nil); err != nil {
+			t.Fatalf("Delete() error: %v", err)
+		}
+	})
+
 	t.Run("deprovisioned user skips deactivate", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
@@ -152,7 +167,6 @@ func TestUserResourceDelete(t *testing.T) {
 	t.Run("first delete that only deactivates is followed by a second delete", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
@@ -165,9 +179,26 @@ func TestUserResourceDelete(t *testing.T) {
 		}
 	})
 
-	t.Run("pre-delete confirmation catches a lifecycle race", func(t *testing.T) {
+	t.Run("two deletes without absence return a retryable error", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+		)
+
+		builder := userBuilder(&Okta{client: client})
+		_, err := builder.Delete(t.Context(), userResourceID(), nil)
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Delete() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
+
+	t.Run("post-delete verification catches a lifecycle race", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
 		)
 
@@ -220,7 +251,6 @@ func TestUserResourceDelete(t *testing.T) {
 				body:       oktaLifecycleErrorResponse(),
 			},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNoContent},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
 		)
@@ -233,7 +263,6 @@ func TestUserResourceDelete(t *testing.T) {
 
 	t.Run("concurrent deletion is an idempotent success", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
 		)
@@ -317,6 +346,7 @@ func TestUserDeprovisioningActions(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
 			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID + "/lifecycle/deactivate", query: map[string]string{"sendEmail": "false"}, statusCode: http.StatusOK},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 		)
 
 		result, _, err := userBuilder(&Okta{client: client}).deactivateUserAction(t.Context(), userActionArgs(t))
