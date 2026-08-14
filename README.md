@@ -92,11 +92,13 @@ We have also introduced resourceset-bindings (resourcesetID and custom roles ID)
 With `--provisioning` enabled, the connector supports:
 
 - **Account creation** — create Okta users via C1 account provisioning / `--create-account-profile`
+- **Account deprovisioning** — C1 resource deletion deactivates and then permanently deletes the Okta user
 - **Group / app / role grant and revoke**
 - **Group create, modify, and delete** (group delete via `--delete-resource`)
 - **enable_user / disable_user** lifecycle actions — `enable_user` unsuspends a `SUSPENDED` account and activates a `STAGED` one (no activation email); `disable_user` suspends an enabled account
+- **deactivate_user / delete_user** workflow actions — explicitly deprovision or permanently delete a selected Okta user
 
-Okta `STAGED` users (created but not activated — cannot sign in to Okta) sync as disabled in C1, aligned with those lifecycle actions. See [docs/docs-info.md](docs/docs-info.md#lifecycle-actions) and [docs/connector.mdx](docs/connector.mdx).
+`disable_user` is intentionally reversible suspension. `deactivate_user` is destructive deprovisioning that retains the Okta user record, while `delete_user` and C1 account deprovisioning ensure deactivation and then permanently remove it. Okta `STAGED` users (created but not activated — cannot sign in to Okta) sync as disabled in C1. See [docs/docs-info.md](docs/docs-info.md#lifecycle-and-deprovisioning-actions) and [docs/connector.mdx](docs/connector.mdx).
 
 ### Account creation profile fields
 

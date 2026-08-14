@@ -22,9 +22,9 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
    - **Role assignment** — Grant/Revoke for assignable roles
    - **Custom-role bindings** — Grant/Revoke on resource-set bindings when custom roles are enabled
    - **Group create / modify / delete** — Resource actions + `ResourceDeleter` for groups
-   - **enable_user / disable_user** — Lifecycle actions (activate / unsuspend / suspend, see [Lifecycle actions](#lifecycle-actions))
-
-   **Note:** Account **deprovisioning** (hard delete of users) is not implemented. Soft disable is via `disable_user`.
+   - **enable_user / disable_user** — Reversible lifecycle actions (activate / unsuspend / suspend)
+   - **deactivate_user / delete_user** — Explicit destructive workflow actions
+   - **Account deprovisioning** — `ResourceDeleterV2Limited` deactivates and permanently deletes users
 
 3. Does the connector support grant expansion?
    - Yes for group-as-principal paths where `GrantExpandable` points at the group's `member` entitlement (app/role grants through groups).
@@ -159,62 +159,42 @@ Spoke users are often created as `FEDERATION` (hub owns credentials) with `send_
 
 ---
 
-## Lifecycle actions
+## Lifecycle and deprovisioning actions
 
-`enable_user` and `disable_user` both read the account's current Okta status first, because each
-Okta lifecycle endpoint accepts a single source status — `unsuspend` only applies to `SUSPENDED`
-and `activate` only to `STAGED`. What each status does:
+Okta distinguishes suspension, deactivation, and deletion. The connector keeps those contracts separate:
 
-| Okta status | `enable_user` | `disable_user` |
-|---|---|---|
-| `ACTIVE`, `PROVISIONED`, `RECOVERY`, `PASSWORD_EXPIRED`, `LOCKED_OUT` | already enabled, no call | `POST /lifecycle/suspend` |
-| `SUSPENDED` | `POST /lifecycle/unsuspend` | already disabled, no call |
-| `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call |
-| `DEPROVISIONED` | error — reactivating a deactivated account is a separate decision | already disabled, no call |
+- `disable_user` suspends an account. Suspension blocks sign-in but retains group and application assignments and can be reversed by `enable_user`.
+- `deactivate_user` deprovisions an account from assigned applications and leaves its Okta record in `DEPROVISIONED`.
+- `delete_user` ensures deactivation and then permanently deletes the Okta record.
+- C1 resource deletion uses the same permanent-delete operation as `delete_user`.
 
-**Sync status for `STAGED` (Okta sign-in, not C1).** Sync maps `STAGED` →
-`RESOURCE_STATUS_DISABLED` (same bucket as `SUSPENDED` / `DEPROVISIONED`). In Okta,
-staged means the account was created but not activated — nobody can sign in to **Okta**
-until `activate`. That is an Okta lifecycle state; it is not about signing in to ConductorOne.
-Aligning sync with lifecycle actions removes the old confusion where sync reported staged as
-enabled while `disable_user` treated it as already disabled and `enable_user` was the path
-that actually activates. Customer-facing create-inactive wording already calls this
-"staged (inactive)".
+The two new destructive actions are global Baton actions with a required `user_id` `ResourceIdField` restricted to the Okta `user` resource type, so C1 workflows can bind a synced account directly. They use generic `ACCOUNT` action typing. `disable_user` remains the only `ACCOUNT_DISABLE` action, preserving the standard account-lifecycle integration and its reversible suspend semantics.
 
-How a user leaves `STAGED`: Okta `POST /lifecycle/activate` (our `enable_user` with
-`sendEmail=false`). After activation the account is typically `ACTIVE` or `PROVISIONED`.
-`PROVISIONED` stays `ENABLED` in sync — activation already happened; the account is only
-pending the user's first login / credential setup.
+| Okta status | `enable_user` | `disable_user` | `deactivate_user` | `delete_user` / resource delete |
+|---|---|---|---|---|
+| `ACTIVE`, `PROVISIONED`, `RECOVERY`, `PASSWORD_EXPIRED`, `LOCKED_OUT` | already enabled, no call | `POST /lifecycle/suspend` | `POST /lifecycle/deactivate?sendEmail=false` | deactivate, then `DELETE /api/v1/users/{id}` |
+| `SUSPENDED` | `POST /lifecycle/unsuspend` | already disabled, no call | `POST /lifecycle/deactivate?sendEmail=false` | deactivate, then delete |
+| `STAGED` | `POST /lifecycle/activate?sendEmail=false` | already disabled, no call | `POST /lifecycle/deactivate?sendEmail=false` | deactivate, then delete |
+| `DEPROVISIONED` | error — reactivation is a separate decision | already disabled, no call | already deactivated, no call | delete |
+| Missing | `NotFound` | `NotFound` | `NotFound` | already deleted, no call |
 
-Why accounts are staged in the first place:
-- `create_inactive=true` on CreateAccount (intentional — leave inactive, no activate call)
-- an Okta admin created the user without activating
-- an incomplete create left them staged
+Okta's DELETE endpoint only permanently deletes a `DEPROVISIONED` user. Calling it on another status merely deactivates the user and requires a second call. The shared connector operation therefore reads status without using the Okta SDK GET cache, deactivates when needed, and then issues DELETE. A fresh read is required because a stale `DEPROVISIONED` value could make DELETE merely deactivate a reactivated account while the connector reports permanent deletion. A missing user is success for delete operations, making C1 retries idempotent; the deactivate-only action keeps missing as `NotFound` because its requested result is a surviving `DEPROVISIONED` user.
 
-Default CreateAccount does **not** leave users staged: the connector activates (or sends the
-activation email). The raw Okta status string remains on the resource details, so staged stays
-distinguishable from suspended/deprovisioned. The previous sync mapping of `STAGED` → `ENABLED`
-came from an early default ("only suspended/deprovisioned are disabled") and was never an
-Okta-accurate design; aligning sync here is a visible status flip for any tenant that still
-has staged users.
+Lifecycle races are reconciled using structured state, not vendor error text. If deactivation is rejected while another actor is changing the same user, the connector performs one fresh status read. It proceeds only when Okta now reports `DEPROVISIONED`, treats absence as success only for a delete operation, and otherwise preserves the original mutation error. Okta's SDK accepts all successful 2xx responses; connector code does not hard-code `200 OK`.
 
-Both actions plan from a single status GET, then trust a successful lifecycle call — they do
-not re-read the account afterward. C1 runs each action in a fresh lambda, so adding vendor-SDK
-cache bypass just to support a confirm GET is unnecessary; the mutation response is the proof.
-A call Okta rejects is returned as an error. Neither action invents success from a string-matched
-vendor error: `enable_user` on a `STAGED` account used to return `Account … was already enabled`
-while the account stayed `STAGED` and unusable.
+`enable_user` and `disable_user` also read the current status first because `unsuspend` only applies to `SUSPENDED` and `activate` only to `STAGED`. They plan from a single status GET, then trust a successful lifecycle call rather than adding a confirm GET. C1 runs each action in a fresh lambda, so a vendor-SDK cache bypass solely for confirmation is unnecessary.
 
-`RECOVERY`, `PASSWORD_EXPIRED` and `LOCKED_OUT` are credential problems on an account that is
-enabled, so `enable_user` reports them as already enabled rather than clearing them — neither
-unlocking nor a password reset is part of this action.
+**Sync status for `STAGED` (Okta sign-in, not C1).** Sync maps `STAGED` to `RESOURCE_STATUS_DISABLED` alongside `SUSPENDED` and `DEPROVISIONED`. In Okta, staged means the account was created but not activated — nobody can sign in to Okta until `activate`. This is an Okta lifecycle state, not a statement about signing in to ConductorOne.
 
-`activate` sends no email, matching the `send_activation_email=false` create path. An `OKTA`
-account without a password typically lands in `PROVISIONED`, while a `FEDERATION` account can land
-in `ACTIVE`; the action success message no longer names that post-transition status.
+Default Create Account does not leave users staged: the connector activates them or sends Okta's activation email. Users remain staged only when `create_inactive=true`, when an Okta admin created the user without activating it, or when an incomplete create left it there. The raw Okta status remains on the resource details, so staged stays distinguishable from suspended and deprovisioned.
+
+Credential-problem statuses (`RECOVERY`, `PASSWORD_EXPIRED`, and `LOCKED_OUT`) remain enabled. `enable_user` reports them as already enabled rather than unlocking the account or resetting credentials. Activating a staged user sends no email, matching the `send_activation_email=false` creation path. An `OKTA` account without a password typically lands in `PROVISIONED`, while a `FEDERATION` account can land in `ACTIVE`.
+
+Deactivation and deletion require `okta.users.manage`. Deactivation is destructive because Okta deprovisions the user from assigned apps, potentially destroying downstream email or files. Permanent deletion cannot be recovered. Workflow authors should put approval gates around these actions when policy requires them.
+
+The detailed implementation and retry contract are recorded in [the mini RFC](mini-rfc-user-deprovisioning.md).
 
 ---
-
 ## Resource reference (API doc links)
 
 Doc roots:

@@ -50,7 +50,7 @@ Use this attribute in policies and access profiles to verify that bindings and g
 
 The Okta connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
-The Okta connector supports account deprovisioning. When a user account is deprovisioned through C1, the connector deactivates and then deletes the user in Okta. The deactivation step transitions the user to the DEPROVISIONED state, and the deletion step permanently removes the user. This requires an API token or OAuth app with `okta.users.manage` scope.
+The Okta connector supports account deprovisioning through C1 resource deletion. It first deactivates the user to the `DEPROVISIONED` state and then permanently deletes the user. The same operations are available separately through the `deactivate_user` and `delete_user` connector actions. These operations require an API token or OAuth app with `okta.users.manage` scope.
 
 #### Account creation profile fields
 
@@ -89,9 +89,19 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
 | enable_user | `user_id` (string, required) | Enables an Okta user account: unsuspends a suspended account, and activates a staged one without sending an activation email. Returns success without calling Okta when the account is already enabled. Does **not** reactivate a deactivated (`DEPROVISIONED`) account — that returns an error. Okta's activate API can do that transition, but this action treats reactivation of a deactivated user as a separate decision from enable. |
-| disable_user     | `user_id` (string, required) | Suspends an Okta user account. Returns success without calling Okta when the account is already suspended, deactivated, or still staged. |
+| disable_user | `user_id` (string, required) | Suspends an Okta user account. Returns success without calling Okta when the account is already suspended, deactivated, or still staged. |
+| deactivate_user | `user_id` (Okta user resource, required) | Destructively deprovisions the selected user from assigned applications and leaves the Okta user record in `DEPROVISIONED`. A user already in that state succeeds without another mutation. |
+| delete_user | `user_id` (Okta user resource, required) | Ensures the selected user is deactivated, then permanently deletes the user. A user that is already absent succeeds so workflow retries are safe. |
 | create | `name` (string, required), `description` (string), `userMembers` (resource ID list) | Creates a new Okta group with optional initial members |
 | modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
+
+<Warning>
+`deactivate_user`, `delete_user`, and C1 account deprovisioning are destructive. Deactivation removes the user's assigned-app provisioning and can destroy downstream data such as email or files. Deletion permanently removes the Okta user and cannot be recovered. Use workflow approval gates where appropriate.
+</Warning>
+
+<Note>
+`disable_user` is not an alias for deactivation: it suspends sign-in while retaining group and application assignments, and `enable_user` can reverse it. Use `deactivate_user` only when the workflow intends Okta deprovisioning, and `delete_user` only when it intends permanent removal.
+</Note>
 
 <Note>
 Group deletion is available via the CLI using the `--delete-resource` flag. To delete a group, run:

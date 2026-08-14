@@ -8,6 +8,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
@@ -72,12 +73,92 @@ var enableUser = &v2.BatonActionSchema{
 	},
 }
 
+var deactivateUserActionSchema = &v2.BatonActionSchema{
+	Name:        "deactivate_user",
+	DisplayName: "Deactivate User",
+	Description: "Destructively deprovisions an Okta user from assigned applications while retaining the Okta user record.",
+	Arguments: []*config.Field{
+		{
+			Name:        "user_id",
+			DisplayName: "User",
+			Description: "The Okta user to deactivate.",
+			Field: &config.Field_ResourceIdField{
+				ResourceIdField: &config.ResourceIdField{
+					Rules: &config.ResourceIDRules{
+						AllowedResourceTypeIds: []string{userResourceTypeID},
+					},
+				},
+			},
+			IsRequired: true,
+		},
+	},
+	ReturnTypes: []*config.Field{
+		{
+			Name:        actionResultSuccess,
+			DisplayName: actionResultSuccessDisplay,
+			Field:       &config.Field_BoolField{},
+		},
+		{
+			Name:        "message",
+			DisplayName: "Message",
+			Field:       &config.Field_StringField{},
+		},
+	},
+	ActionType: []v2.ActionType{
+		v2.ActionType_ACTION_TYPE_ACCOUNT,
+	},
+}
+
+var deleteUserActionSchema = &v2.BatonActionSchema{
+	Name:        "delete_user",
+	DisplayName: "Delete User",
+	Description: "Deactivates and then permanently deletes an Okta user. This operation cannot be recovered.",
+	Arguments: []*config.Field{
+		{
+			Name:        "user_id",
+			DisplayName: "User",
+			Description: "The Okta user to permanently delete.",
+			Field: &config.Field_ResourceIdField{
+				ResourceIdField: &config.ResourceIdField{
+					Rules: &config.ResourceIDRules{
+						AllowedResourceTypeIds: []string{userResourceTypeID},
+					},
+				},
+			},
+			IsRequired: true,
+		},
+	},
+	ReturnTypes: []*config.Field{
+		{
+			Name:        actionResultSuccess,
+			DisplayName: actionResultSuccessDisplay,
+			Field:       &config.Field_BoolField{},
+		},
+		{
+			Name:        "message",
+			DisplayName: "Message",
+			Field:       &config.Field_StringField{},
+		},
+	},
+	ActionType: []v2.ActionType{
+		v2.ActionType_ACTION_TYPE_ACCOUNT,
+	},
+}
+
+var _ connectorbuilder.GlobalActionProvider = (*Okta)(nil)
+
 func (o *Okta) GlobalActions(ctx context.Context, registry actions.ActionRegistry) error {
 	if err := registry.Register(ctx, enableUser, o.enableUser); err != nil {
-		return err
+		return fmt.Errorf("okta-connectorv2: register enable_user action: %w", err)
 	}
 	if err := registry.Register(ctx, disableUser, o.disableUser); err != nil {
-		return err
+		return fmt.Errorf("okta-connectorv2: register disable_user action: %w", err)
+	}
+	if err := registry.Register(ctx, deactivateUserActionSchema, o.deactivateUserAction); err != nil {
+		return fmt.Errorf("okta-connectorv2: register deactivate_user action: %w", err)
+	}
+	if err := registry.Register(ctx, deleteUserActionSchema, o.deleteUserAction); err != nil {
+		return fmt.Errorf("okta-connectorv2: register delete_user action: %w", err)
 	}
 	return nil
 }
@@ -131,6 +212,53 @@ func (o *Okta) disableUser(ctx context.Context, args *structpb.Struct) (*structp
 	return o.applyUserLifecycle(ctx, args, false)
 }
 
+// deactivateUserAction deprovisions the selected Okta user but retains the
+// DEPROVISIONED user object for an explicit later deletion.
+func (o *Okta) deactivateUserAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+	oktaUserID, err := userIDFromResourceActionArgs(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	deactivated, missing, err := ensureUserDeactivated(ctx, o.client, oktaUserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if missing {
+		return nil, nil, status.Errorf(codes.NotFound, "okta-connectorv2: user %s not found", oktaUserID)
+	}
+	if !deactivated {
+		return createSuccessResponse(fmt.Sprintf("Account %s was already deactivated", oktaUserID)), nil, nil
+	}
+	return createSuccessResponse(fmt.Sprintf("Account %s has been successfully deactivated", oktaUserID)), nil, nil
+}
+
+// deleteUserAction guarantees permanent deletion, including Okta's required
+// deactivation transition.
+func (o *Okta) deleteUserAction(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+	oktaUserID, err := userIDFromResourceActionArgs(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	deleted, err := permanentlyDeleteUser(ctx, o.client, oktaUserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !deleted {
+		return createSuccessResponse(fmt.Sprintf("Account %s was already deleted", oktaUserID)), nil, nil
+	}
+	return createSuccessResponse(fmt.Sprintf("Account %s has been permanently deleted", oktaUserID)), nil, nil
+}
+
+func userIDFromResourceActionArgs(args *structpb.Struct) (string, error) {
+	resourceID, err := actions.RequireResourceIDArg(args, "user_id")
+	if err != nil {
+		return "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: %v", err)
+	}
+	return oktaUserIDFromResourceID(resourceID)
+}
+
 // applyUserLifecycle reads status and applies the required Okta transition.
 // Okta lifecycle endpoints each accept one source status. enabled=true enables;
 // enabled=false disables.
@@ -180,13 +308,5 @@ func (o *Okta) applyUserLifecycle(ctx context.Context, args *structpb.Struct, en
 
 // userStatus returns the Okta lifecycle status used to plan the action.
 func (o *Okta) userStatus(ctx context.Context, oktaUserID string) (string, error) {
-	user, _, err := getUser(ctx, o.client, oktaUserID)
-	if err != nil {
-		return "", fmt.Errorf("okta-connectorv2: failed to find user %s: %w", oktaUserID, err)
-	}
-	if user == nil {
-		return "", status.Errorf(codes.NotFound, "okta-connectorv2: user %s not found", oktaUserID)
-	}
-
-	return user.Status, nil
+	return getUserStatus(ctx, o.client, oktaUserID)
 }
