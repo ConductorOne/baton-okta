@@ -22,9 +22,11 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
    - **Role assignment** — Grant/Revoke for assignable roles
    - **Custom-role bindings** — Grant/Revoke on resource-set bindings when custom roles are enabled
    - **Group create / modify / delete** — Resource actions + `ResourceDeleter` for groups
-   - **enable_user / disable_user** — Reversible lifecycle actions (activate / unsuspend / suspend)
+   - **enable_user / disable_user** — Reversible lifecycle actions (activate / unsuspend / suspend, see [Lifecycle and deprovisioning actions](#lifecycle-and-deprovisioning-actions))
    - **deactivate_user / delete_user** — Explicit destructive workflow actions
    - **Account deprovisioning** — `ResourceDeleterV2Limited` deactivates and permanently deletes users
+   - **update_profile** — Partial update of an existing user's profile via `POST /api/v1/users/{id}` (Okta's partial-update semantics; only the fields provided are changed). Manual/UX invocation with individual typed fields.
+   - **update_user** — Same underlying `POST /api/v1/users/{id}` call, but takes a `user_profile` JSON object instead of typed fields and accepts any Okta profile attribute (no curated allowlist). This is the global-action shape C1's automated profile-push pipeline requires — a resource-scoped-only action does not satisfy that lookup.
 
 3. Does the connector support grant expansion?
    - Yes for group-as-principal paths where `GrantExpandable` points at the group's `member` entitlement (app/role grants through groups).

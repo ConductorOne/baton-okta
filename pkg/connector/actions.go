@@ -3,6 +3,8 @@ package connector
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -17,11 +19,17 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// Argument names shared by this file's update_user (global) action.
+const (
+	argUserID      = "user_id"
+	argUserProfile = "user_profile"
+)
+
 var disableUser = &v2.BatonActionSchema{
 	Name: "disable_user",
 	Arguments: []*config.Field{
 		{
-			Name:        "user_id",
+			Name:        argUserID,
 			DisplayName: "User ID",
 			Field:       &config.Field_StringField{},
 			IsRequired:  true,
@@ -49,7 +57,7 @@ var enableUser = &v2.BatonActionSchema{
 	Name: "enable_user",
 	Arguments: []*config.Field{
 		{
-			Name:        "user_id",
+			Name:        argUserID,
 			DisplayName: "User ID",
 			Field:       &config.Field_StringField{},
 			IsRequired:  true,
@@ -79,8 +87,8 @@ var deactivateUserActionSchema = &v2.BatonActionSchema{
 	Description: "Destructively deprovisions an Okta user from assigned applications while retaining the Okta user record.",
 	Arguments: []*config.Field{
 		{
-			Name:        "user_id",
-			DisplayName: "User",
+			Name:        argUserID,
+			DisplayName: userResourceTypeDisplayName,
 			Description: "The Okta user to deactivate.",
 			Field: &config.Field_ResourceIdField{
 				ResourceIdField: &config.ResourceIdField{
@@ -115,8 +123,8 @@ var deleteUserActionSchema = &v2.BatonActionSchema{
 	Description: "Deactivates and then permanently deletes an Okta user. This operation cannot be recovered.",
 	Arguments: []*config.Field{
 		{
-			Name:        "user_id",
-			DisplayName: "User",
+			Name:        argUserID,
+			DisplayName: userResourceTypeDisplayName,
 			Description: "The Okta user to permanently delete.",
 			Field: &config.Field_ResourceIdField{
 				ResourceIdField: &config.ResourceIdField{
@@ -145,6 +153,37 @@ var deleteUserActionSchema = &v2.BatonActionSchema{
 	},
 }
 
+var updateUserSchema = &v2.BatonActionSchema{
+	Name:        "update_user",
+	DisplayName: "Update User",
+	Description: "Updates a user's profile attributes from a user_profile JSON object. Used by C1's automated " +
+		"profile-push pipeline; for manual invocation with individual typed fields, use update_profile instead.",
+	Arguments: []*config.Field{
+		{
+			Name:        argUserID,
+			DisplayName: "User Resource ID",
+			Description: "The ID of the user to update.",
+			Field:       &config.Field_StringField{StringField: &config.StringField{}},
+			IsRequired:  true,
+		},
+		{
+			Name:        argUserProfile,
+			DisplayName: "User Profile Data",
+			Description: "A JSON object of Okta profile attributes to update.",
+			Field:       &config.Field_StringField{StringField: &config.StringField{}},
+			IsRequired:  true,
+		},
+	},
+	ReturnTypes: []*config.Field{
+		{Name: actionResultSuccess, DisplayName: actionResultSuccessDisplay, Field: &config.Field_BoolField{}},
+		{Name: "updated_fields", DisplayName: "Updated Fields", Field: &config.Field_StringField{}},
+	},
+	ActionType: []v2.ActionType{
+		v2.ActionType_ACTION_TYPE_ACCOUNT,
+		v2.ActionType_ACTION_TYPE_ACCOUNT_UPDATE_PROFILE,
+	},
+}
+
 var _ connectorbuilder.GlobalActionProvider = (*Okta)(nil)
 var _ connectorbuilder.ResourceActionProvider = (*userResourceType)(nil)
 
@@ -155,9 +194,15 @@ func (o *Okta) GlobalActions(ctx context.Context, registry actions.ActionRegistr
 	if err := registry.Register(ctx, disableUser, o.disableUser); err != nil {
 		return fmt.Errorf("okta-connectorv2: register disable_user action: %w", err)
 	}
+	if err := registry.Register(ctx, updateUserSchema, o.updateUserActionHandler); err != nil {
+		return fmt.Errorf("okta-connectorv2: register update_user action: %w", err)
+	}
 	return nil
 }
 
+// ResourceActions registers every resource-scoped action on the user
+// resource type: deactivate_user/delete_user (deprovisioning, this file)
+// and update_profile (pkg/connector/user_actions.go).
 func (o *userResourceType) ResourceActions(ctx context.Context, registry actions.ActionRegistry) error {
 	if err := registry.Register(ctx, deactivateUserActionSchema, o.deactivateUserAction); err != nil {
 		return fmt.Errorf("okta-connectorv2: register deactivate_user resource action: %w", err)
@@ -165,7 +210,57 @@ func (o *userResourceType) ResourceActions(ctx context.Context, registry actions
 	if err := registry.Register(ctx, deleteUserActionSchema, o.deleteUserAction); err != nil {
 		return fmt.Errorf("okta-connectorv2: register delete_user resource action: %w", err)
 	}
+	if err := registry.Register(ctx, updateUserProfileSchema, o.updateUserProfile); err != nil {
+		return fmt.Errorf("okta-connectorv2: register update_profile resource action: %w", err)
+	}
 	return nil
+}
+
+// updateUserActionHandler handles the global update_user action — the shape
+// C1's automated profile-push pipeline looks up. It accepts any Okta profile
+// attribute (no curated allowlist, unlike update_profile) and shares
+// applyUserProfileUpdate with the resource-scoped action.
+func (o *Okta) updateUserActionHandler(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	userID, err := actions.RequireStringArg(args, argUserID)
+	if err != nil {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user: %v", err)
+	}
+
+	rawProfile, err := profileArgAsMap(args, argUserProfile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	profile, err := buildOktaProfileFromMap(rawProfile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l.Debug("okta-connectorv2: update-user: updating user",
+		zap.String(argUserID, userID),
+		zap.Int("fields", len(profile)),
+	)
+
+	if _, err := applyUserProfileUpdate(ctx, o.client, o.skipSecondaryEmails, userID, profile); err != nil {
+		return nil, nil, err
+	}
+
+	updatedFields := make([]string, 0, len(profile))
+	for k := range profile {
+		updatedFields = append(updatedFields, k)
+	}
+	sort.Strings(updatedFields)
+
+	result, err := structpb.NewStruct(map[string]interface{}{
+		actionResultSuccess: true,
+		"updated_fields":    strings.Join(updatedFields, ", "),
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: update-user: failed to build result: %w", err)
+	}
+	return result, nil, nil
 }
 
 // lifecycleTransitionFunc is one Okta lifecycle call (activate, unsuspend, suspend).
@@ -257,7 +352,7 @@ func (o *userResourceType) deleteUserAction(ctx context.Context, args *structpb.
 }
 
 func userIDFromResourceActionArgs(args *structpb.Struct) (string, error) {
-	resourceID, err := actions.RequireResourceIDArg(args, "user_id")
+	resourceID, err := actions.RequireResourceIDArg(args, argUserID)
 	if err != nil {
 		return "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: %v", err)
 	}
@@ -270,7 +365,7 @@ func userIDFromResourceActionArgs(args *structpb.Struct) (string, error) {
 func (o *Okta) applyUserLifecycle(ctx context.Context, args *structpb.Struct, enabled bool) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	oktaUserID, err := extractFieldAsString(args, "user_id")
+	oktaUserID, err := extractFieldAsString(args, argUserID)
 	if err != nil {
 		return nil, nil, err
 	}
