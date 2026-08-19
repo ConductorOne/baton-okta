@@ -99,7 +99,7 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 | [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) | `deactivate_user`, `delete_user`, `create`, `modify_group` | Varies by action. The two user actions use a resource selector on the **User** resource type. `modify_group` takes the Okta group ID as a plain text field, and `create` has no target at all. |
 | Account lifecycle action | `enable_user`, `disable_user` | The step's own **Target account** selector — either the account in context or a specific account. |
 
-`deactivate_user` and `delete_user` are actions on the Okta **User** resource type. In the Perform connector action step they appear prefixed with that resource type, as **`user - Deactivate User`** and **`user - Delete User`**, rather than under their raw action names.
+In the Perform connector action step, actions are listed under their resource type and display name rather than their raw action name: `deactivate_user` and `delete_user` appear as **`user - Deactivate User`** and **`user - Delete User`**, and the group actions as **`group - create`** and **`group - Modify Group`**.
 
 `enable_user` and `disable_user` take `user_id` as a plain string, and `modify_group` takes `group_id` the same way. Pass the raw Okta ID (for example `00u1abc2def3GHI4jk5`), not the C1 resource ID — the connector sends the value to Okta unchanged, and a C1 resource ID returns a not-found error. `deactivate_user` and `delete_user` take a resource selector instead, so the Okta ID is resolved for you.
 
