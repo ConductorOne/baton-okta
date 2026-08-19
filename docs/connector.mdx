@@ -77,7 +77,7 @@ Default **Create Account** does not leave users staged: the connector activates 
 <Note>
 **Recovering an account left staged by an interrupted create.** With **Send Activation Email** set to `False`, account creation spans several calls, so a failure partway through can leave the Okta user created but not activated.
 
-Retrying the same create does not finish the job. Okta rejects the duplicate login, the connector returns the account it found, and the user stays **Staged**. That is deliberate: a staged account created by **Create Inactive** and one left behind by an interrupted create look identical, and activating on a retry would override a deliberate "keep this account inactive" decision.
+Retrying the same create does not finish the job. Okta rejects the duplicate login, the connector returns the account it found, and the user stays **Staged** — a staged account left behind this way is indistinguishable from one created deliberately with **Create Inactive**.
 
 Run the `enable_user` action against the account to finish activating it. Only an operator naming that specific account can make that call.
 </Note>
@@ -94,14 +94,14 @@ Syncing standard and custom admin roles requires a super admin token.
 
 Connector actions are custom capabilities that extend C1 automations with app-specific operations. The Okta connector's actions are reached from **two different automation steps**, and which step offers an action is determined by the action itself — you cannot choose:
 
-| Automation step | Actions offered | How the account is selected |
-|-----------------|-----------------|-----------------------------|
-| [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) | `deactivate_user`, `delete_user`, `create`, `modify_group` | A resource selector scoped to the action's resource type. Pick the resource type first, then the Okta user or group. |
+| Automation step | Actions offered | How the target is selected |
+|-----------------|-----------------|----------------------------|
+| [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) | `deactivate_user`, `delete_user`, `create`, `modify_group` | Varies by action. The two user actions use a resource selector on the **User** resource type. `modify_group` takes the Okta group ID as a plain text field, and `create` has no target at all. |
 | Account lifecycle action | `enable_user`, `disable_user` | The step's own **Target account** selector — either the account in context or a specific account. |
 
 `deactivate_user` and `delete_user` are actions on the Okta **User** resource type. In the Perform connector action step they appear prefixed with that resource type, as **`user - Deactivate User`** and **`user - Delete User`**, rather than under their raw action names.
 
-`enable_user` and `disable_user` take `user_id` as a plain string. Pass the raw Okta user ID (for example `00u1abc2def3GHI4jk5`), not the C1 resource ID — the connector sends the value to Okta unchanged, and a C1 resource ID returns a not-found error. `deactivate_user` and `delete_user` take a resource selector instead, so the Okta ID is resolved for you.
+`enable_user` and `disable_user` take `user_id` as a plain string, and `modify_group` takes `group_id` the same way. Pass the raw Okta ID (for example `00u1abc2def3GHI4jk5`), not the C1 resource ID — the connector sends the value to Okta unchanged, and a C1 resource ID returns a not-found error. `deactivate_user` and `delete_user` take a resource selector instead, so the Okta ID is resolved for you.
 
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
@@ -355,12 +355,6 @@ If a sync finishes cleanly with no accounts, check the app's **Admin Roles** tab
 </Note>
 </Step>
 </Steps>
-
-<Note>
-**Confirm the granted scopes on screen before moving on.** The **Okta API Scopes** tab has been observed accepting a scope grant and not saving it, with no error shown. Refresh the tab and check that every scope you granted is still listed.
-
-A scope the app was never granted is dropped from the issued token rather than refused, so the connector still authenticates and the first sync still runs. The missing scope surfaces later as a `403` on one resource type — which reads as a permissions problem in Okta rather than a setup step that did not take.
-</Note>
 
 You'll need the **Client ID**, **Private Key**, and **Private Key ID** when configuring the connector.
 
