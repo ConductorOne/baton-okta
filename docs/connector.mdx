@@ -79,7 +79,7 @@ Default **Create Account** does not leave users staged: the connector activates 
 
 Retrying the same create does not finish the job. Okta rejects the duplicate login, the connector returns the account it found, and the user stays **Staged** — a staged account left behind this way is indistinguishable from one created deliberately with **Create Inactive**.
 
-Run the `enable_user` action against the account to finish activating it. Only an operator naming that specific account can make that call.
+Run the `enable_user` action against the account to finish activating it.
 </Note>
 
 <Note>

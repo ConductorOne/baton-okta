@@ -88,7 +88,7 @@ Devices are an opt-in resource type: enable the **Device** resource type in the 
 
 Secrets (Okta API tokens) sync only when `--sync-secrets` is provided. Its default value is `false`. They are read-only, and C1 displays them on the Inventory page.
 
-The connector also supports an event feed and targeted sync. The event feed streams Okta System Log events for user, application, group, and role lifecycle and membership changes, along with grants, revokes, and sign-in usage. Targeted sync narrows a run to specific resource types or resource IDs via `--sync-resource-types` and `--sync-resources`.
+The connector also supports an event feed and targeted sync. The event feed streams a filtered set of Okta System Log events: user lifecycle and profile changes, application creation and update, group creation, group memberships added and removed, application assignment and admin-role grants, and SSO sign-ins. Targeted sync narrows a run to specific resource types or resource IDs via `--sync-resource-types` and `--sync-resources`.
 
 We have also introduced resourceset-bindings (resourcesetID and custom roles ID) for provisioning custom roles and members.
 
