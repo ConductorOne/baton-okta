@@ -75,6 +75,14 @@ Default **Create Account** does not leave users staged: the connector activates 
 </Note>
 
 <Note>
+**Recovering an account left staged by an interrupted create.** With **Send Activation Email** set to `False`, account creation spans several calls, so a failure partway through can leave the Okta user created but not activated.
+
+Retrying the same create does not finish the job. Okta rejects the duplicate login, the connector returns the account it found, and the user stays **Staged** — a staged account left behind this way is indistinguishable from one created deliberately with **Create Inactive**.
+
+Run the `enable_user` action against the account to finish activating it.
+</Note>
+
+<Note>
 **Password Change Required on Login**, **Create Inactive**, and **Send Activation Email** are all string fields with a `True` / `False` placeholder (same schema shape). Map them as the strings `"true"` / `"false"` (case-insensitive). The connector also accepts a real boolean at runtime, but provisioning mappings that treat these three fields the same way are the supported pattern. **Additional Attributes** must return a map. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
 </Note>
 
@@ -84,7 +92,16 @@ Syncing standard and custom admin roles requires a super admin token.
 
 ### Connector actions
 
-Connector actions are custom capabilities that extend C1 automations with app-specific operations. You can use connector actions in the [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) automation step. `deactivate_user` and `delete_user` are actions on the Okta **User** resource type; select that resource type and user when configuring the workflow step.
+Connector actions are custom capabilities that extend C1 automations with app-specific operations. The Okta connector's actions are reached from **two different automation steps**, and which step offers an action is determined by the action itself — you cannot choose:
+
+| Automation step | Actions offered | How the target is selected |
+|-----------------|-----------------|----------------------------|
+| [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) | `deactivate_user`, `delete_user`, `create`, `modify_group` | Varies by action. The two user actions use a resource selector on the **User** resource type. `modify_group` takes the Okta group ID as a plain text field, and `create` has no target at all. |
+| Account lifecycle action | `enable_user`, `disable_user` | The step's own **Target account** selector — either the account in context or a specific account. |
+
+In the Perform connector action step, actions are listed under their resource type and display name rather than their raw action name: `deactivate_user` and `delete_user` appear as **`user - Deactivate User`** and **`user - Delete User`**, and `modify_group` as **`group - Modify Group`**. An action with no display name registered falls back to its raw name, so `create` appears as **`group - create`**.
+
+`enable_user` and `disable_user` take `user_id` as a plain string, and `modify_group` takes `group_id` the same way. Pass the raw Okta ID (for example `00u1abc2def3GHI4jk5`), not the C1 resource ID — the connector sends the value to Okta unchanged, and a C1 resource ID returns a not-found error. `deactivate_user` and `delete_user` take a resource selector instead, so the Okta ID is resolved for you.
 
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
@@ -101,6 +118,16 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 
 <Note>
 `disable_user` is not an alias for deactivation: it suspends sign-in while retaining group and application assignments, and `enable_user` can reverse it. Use `deactivate_user` only when the workflow intends Okta deprovisioning, and `delete_user` only when it intends permanent removal.
+</Note>
+
+<Note>
+`deactivate_user` is **not** available from the Account lifecycle action step — that step offers only `enable_user` and `disable_user`. An existing offboarding automation built on Account lifecycle action therefore reaches Okta *suspend*, not deprovision. To deprovision from a workflow, add a **Perform connector action** step and select `user - Deactivate User`.
+</Note>
+
+<Note>
+**`enable_user` does not clear a credential problem.** Okta treats **Recovery**, **Password expired**, and **Locked out** as enabled statuses — the account exists and is not suspended, it just cannot complete a sign-in. `enable_user` reports those accounts as already enabled and makes no call to Okta, so it neither unlocks the account nor resets the password.
+
+Clear these in Okta, or with a password-reset or unlock flow. `enable_user` covers only the two transitions it names: unsuspending a **Suspended** account and activating a **Staged** one.
 </Note>
 
 <Note>
@@ -402,7 +429,7 @@ Enter your credentials:
 **Optional.** If desired, click the checkbox to **Skip app groups** to exclude Okta push groups (APP\_GROUP type) from sync. This is useful when push groups created by SCIM-integrated apps are not needed for access management workflows.
 </Step>
 <Step>
-**Optional.** If desired, click the checkbox to **Sync inactive apps** to include inactive (disabled) Okta applications in sync. By default, only active applications are synced.
+**Optional.** Inactive (disabled) Okta applications are synced by default. Clear the **Sync inactive apps** checkbox to exclude them.
 </Step>
 <Step>
 **Optional.** Enable **Sync secrets** to display them on the [Inventory page](/product/admin/inventory).
@@ -496,8 +523,9 @@ stringData:
   # Optional: exclude Okta push groups (APP_GROUP type) from sync
   # BATON_SKIP_APP_GROUPS: true
 
-  # Optional: include inactive (disabled) Okta applications in sync
-  # BATON_SYNC_INACTIVE_APPS: true
+  # Optional: inactive (disabled) Okta applications are synced by default.
+  # Set this to false to exclude them.
+  # BATON_SYNC_INACTIVE_APPS: false
 ```
 
 See the connector's README or run `--help` to see all available configuration flags and environment variables.

@@ -78,12 +78,17 @@ baton resources
 - Resource-Sets
 - Resourceset-Bindings
 - Devices
+- Secrets (Okta API tokens)
 
 By default, `baton-okta` will sync information for inactive applications. You can exclude inactive applications setting the `--sync-inactive-apps` flag to `false`.
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 
 Devices are an opt-in resource type: enable the **Device** resource type in the connector's sync configuration to include it. Device sync is read-only; the connector does not manage device-to-user assignments.
+
+Secrets (Okta API tokens) sync only when `--sync-secrets` is provided. Its default value is `false`. They are read-only, and C1 displays them on the Inventory page.
+
+The connector also supports an event feed and targeted sync. The event feed streams a filtered set of Okta System Log events: user lifecycle and profile changes, application creation and update, group creation, group memberships added and removed, application assignment and admin-role grants, and SSO sign-ins. Targeted sync narrows a run to specific resource types or resource IDs via `--sync-resource-types` and `--sync-resources`.
 
 We have also introduced resourceset-bindings (resourcesetID and custom roles ID) for provisioning custom roles and members.
 
