@@ -477,6 +477,15 @@ func (r *userResourceType) CreateAccount(
 			)
 			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
+		// A DEPROVISIONED collision has no connector-side recovery path (enable_user
+		// refuses it), so AlreadyExistsResult would report success on a login that can
+		// never be provisioned. FailedPrecondition mirrors enable_user's DEPROVISIONED path.
+		if existing.Status == userStatusDeprovisioned {
+			return nil, nil, nil, status.Error(
+				codes.FailedPrecondition,
+				"okta-connectorv2: login already exists on a deprovisioned account the connector cannot reactivate; delete the account and recreate it to reuse this login",
+			)
+		}
 		l.Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
 			zap.String("user_id", existing.Id),
 			zap.String("login", login),
