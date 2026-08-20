@@ -464,7 +464,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 		l.Debug("Membership has been created")
 	}
 
-	return nil, nil
+	return rateLimitAnnotations(response), nil
 }
 
 func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
@@ -485,16 +485,24 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 
 	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
+		if isRevokeNotFoundError(response, err) {
+			l.Debug(
+				"okta-connector: revoke: user does not have group membership",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		}
 		return nil, handleOktaResponseError(response, err)
 	}
 
 	if response != nil {
-		l.Warn("Membership has been revoked", zap.String("Status", response.Status))
+		l.Debug("Membership has been revoked", zap.String("Status", response.Status))
 	} else {
-		l.Warn("Membership has been revoked")
+		l.Debug("Membership has been revoked")
 	}
 
-	return nil, nil
+	return rateLimitAnnotations(response), nil
 }
 
 func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
