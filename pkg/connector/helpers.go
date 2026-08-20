@@ -6,10 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
@@ -131,10 +135,54 @@ func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, 
 	if errors.Is(err, context.DeadlineExceeded) {
 		return status.Error(codes.DeadlineExceeded, "request timeout")
 	}
+	if isRateLimitError(resp, err) {
+		return rateLimitError(resp, err)
+	}
 	if resp != nil && resp.StatusCode >= 500 {
-		return status.Error(codes.Unavailable, "server error")
+		return uhttp.WrapErrors(codes.Unavailable, "server error", err)
 	}
 	return convertNotFoundError(err, message)
+}
+
+// isRevokeNotFoundError reports whether a revoke's failed check means the assignment is
+// already gone: an HTTP 404, or a classified codes.NotFound — both mean the same thing.
+func isRevokeNotFoundError(resp *okta.Response, err error) bool {
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
+		return true
+	}
+	return status.Code(convertNotFoundError(err, "not found")) == codes.NotFound
+}
+
+// isRateLimitError reports a 429 from the response status, or from the "too many
+// requests" sentinel once the v2 SDK exhausts its own retries and drops the response.
+func isRateLimitError(resp *okta.Response, err error) bool {
+	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
+		return true
+	}
+	return err != nil && strings.Contains(err.Error(), "too many requests")
+}
+
+// rateLimitError classifies rate limits as codes.Unavailable, not ResourceExhausted:
+// baton-sdk's provisioning retryer only waits and retries on Unavailable/DeadlineExceeded.
+func rateLimitError(resp *okta.Response, err error) error {
+	if resp != nil && resp.Response != nil {
+		return uhttp.WrapErrorsWithRateLimitInfo(codes.Unavailable, resp.Response, err)
+	}
+	return uhttp.WrapErrors(codes.Unavailable, "rate limited by Okta", err)
+}
+
+// rateLimitAnnotations extracts rate-limit info from a successful response, nil-safe.
+// desc can be a typed-nil *v2.RateLimitDescription that WithRateLimiting won't catch,
+// so the nil check happens here instead.
+func rateLimitAnnotations(resp *okta.Response) annotations.Annotations {
+	var annos annotations.Annotations
+	if resp == nil || resp.Response == nil {
+		return annos
+	}
+	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil && desc != nil {
+		annos.WithRateLimiting(desc)
+	}
+	return annos
 }
 
 // https://developer.okta.com/docs/reference/error-codes/?q=not%20found
