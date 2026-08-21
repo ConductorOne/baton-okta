@@ -83,6 +83,10 @@ Run the `enable_user` action against the account to finish activating it.
 </Note>
 
 <Note>
+**A deprovisioned login cannot be reused by Create Account.** If the login you are creating already belongs to a **Deprovisioned** (deactivated) Okta account, the create fails with an error instead of returning that account. The connector cannot reactivate a deprovisioned user, so returning it would hand back an account that can never be used. Reactivate the user directly in Okta, or delete and recreate the account, to reuse the login.
+</Note>
+
+<Note>
 **Password Change Required on Login**, **Create Inactive**, and **Send Activation Email** are all string fields with a `True` / `False` placeholder (same schema shape). Map them as the strings `"true"` / `"false"` (case-insensitive). The connector also accepts a real boolean at runtime, but provisioning mappings that treat these three fields the same way are the supported pattern. **Additional Attributes** must return a map. Account creation fails with an error when a mapped value has the wrong type, so the account is never created without the values you asked for. Leaving a field unmapped uses its default.
 </Note>
 

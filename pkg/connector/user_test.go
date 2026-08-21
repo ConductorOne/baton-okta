@@ -3,11 +3,14 @@ package connector
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/okta/okta-sdk-golang/v2/okta"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -996,3 +999,61 @@ func TestIsDuplicateLoginError(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// A duplicate-login collision must not report success on an existing DEPROVISIONED
+// account: it has no connector-side recovery path, so CreateAccount fails loud instead
+// of returning AlreadyExistsResult. Recoverable states (STAGED/SUSPENDED) are still adopted.
+func TestCreateAccountDuplicateLogin(t *testing.T) {
+	noPassword := v2.LocalCredentialOptions_builder{
+		NoPassword: &v2.LocalCredentialOptions_NoPassword{},
+	}.Build()
+
+	accountInfo := func(t *testing.T) *v2.AccountInfo {
+		t.Helper()
+		s, err := structpb.NewStruct(map[string]interface{}{
+			"first_name": "Test",
+			"last_name":  "User",
+			"email":      "test.user@example.com",
+			"login":      "testuser",
+		})
+		if err != nil {
+			t.Fatalf("structpb.NewStruct: %v", err)
+		}
+		return &v2.AccountInfo{Profile: s}
+	}
+
+	const dupLoginBody = `{"errorCode":"E0000001","errorSummary":"Api validation failed","errorCauses":[{"errorSummary":"login: already exists"}]}`
+
+	t.Run("deprovisioned existing account fails loud", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users", statusCode: http.StatusBadRequest, body: dupLoginBody},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/testuser", statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+		)
+
+		resp, _, _, err := userBuilder(&Okta{client: client}).CreateAccount(t.Context(), accountInfo(t), noPassword)
+		if err == nil {
+			t.Fatal("CreateAccount over a deprovisioned login = nil error, want FailedPrecondition")
+		}
+		if status.Code(err) != codes.FailedPrecondition {
+			t.Errorf("CreateAccount error code = %s, want FailedPrecondition", status.Code(err))
+		}
+		if resp != nil {
+			t.Errorf("CreateAccount response = %v, want nil", resp)
+		}
+	})
+
+	t.Run("staged existing account is adopted as already-exists", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users", statusCode: http.StatusBadRequest, body: dupLoginBody},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/testuser", statusCode: http.StatusOK, body: oktaUserResponse(userStatusStaged)},
+		)
+
+		resp, _, _, err := userBuilder(&Okta{client: client}).CreateAccount(t.Context(), accountInfo(t), noPassword)
+		if err != nil {
+			t.Fatalf("CreateAccount over a staged login = %v, want AlreadyExistsResult", err)
+		}
+		if _, ok := resp.(*v2.CreateAccountResponse_AlreadyExistsResult); !ok {
+			t.Errorf("CreateAccount response = %T, want *AlreadyExistsResult", resp)
+		}
+	})
+}
