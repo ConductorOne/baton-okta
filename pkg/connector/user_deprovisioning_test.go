@@ -411,13 +411,27 @@ func TestUserDeprovisioningActionSchemas(t *testing.T) {
 		t.Fatalf("ListActionSchemas() error: %v", err)
 	}
 
+	wantSchemaNames := map[string]bool{
+		deactivateUserActionSchema.GetName(): true,
+		deleteUserActionSchema.GetName():     true,
+		updateUserProfileSchema.GetName():    true,
+	}
+	if len(schemas) != len(wantSchemaNames) {
+		t.Fatalf("user action schema count = %d, want %d (names: %v)", len(schemas), len(wantSchemaNames), wantSchemaNames)
+	}
+	for _, schema := range schemas {
+		if !wantSchemaNames[schema.GetName()] {
+			t.Errorf("unexpected user action schema %q", schema.GetName())
+		}
+	}
+
 	// This test is scoped to the deprovisioning actions (deactivate_user,
 	// delete_user); other resource-scoped actions on the user resource type
 	// (e.g. update_profile) have a different shape and are covered by their
 	// own tests, so they're skipped here rather than asserted against.
 	wantActionTypes := map[string]v2.ActionType{
-		"deactivate_user": v2.ActionType_ACTION_TYPE_RESOURCE_DISABLE,
-		"delete_user":     v2.ActionType_ACTION_TYPE_RESOURCE_DELETE,
+		deactivateUserActionSchema.GetName(): v2.ActionType_ACTION_TYPE_RESOURCE_DISABLE,
+		deleteUserActionSchema.GetName():     v2.ActionType_ACTION_TYPE_RESOURCE_DELETE,
 	}
 	for _, schema := range schemas {
 		name := schema.GetName()

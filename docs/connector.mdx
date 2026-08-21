@@ -97,6 +97,10 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 | create | `name` (string, required), `description` (string), `userMembers` (resource ID list) | Creates a new Okta group with optional initial members |
 | modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
 
+<Note>
+`update_user` (global action, takes `user_profile` as a JSON object) is the action required for C1's automated profile-push pipeline — a push rule that syncs Okta profile fields specifically looks up this global action shape. `update_profile` (resource-scoped, individual typed fields) is for manual/UX invocation from a workflow step; it does not satisfy the push-rule lookup on its own. Named profile fields and `user_profile` JSON keys use Okta's camelCase attribute names (e.g. `firstName`, not `first_name`).
+</Note>
+
 <Warning>
 `deactivate_user`, `delete_user`, and C1 account deprovisioning are destructive. Deactivation removes the user's assigned-app provisioning and can destroy downstream data such as email or files. Deletion permanently removes the Okta user and cannot be recovered. Use workflow approval gates where appropriate.
 </Warning>

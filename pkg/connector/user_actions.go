@@ -94,7 +94,7 @@ func buildUpdateProfileMap(argsMap map[string]interface{}) (okta.UserProfile, er
 
 	additional, err := parseObjectProfileField(argsMap, profileFieldAdditionalAttributes)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user-profile: %v", err)
 	}
 	for k, v := range additional {
 		if named[k] {
@@ -172,7 +172,7 @@ var updateUserProfileSchema = &v2.BatonActionSchema{
 			Description: "The user's display name (Okta profile attribute displayName)",
 			Field:       &config.Field_StringField{StringField: &config.StringField{}},
 		},
-		{Name: oktaAttrTitle, DisplayName: "title", Description: "The user's job title (Okta profile attribute title)", Field: &config.Field_StringField{StringField: &config.StringField{}}},
+		{Name: oktaAttrTitle, DisplayName: oktaAttrTitle, Description: "The user's job title (Okta profile attribute title)", Field: &config.Field_StringField{StringField: &config.StringField{}}},
 		{
 			Name:        oktaAttrDepartment,
 			DisplayName: oktaAttrDepartment,
@@ -257,13 +257,9 @@ var updateUserProfileSchema = &v2.BatonActionSchema{
 func (o *userResourceType) updateUserProfile(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	userResourceID, ok := actions.GetResourceIDArg(args, argUserID)
-	if !ok {
-		return nil, nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user-profile: missing required argument user_id")
-	}
-	userID := userResourceID.GetResource()
-	if userID == "" {
-		return nil, nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user-profile: empty user_id provided")
+	userID, err := userIDFromResourceActionArgs(args)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	profile, err := buildUpdateProfileMap(args.AsMap())
@@ -295,12 +291,13 @@ func buildUpdateProfileResponse(resource *v2.Resource) (*structpb.Struct, annota
 	return actions.NewReturnValues(true, returnField), nil, nil
 }
 
-// applyUserProfileUpdate sends a single partial-update POST for userID's
-// profile and rebuilds the updated resource from the response. Shared by
-// both this resource-scoped update_profile action (Shape B) and the global
-// update_user action (Shape A, Task 3) — the two schemas differ, but the
-// actual API call and response handling do not.
-func applyUserProfileUpdate(ctx context.Context, client *okta.Client, skipSecondaryEmails bool, userID string, profile okta.UserProfile) (*v2.Resource, error) {
+// partialUpdateUserProfile sends the single atomic partial-update POST and
+// returns the raw updated Okta user, without building a v2.Resource. Used
+// directly by the global update_user action, which doesn't need the
+// resource — this means a resource-construction failure (see
+// applyUserProfileUpdate) can never cause update_user to report a failed
+// action for a write that actually landed in Okta.
+func partialUpdateUserProfile(ctx context.Context, client *okta.Client, userID string, profile okta.UserProfile) (*okta.User, error) {
 	if userID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user-profile: user_id cannot be empty")
 	}
@@ -314,6 +311,18 @@ func applyUserProfileUpdate(ctx context.Context, client *okta.Client, skipSecond
 	}
 	if updatedUser == nil || updatedUser.Profile == nil {
 		return nil, status.Errorf(codes.Internal, "okta-connectorv2: update-user-profile: empty response updating user %s", userID)
+	}
+	return updatedUser, nil
+}
+
+// applyUserProfileUpdate sends a single partial-update POST for userID's
+// profile and rebuilds the updated resource from the response. Used by the
+// resource-scoped update_profile action, which returns the resource to the
+// caller.
+func applyUserProfileUpdate(ctx context.Context, client *okta.Client, skipSecondaryEmails bool, userID string, profile okta.UserProfile) (*v2.Resource, error) {
+	updatedUser, err := partialUpdateUserProfile(ctx, client, userID, profile)
+	if err != nil {
+		return nil, err
 	}
 
 	updatedResource, err := userResource(updatedUser, skipSecondaryEmails)

@@ -6,6 +6,8 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -98,20 +100,23 @@ func TestUpdateUserActionHandler_ValidationErrors(t *testing.T) {
 	o := &Okta{}
 
 	tests := []struct {
-		name string
-		args *structpb.Struct
+		name     string
+		args     *structpb.Struct
+		wantCode codes.Code
 	}{
 		{
 			name: "missing user_id",
 			args: mustStruct(t, map[string]interface{}{
 				"user_profile": `{"firstName":"Jane"}`,
 			}),
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "missing user_profile",
 			args: mustStruct(t, map[string]interface{}{
 				"user_id": "00u1",
 			}),
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "empty user_id string",
@@ -119,6 +124,7 @@ func TestUpdateUserActionHandler_ValidationErrors(t *testing.T) {
 				"user_id":      "",
 				"user_profile": `{"firstName":"Jane"}`,
 			}),
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			// An empty JSON object has no fields at all. Note that
@@ -131,6 +137,7 @@ func TestUpdateUserActionHandler_ValidationErrors(t *testing.T) {
 				"user_id":      "00u1",
 				"user_profile": `{}`,
 			}),
+			wantCode: codes.InvalidArgument,
 		},
 	}
 
@@ -141,6 +148,9 @@ func TestUpdateUserActionHandler_ValidationErrors(t *testing.T) {
 			_, _, err := o.updateUserActionHandler(context.Background(), tt.args)
 			if err == nil {
 				t.Fatal("expected error, got nil")
+			}
+			if got := status.Code(err); got != tt.wantCode {
+				t.Errorf("status code = %v, want %v", got, tt.wantCode)
 			}
 		})
 	}

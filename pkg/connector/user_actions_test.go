@@ -2,11 +2,14 @@ package connector
 
 import (
 	"context"
+	"net/http"
 	"reflect"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -14,10 +17,11 @@ func TestBuildUpdateProfileMap(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		argsMap map[string]interface{}
-		want    okta.UserProfile
-		wantErr bool
+		name     string
+		argsMap  map[string]interface{}
+		want     okta.UserProfile
+		wantErr  bool
+		wantCode codes.Code
 	}{
 		{
 			name:    "no fields yields empty profile",
@@ -55,21 +59,24 @@ func TestBuildUpdateProfileMap(t *testing.T) {
 			},
 		},
 		{
-			name:    "wrong-typed named field errors",
-			argsMap: map[string]interface{}{"firstName": float64(1)},
-			wantErr: true,
+			name:     "wrong-typed named field errors",
+			argsMap:  map[string]interface{}{"firstName": float64(1)},
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "additionalAttributes colliding with a named field errors",
 			argsMap: map[string]interface{}{
 				"additionalAttributes": map[string]interface{}{"firstName": "override"},
 			},
-			wantErr: true,
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
-			name:    "wrong-typed additionalAttributes errors",
-			argsMap: map[string]interface{}{"additionalAttributes": "bad"},
-			wantErr: true,
+			name:     "wrong-typed additionalAttributes errors",
+			argsMap:  map[string]interface{}{"additionalAttributes": "bad"},
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "additionalAttributes accepts non-string scalar values",
@@ -83,7 +90,8 @@ func TestBuildUpdateProfileMap(t *testing.T) {
 			argsMap: map[string]interface{}{
 				"additionalAttributes": map[string]interface{}{"nickName": map[string]interface{}{"nested": true}},
 			},
-			wantErr: true,
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 	}
 
@@ -95,6 +103,9 @@ func TestBuildUpdateProfileMap(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
+				}
+				if got := status.Code(err); got != tt.wantCode {
+					t.Errorf("status code = %v, want %v", got, tt.wantCode)
 				}
 				return
 			}
@@ -188,24 +199,28 @@ func TestUpdateUserProfile_ValidationErrors(t *testing.T) {
 	o := &userResourceType{connector: &Okta{}}
 
 	tests := []struct {
-		name string
-		args *structpb.Struct
+		name     string
+		args     *structpb.Struct
+		wantCode codes.Code
 	}{
 		{
-			name: "missing user_id",
-			args: mustStruct(t, map[string]interface{}{}),
+			name:     "missing user_id",
+			args:     mustStruct(t, map[string]interface{}{}),
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "empty user_id",
 			args: mustStruct(t, map[string]interface{}{
 				"user_id": map[string]interface{}{"resource_id": "", "resource_type_id": userResourceTypeID},
 			}),
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "no profile fields provided",
 			args: mustStruct(t, map[string]interface{}{
 				"user_id": map[string]interface{}{"resource_id": "00u1", "resource_type_id": userResourceTypeID},
 			}),
+			wantCode: codes.InvalidArgument,
 		},
 	}
 
@@ -216,6 +231,9 @@ func TestUpdateUserProfile_ValidationErrors(t *testing.T) {
 			_, _, err := o.updateUserProfile(context.Background(), tt.args)
 			if err == nil {
 				t.Fatal("expected error, got nil")
+			}
+			if got := status.Code(err); got != tt.wantCode {
+				t.Errorf("status code = %v, want %v", got, tt.wantCode)
 			}
 		})
 	}
@@ -251,6 +269,64 @@ func TestApplyUserProfileUpdate_EmptyUserID(t *testing.T) {
 	}
 }
 
+func TestApplyUserProfileUpdate_Success(t *testing.T) {
+	t.Parallel()
+
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+	)
+
+	resource, err := applyUserProfileUpdate(context.Background(), client, false, testOktaUserID, okta.UserProfile{"title": "Staff Engineer"})
+	if err != nil {
+		t.Fatalf("applyUserProfileUpdate() error = %v", err)
+	}
+	if resource.GetId().GetResource() != testOktaUserID {
+		t.Errorf("resource ID = %q, want %q", resource.GetId().GetResource(), testOktaUserID)
+	}
+}
+
+func TestApplyUserProfileUpdate_NotFound(t *testing.T) {
+	t.Parallel()
+
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+	)
+
+	_, err := applyUserProfileUpdate(context.Background(), client, false, testOktaUserID, okta.UserProfile{"title": "Staff Engineer"})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("applyUserProfileUpdate() status = %s, want %s (error: %v)", status.Code(err), codes.NotFound, err)
+	}
+}
+
+func TestPartialUpdateUserProfile_Success(t *testing.T) {
+	t.Parallel()
+
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
+	)
+
+	updatedUser, err := partialUpdateUserProfile(context.Background(), client, testOktaUserID, okta.UserProfile{"title": "Staff Engineer"})
+	if err != nil {
+		t.Fatalf("partialUpdateUserProfile() error = %v", err)
+	}
+	if updatedUser.Id != testOktaUserID {
+		t.Errorf("updated user ID = %q, want %q", updatedUser.Id, testOktaUserID)
+	}
+}
+
+func TestPartialUpdateUserProfile_NotFound(t *testing.T) {
+	t.Parallel()
+
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+	)
+
+	_, err := partialUpdateUserProfile(context.Background(), client, testOktaUserID, okta.UserProfile{"title": "Staff Engineer"})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("partialUpdateUserProfile() status = %s, want %s (error: %v)", status.Code(err), codes.NotFound, err)
+	}
+}
+
 func mustStruct(t *testing.T, m map[string]interface{}) *structpb.Struct {
 	t.Helper()
 	s, err := structpb.NewStruct(m)
@@ -264,15 +340,17 @@ func TestProfileArgAsMap(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		args    *structpb.Struct
-		want    map[string]interface{}
-		wantErr bool
+		name     string
+		args     *structpb.Struct
+		want     map[string]interface{}
+		wantErr  bool
+		wantCode codes.Code
 	}{
 		{
-			name:    "missing key errors",
-			args:    mustStruct(t, map[string]interface{}{}),
-			wantErr: true,
+			name:     "missing key errors",
+			args:     mustStruct(t, map[string]interface{}{}),
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "JSON string is parsed",
@@ -286,7 +364,8 @@ func TestProfileArgAsMap(t *testing.T) {
 			args: mustStruct(t, map[string]interface{}{
 				"user_profile": `not json`,
 			}),
-			wantErr: true,
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "nested struct is accepted",
@@ -305,6 +384,9 @@ func TestProfileArgAsMap(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
+				}
+				if got := status.Code(err); got != tt.wantCode {
+					t.Errorf("status code = %v, want %v", got, tt.wantCode)
 				}
 				return
 			}
@@ -327,15 +409,17 @@ func TestBuildOktaProfileFromMap(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		raw     map[string]interface{}
-		want    okta.UserProfile
-		wantErr bool
+		name     string
+		raw      map[string]interface{}
+		want     okta.UserProfile
+		wantErr  bool
+		wantCode codes.Code
 	}{
 		{
-			name:    "empty map errors (nothing to update)",
-			raw:     map[string]interface{}{},
-			wantErr: true,
+			name:     "empty map errors (nothing to update)",
+			raw:      map[string]interface{}{},
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "accepts a field outside Shape B's curated list",
@@ -348,9 +432,10 @@ func TestBuildOktaProfileFromMap(t *testing.T) {
 			want: okta.UserProfile{"firstName": "", oktaAttrMiddleName: nil, "lastName": "Doe"},
 		},
 		{
-			name:    "nested object value errors",
-			raw:     map[string]interface{}{"firstName": map[string]interface{}{"nested": true}},
-			wantErr: true,
+			name:     "nested object value errors",
+			raw:      map[string]interface{}{"firstName": map[string]interface{}{"nested": true}},
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "bool value is accepted",
@@ -368,9 +453,10 @@ func TestBuildOktaProfileFromMap(t *testing.T) {
 			want: okta.UserProfile{"tags": []interface{}{"a", "b"}},
 		},
 		{
-			name:    "array with non-string element errors",
-			raw:     map[string]interface{}{"tags": []interface{}{"a", 5}},
-			wantErr: true,
+			name:     "array with non-string element errors",
+			raw:      map[string]interface{}{"tags": []interface{}{"a", 5}},
+			wantErr:  true,
+			wantCode: codes.InvalidArgument,
 		},
 	}
 
@@ -382,6 +468,9 @@ func TestBuildOktaProfileFromMap(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
+				}
+				if got := status.Code(err); got != tt.wantCode {
+					t.Errorf("status code = %v, want %v", got, tt.wantCode)
 				}
 				return
 			}

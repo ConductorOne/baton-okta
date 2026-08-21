@@ -243,7 +243,7 @@ func (o *Okta) updateUserActionHandler(ctx context.Context, args *structpb.Struc
 		zap.Int("fields", len(profile)),
 	)
 
-	if _, err := applyUserProfileUpdate(ctx, o.client, o.skipSecondaryEmails, userID, profile); err != nil {
+	if _, err := partialUpdateUserProfile(ctx, o.client, userID, profile); err != nil {
 		return nil, nil, err
 	}
 
