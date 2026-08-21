@@ -483,7 +483,7 @@ func (r *userResourceType) CreateAccount(
 		if existing.Status == userStatusDeprovisioned {
 			return nil, nil, nil, status.Error(
 				codes.FailedPrecondition,
-				"okta-connectorv2: login already exists on a deprovisioned account the connector cannot reactivate; delete the account and recreate it to reuse this login",
+				"okta-connectorv2: login already exists on a deprovisioned account; reactivate the user in Okta, or delete and recreate the account, to reuse this login",
 			)
 		}
 		l.Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
