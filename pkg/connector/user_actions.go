@@ -68,11 +68,13 @@ var updateProfileNamedFields = []string{
 // update_profile action from its already-flattened argument map (see
 // structpb.Struct.AsMap). A field genuinely absent from argsMap (or
 // explicitly nil) is left untouched by Okta's partial update semantics. A
-// field explicitly present with an empty string is forwarded as an
-// intentional clear of that Okta attribute — matching buildOktaProfileFromMap's
-// behavior for the same reason: silently dropping it would turn an intended
-// clear into a no-op. additionalAttributes entries are merged in last and may
-// not override a named field.
+// field explicitly present with an empty string is forwarded to Okta as an
+// empty string, not silently dropped — but that sets the attribute to
+// present-but-empty, it does not clear it (Okta only clears an attribute on
+// receiving an explicit null; see docs/docs-info.md). Named fields skip nil
+// above, so update_profile has no way to send a null and can never actually
+// clear a named attribute — only set it to empty. additionalAttributes
+// entries are merged in last and may not override a named field.
 func buildUpdateProfileMap(argsMap map[string]interface{}) (okta.UserProfile, error) {
 	profile := okta.UserProfile{}
 	named := make(map[string]bool, len(updateProfileNamedFields))
