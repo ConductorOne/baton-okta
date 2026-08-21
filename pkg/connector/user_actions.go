@@ -96,7 +96,7 @@ func buildUpdateProfileMap(argsMap map[string]interface{}) (okta.UserProfile, er
 
 	additional, err := parseObjectProfileField(argsMap, profileFieldAdditionalAttributes)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user-profile: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	for k, v := range additional {
 		if named[k] {
@@ -364,9 +364,11 @@ func profileArgAsMap(args *structpb.Struct, key string) (map[string]interface{},
 // attributes; a restrictive allowlist would defeat that purpose.
 //
 // Every key in raw is forwarded through to the resulting profile, including
-// explicit nil and empty-string values: Okta clears a profile attribute when
-// it receives null for that field, so silently dropping nil/empty values
-// would turn an intended clear into a no-op. Accepted value types are JSON
+// explicit nil and empty-string values, rather than silently dropped: an
+// explicit null clears the Okta attribute, while an empty string sets it to
+// present-but-empty — these are different outcomes, not equivalent clears,
+// and dropping either would turn an intended change into a no-op. Accepted
+// value types are JSON
 // scalars (string, bool, float64 — the type json.Unmarshal produces for a
 // JSON number) plus []interface{} where every element is a string, matching
 // the attribute types Okta profile schemas support (including custom

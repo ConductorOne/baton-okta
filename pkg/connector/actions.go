@@ -219,7 +219,10 @@ func (o *userResourceType) ResourceActions(ctx context.Context, registry actions
 // updateUserActionHandler handles the global update_user action — the shape
 // C1's automated profile-push pipeline looks up. It accepts any Okta profile
 // attribute (no curated allowlist, unlike update_profile) and shares
-// applyUserProfileUpdate with the resource-scoped action.
+// partialUpdateUserProfile with the resource-scoped action, intentionally
+// skipping the v2.Resource rebuild that applyUserProfileUpdate does — so a
+// resource-construction failure can never make update_user report a failed
+// action for an Okta write that already landed.
 func (o *Okta) updateUserActionHandler(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 

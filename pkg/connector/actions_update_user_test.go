@@ -130,8 +130,9 @@ func TestUpdateUserActionHandler_ValidationErrors(t *testing.T) {
 			// An empty JSON object has no fields at all. Note that
 			// `{"firstName":""}` is NOT an example of this anymore: since
 			// buildOktaProfileFromMap now forwards explicit empty-string
-			// values (Okta clears a profile attribute on receiving one),
-			// that payload has one usable field.
+			// values (setting the attribute to present-but-empty, not
+			// clearing it — only an explicit null clears), that payload has
+			// one usable field.
 			name: "user_profile is an empty object",
 			args: mustStruct(t, map[string]interface{}{
 				"user_id":      "00u1",

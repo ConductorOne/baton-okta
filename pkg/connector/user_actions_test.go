@@ -29,7 +29,7 @@ func TestBuildUpdateProfileMap(t *testing.T) {
 			want:    okta.UserProfile{},
 		},
 		{
-			name:    "empty string field is forwarded as an explicit clear",
+			name:    "empty string field is forwarded, setting the attribute to empty (not a clear)",
 			argsMap: map[string]interface{}{oktaAttrFirstName: ""},
 			want:    okta.UserProfile{oktaAttrFirstName: ""},
 		},
