@@ -97,9 +97,9 @@ func (rsb *resourceSetsBindingsResourceType) List(ctx context.Context, parentRes
 
 	for _, resourceSet := range resourceSets {
 		resourceSetCpy := resourceSet
-		roles, _, err := listBindings(ctx, rsb.client, resourceSetCpy.ID)
+		roles, oktaResp, err := listBindings(ctx, rsb.client, resourceSetCpy.ID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list resource set bindings: %w", handleOktaResponseError(oktaResp, err))
 		}
 
 		for _, role := range roles {
@@ -160,7 +160,7 @@ func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(
 	var resourceSetBindings *resourceSetBindingsAPIData
 	resp, err := doRequest(ctx, reqUrl.String(), http.MethodGet, &resourceSetBindings, client)
 	if err != nil {
-		return nil, nil, err
+		return nil, resp, err
 	}
 
 	return resourceSetBindings.Members, resp, nil
@@ -238,9 +238,9 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	resourceIDs := strings.Split(resource.Id.Resource, ":")
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
-	members, _, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId)
+	members, resp, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId)
 	if err != nil {
-		return nil, nil, convertNotFoundError(err, "resource set binding not found")
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list members of resource set binding: %w", handleOktaResponseError(resp, err))
 	}
 
 	for _, member := range members {

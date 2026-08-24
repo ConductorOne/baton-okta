@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
@@ -117,11 +118,20 @@ func getError(response *okta.Response) (okta.Error, error) {
 	return errOkta, nil
 }
 
-func handleOktaResponseError(resp *okta.Response, err error) error {
-	return handleOktaResponseErrorWithNotFoundMessage(resp, err, "not found")
+// https://developer.okta.com/docs/reference/error-codes/
+var oktaErrToGRPCError = map[string]codes.Code{
+	"E0000006": codes.PermissionDenied,
+	"E0000007": codes.NotFound,
+	"E0000008": codes.NotFound,
+	"E0000011": codes.Unauthenticated,
 }
 
-func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, message string) error {
+func handleOktaResponseError(resp *okta.Response, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// TODO: Whenever baton-sdk exposes wrapTransientNetworkError or something like it, use it here.
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
@@ -131,16 +141,22 @@ func handleOktaResponseErrorWithNotFoundMessage(resp *okta.Response, err error, 
 	if errors.Is(err, context.DeadlineExceeded) {
 		return status.Error(codes.DeadlineExceeded, "request timeout")
 	}
-	if resp != nil && resp.StatusCode >= 500 {
-		return status.Error(codes.Unavailable, "server error")
-	}
-	return convertNotFoundError(err, message)
-}
 
-// https://developer.okta.com/docs/reference/error-codes/?q=not%20found
-var oktaNotFoundErrors = map[string]struct{}{
-	"E0000007": {},
-	"E0000008": {},
+	var oktaApiError *okta.Error
+	if errors.As(err, &oktaApiError) {
+		grpcErrCode, ok := oktaErrToGRPCError[oktaApiError.ErrorCode]
+		if ok {
+			return errors.Join(status.Error(grpcErrCode, oktaApiError.ErrorSummary), err)
+		}
+	}
+
+	// Fall back to http status code.
+	if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
+		grpcCode := uhttp.GrpcCodeFromHTTPStatus(resp.StatusCode)
+		return uhttp.WrapErrorsWithRateLimitInfo(grpcCode, resp.Response, err)
+	}
+
+	return err
 }
 
 // apiValidationFailedErrorCode covers every Create User validation failure, so a
@@ -167,26 +183,6 @@ func isDuplicateLoginError(err error) bool {
 	}
 
 	return false
-}
-
-func convertNotFoundError(err error, message string) error {
-	if err == nil {
-		return nil
-	}
-
-	var oktaApiError *okta.Error
-	if !errors.As(err, &oktaApiError) {
-		return err
-	}
-
-	_, ok := oktaNotFoundErrors[oktaApiError.ErrorCode]
-	if !ok {
-		return err
-	}
-
-	grpcErr := status.Error(codes.NotFound, message)
-	allErrs := append([]error{grpcErr}, err)
-	return errors.Join(allErrs...)
 }
 
 // createSuccessResponse creates a standardized success response struct.

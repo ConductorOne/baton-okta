@@ -306,7 +306,7 @@ func partialUpdateUserProfile(ctx context.Context, client *okta.Client, userID s
 
 	updatedUser, resp, err := client.User.PartialUpdateUser(ctx, userID, okta.User{Profile: &profile}, nil)
 	if err != nil {
-		return nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "user not found")
+		return nil, fmt.Errorf("okta-connectorv2: failed to update user profile: %w", handleOktaResponseError(resp, err))
 	}
 	if resp != nil && resp.StatusCode != http.StatusOK {
 		return nil, status.Errorf(codes.Internal, "okta-connectorv2: update-user-profile: unexpected status updating user %s: %s", userID, resp.Status)

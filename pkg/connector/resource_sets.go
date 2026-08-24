@@ -180,6 +180,10 @@ func listBindings(
 		return nil, resp, err
 	}
 
+	if resourceSetsBindings == nil {
+		return nil, resp, nil
+	}
+
 	return resourceSetsBindings.Roles, resp, nil
 }
 
@@ -229,9 +233,9 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	roles, respCtx, err := listBindings(ctx, rs.client, resource.Id.Resource)
+	roles, oktaResp, err := listBindings(ctx, rs.client, resource.GetId().GetResource())
 	if err != nil {
-		return nil, nil, convertNotFoundError(err, "resource set not found")
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list resource set bindings: %w", handleOktaResponseError(oktaResp, err))
 	}
 
 	for _, role := range roles {
@@ -244,7 +248,7 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 		rv = append(rv, gr)
 	}
 
-	nextPage, annos, err := parseResp(respCtx)
+	nextPage, annos, err := parseResp(oktaResp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
