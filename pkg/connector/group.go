@@ -87,6 +87,17 @@ func (o *groupResourceType) List(
 			return nil, nil, err
 		}
 
+		// A clamped description renders cut off in C1 with nothing else to explain
+		// it, so leave a trail an operator can find in the sync log.
+		if original := len(strings.TrimSpace(group.Profile.Description)); original > maxDescriptionBytes {
+			l.Debug("okta-connectorv2: clamped group description to the description budget",
+				zap.String("group_id", group.Id),
+				zap.Int("original_bytes", original),
+				zap.Int("clamped_bytes", len(resource.GetDescription())),
+				zap.Int("budget_bytes", maxDescriptionBytes),
+			)
+		}
+
 		rv = append(rv, resource)
 	}
 
