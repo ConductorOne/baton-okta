@@ -817,7 +817,7 @@ func getUserWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID
 
 	resp, err := rq.Do(ctx, req, &oktaUsers)
 	if err != nil {
-		return nil, nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "user not found")
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get user: %w", handleOktaResponseError(resp, err))
 	}
 
 	return oktaUsers, &responseContext{OktaResponse: resp}, nil

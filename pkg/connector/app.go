@@ -143,15 +143,15 @@ func (o *appResourceType) Grants(
 	case appGrantGroup:
 		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, token, bag, page)
 		if err != nil {
-			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list app group grants: %w", err)
+			return nil, nil, err
 		}
 	case appGrantUser:
 		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, token, bag, page)
 		if err != nil {
-			return nil, nil, fmt.Errorf("okta-connectorv2: failed to list app users grants: %w", err)
+			return nil, nil, err
 		}
 	default:
-		return nil, nil, fmt.Errorf("okta-connectorv2: unexpected resource for app: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: unexpected resource for app: %s", bag.ResourceID())
 	}
 
 	pageToken, err := bag.Marshal()
@@ -173,7 +173,7 @@ func (o *appResourceType) listAppGroupGrants(
 	qp := queryParams(token.Size, page)
 	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
-		return nil, nil, bag, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+		return nil, nil, bag, err
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
@@ -212,7 +212,7 @@ func (o *appResourceType) listAppUsersGrants(
 	qp := queryParams(token.Size, page)
 	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
 	if err != nil {
-		return nil, nil, bag, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+		return nil, nil, bag, err
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
@@ -628,7 +628,7 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
 	app, resp, err := client.Application.GetApplication(ctx, appID, okta.NewApplication(), nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseErrorWithNotFoundMessage(resp, err, "app not found"))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseError(resp, err))
 	}
 
 	reqCtx := &responseContext{OktaResponse: resp}

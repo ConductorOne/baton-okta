@@ -146,7 +146,7 @@ func (o *groupResourceType) Grants(
 
 			users, respCtx, err := o.listGroupUsers(ctx, groupID, token, qp)
 			if err != nil {
-				return nil, nil, convertNotFoundError(err, "okta-connectorv2: failed to list group users")
+				return nil, nil, err
 			}
 
 			nextPage, annos, err = parseResp(respCtx.OktaResponse)
@@ -200,7 +200,7 @@ func (o *groupResourceType) Grants(
 				}
 				return nil, &sdkResource.SyncOpResults{NextPageToken: pageToken}, nil
 			} else {
-				return nil, nil, convertNotFoundError(&errOkta, "okta-connectorv2: failed to list group roles")
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", handleOktaResponseError(resp, &errOkta))
 			}
 		}
 
@@ -505,7 +505,7 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 
 	group, resp, err := o.GetGroupWithParams(ctx, resourceId.Resource)
 	if err != nil {
-		return nil, nil, handleOktaResponseErrorWithNotFoundMessage(resp, err, "group not found")
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group: %w", handleOktaResponseError(resp, err))
 	}
 
 	if resp != nil {
