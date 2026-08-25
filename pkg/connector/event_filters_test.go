@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -88,20 +89,16 @@ func TestRoleMembershipRevokeFilterUnknownLabel(t *testing.T) {
 	require.ErrorContains(t, err, "error getting role from label")
 }
 
-// Both new event types must reach the Okta System Log query, otherwise the
-// filters never see an event to handle.
-func TestRevokeFiltersAreQueried(t *testing.T) {
-	filter := (&EventFilter{
-		EventTypes:  ApplicationMembershipRevokeFilter.EventTypes,
-		TargetTypes: ApplicationMembershipRevokeFilter.TargetTypes,
-	}).Filter()
-	require.Contains(t, filter, `eventType eq "application.user_membership.remove"`)
+// A filter that is not in activeFilters is never queried, so registration is the
+// invariant worth asserting -- not that a filter can build a query string.
+func TestRevokeFiltersAreRegistered(t *testing.T) {
+	queried := mapset.NewSet[string]()
+	for _, filter := range activeFilters {
+		queried = queried.Union(filter.EventTypes)
+	}
 
-	filter = (&EventFilter{
-		EventTypes:  RoleMembershipRevokeFilter.EventTypes,
-		TargetTypes: RoleMembershipRevokeFilter.TargetTypes,
-	}).Filter()
-	require.Contains(t, filter, `eventType eq "user.account.privilege.revoke"`)
+	require.True(t, queried.Contains("application.user_membership.remove"))
+	require.True(t, queried.Contains("user.account.privilege.revoke"))
 }
 
 // Real payload from a test tenant. Okta sends a third target whose type is
@@ -116,7 +113,10 @@ const privilegeRevokeFixture = `{
   "uuid": "30010c48-a0ac-11f1-ae0a-95c6e5af725d",
   "target": [
     {"id":"00u12xvaouixjW1y3698","type":"User","alternateId":"user@example.com","displayName":"Target User"},
-    {"id":"ROLE_UNASSIGNED_ALL_PRIVILEGES_REVOKED","type":"ROLE_UNASSIGNED_ALL_PRIVILEGES_REVOKED","alternateId":"unknown","displayName":"All Privileges revoked from User. User has no admin privileges"},
+    {"id":"ROLE_UNASSIGNED_ALL_PRIVILEGES_REVOKED",
+     "type":"ROLE_UNASSIGNED_ALL_PRIVILEGES_REVOKED",
+     "alternateId":"unknown",
+     "displayName":"All Privileges revoked from User. User has no admin privileges"},
     {"id":"HelpDeskAdmin","type":"ROLE","alternateId":"JBCUYUC7IRCVGS27IFCE2SKO","displayName":"Help Desk Administrator"}
   ]
 }`
@@ -149,15 +149,15 @@ func TestApplicationLifecycleFilterEventTypes(t *testing.T) {
 		"application.lifecycle.create",
 		"application.lifecycle.update",
 		"application.lifecycle.activate",
-		"application.lifecycle.deactivate",
 	} {
 		require.True(t, types.Contains(want), "missing %s", want)
 	}
 
 	require.False(t, types.Contains("app.lifecycle.create"), "app.lifecycle.* is not a real Okta namespace")
-	// Emitting a ResourceChangeEvent for a delete is a no-op: the targeted sync's
-	// GetResource returns not-found and the stale resource is left behind.
+	// Both leave the targeted sync with no resource to write, so the SDK records a
+	// task failure and the stale resource survives regardless.
 	require.False(t, types.Contains("application.lifecycle.delete"))
+	require.False(t, types.Contains("application.lifecycle.deactivate"))
 
 	event := logEvent("application.lifecycle.create",
 		&oktaSDK.LogTarget{Type: "AppInstance", Id: "app1", DisplayName: "Salesforce"},

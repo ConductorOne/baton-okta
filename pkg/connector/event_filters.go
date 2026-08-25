@@ -136,17 +136,16 @@ var (
 		// "app.lifecycle.create" this used to request is not a real event type, so
 		// app creations were never picked up.
 		//
-		// "application.lifecycle.delete" is intentionally absent: a ResourceChangeEvent
-		// for a deleted resource does nothing, because the targeted sync's GetResource
-		// returns not-found and leaves the stale resource in place.
-		//
-		// "deactivate" only takes effect when sync-inactive-apps is enabled; otherwise
-		// appResourceType.Get filters non-ACTIVE apps out and the event is inert.
+		// "delete" and "deactivate" are intentionally absent. Both leave the targeted
+		// sync with no resource to write: a deleted app is gone, and a deactivated one
+		// is filtered out by appResourceType.Get unless sync-inactive-apps is set. The
+		// SDK turns that nil resource into NotFound and records a task failure
+		// (resource_syncer.go), so emitting them costs a request and a failure metric
+		// while leaving the stale resource in place either way.
 		EventTypes: mapset.NewSet(
 			"application.lifecycle.create",
 			"application.lifecycle.update",
 			"application.lifecycle.activate",
-			"application.lifecycle.deactivate",
 		),
 		TargetTypes: mapset.NewSet("AppInstance"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
