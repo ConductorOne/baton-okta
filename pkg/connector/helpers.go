@@ -197,7 +197,7 @@ func createSuccessResponse(message string) *structpb.Struct {
 		actionResultSuccess: structpb.NewBoolValue(true),
 	}
 	if message != "" {
-		fields["message"] = structpb.NewStringValue(message)
+		fields[actionResultMessage] = structpb.NewStringValue(message)
 	}
 	return &structpb.Struct{
 		Fields: fields,

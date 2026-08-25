@@ -42,8 +42,8 @@ var disableUser = &v2.BatonActionSchema{
 			Field:       &config.Field_BoolField{},
 		},
 		{
-			Name:        "message",
-			DisplayName: "Message",
+			Name:        actionResultMessage,
+			DisplayName: actionResultMessageDisplay,
 			Field:       &config.Field_StringField{},
 		},
 	},
@@ -70,8 +70,8 @@ var enableUser = &v2.BatonActionSchema{
 			Field:       &config.Field_BoolField{},
 		},
 		{
-			Name:        "message",
-			DisplayName: "Message",
+			Name:        actionResultMessage,
+			DisplayName: actionResultMessageDisplay,
 			Field:       &config.Field_StringField{},
 		},
 	},
@@ -107,8 +107,8 @@ var deactivateUserActionSchema = &v2.BatonActionSchema{
 			Field:       &config.Field_BoolField{},
 		},
 		{
-			Name:        "message",
-			DisplayName: "Message",
+			Name:        actionResultMessage,
+			DisplayName: actionResultMessageDisplay,
 			Field:       &config.Field_StringField{},
 		},
 	},
@@ -143,8 +143,8 @@ var deleteUserActionSchema = &v2.BatonActionSchema{
 			Field:       &config.Field_BoolField{},
 		},
 		{
-			Name:        "message",
-			DisplayName: "Message",
+			Name:        actionResultMessage,
+			DisplayName: actionResultMessageDisplay,
 			Field:       &config.Field_StringField{},
 		},
 	},

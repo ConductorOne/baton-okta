@@ -20,6 +20,8 @@ const (
 const (
 	actionResultSuccess        = "success"
 	actionResultSuccessDisplay = "Success"
+	actionResultMessage        = "message"
+	actionResultMessageDisplay = "Message"
 )
 
 const (
