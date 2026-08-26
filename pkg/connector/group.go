@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+	"unicode/utf8"
 
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -32,6 +34,10 @@ const builtInGroupType = "BUILT_IN"
 const appGroupType = "APP_GROUP"
 const oktaGroupType = "OKTA_GROUP"
 const apiPathGetGroupFmt = "/api/v1/groups/%s"
+
+// maxDescriptionBytes is the per-field budget the connector protocol enforces on
+// Resource.Description and Entitlement.Description.
+const maxDescriptionBytes = 2048
 
 type groupResourceType struct {
 	resourceType *v2.ResourceType
@@ -79,6 +85,21 @@ func (o *groupResourceType) List(
 		resource, err := o.groupResource(group)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		// A clamped description renders cut off in C1 with nothing else to explain
+		// it, so leave a trail an operator can find in the sync log. Trimming only
+		// ever shortens, so the raw length gates this without trimming every group.
+		if len(group.Profile.Description) > maxDescriptionBytes {
+			original := len(strings.TrimSpace(group.Profile.Description))
+			if clamped := len(resource.GetDescription()); original > clamped {
+				l.Debug("okta-connectorv2: clamped group description to the description budget",
+					zap.String("group_id", group.Id),
+					zap.Int("original_bytes", original),
+					zap.Int("clamped_bytes", clamped),
+					zap.Int("budget_bytes", maxDescriptionBytes),
+				)
+			}
 		}
 
 		rv = append(rv, resource)
@@ -334,6 +355,7 @@ func (o *groupResourceType) groupResource(group *okta.Group) (*v2.Resource, erro
 
 	resourceOpts := []sdkResource.ResourceOption{
 		sdkResource.WithResourceProfile(groupProfileMap(group)),
+		sdkResource.WithDescription(groupDescription(group)),
 		sdkResource.WithAnnotation(&v2.V1Identifier{Id: fmtResourceIdV1(group.Id)}),
 		sdkResource.WithAnnotation(&v2.RawId{Id: group.Id}),
 	}
@@ -342,6 +364,29 @@ func (o *groupResourceType) groupResource(group *okta.Group) (*v2.Resource, erro
 	}
 
 	return sdkResource.NewGroupResource(group.Profile.Name, resourceTypeGroup, group.Id, traitOpts, resourceOpts...)
+}
+
+// groupDescription returns the Okta group description ready for
+// Resource.Description and the membership entitlement.
+//
+// Whitespace-only values become empty so callers fall back to generated text.
+// The result is clamped to maxDescriptionBytes: Okta caps group descriptions at
+// 1024 UTF-16 units, which is up to 3072 bytes of UTF-8, and a description over
+// the protocol budget fails validation and aborts the whole sync.
+func groupDescription(group *okta.Group) string {
+	description := strings.TrimSpace(group.Profile.Description)
+	if len(description) <= maxDescriptionBytes {
+		return description
+	}
+
+	// Drop the trailing bytes of the character the cut landed inside, so the
+	// value stays valid UTF-8.
+	truncated := description[:maxDescriptionBytes]
+	for !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+
+	return truncated
 }
 
 // groupProfileMap builds the C1 profile for an Okta group. The profile is set
@@ -421,13 +466,22 @@ func getGroupAppsCount(group *okta.Group) (float64, bool) {
 }
 
 func (o *groupResourceType) groupEntitlement(resource *v2.Resource) *v2.Entitlement {
+	// Access-request forms, access reviews and CSV exports read the entitlement
+	// description rather than the resource description, so the group's own Okta
+	// description has to be repeated here. Groups without one keep the generated
+	// text.
+	description := resource.GetDescription()
+	if description == "" {
+		description = fmt.Sprintf("Member of %s group in Okta", resource.DisplayName)
+	}
+
 	return sdkEntitlement.NewAssignmentEntitlement(resource, "member",
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
 			Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 		}),
 		sdkEntitlement.WithGrantableTo(resourceTypeUser),
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Group Member", resource.DisplayName)),
-		sdkEntitlement.WithDescription(fmt.Sprintf("Member of %s group in Okta", resource.DisplayName)),
+		sdkEntitlement.WithDescription(description),
 	)
 }
 
