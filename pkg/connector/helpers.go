@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -103,19 +104,39 @@ func responseToContext(token *pagination.Token, resp *okta.Response) (*responseC
 	}, nil
 }
 
+// errorBodyExcerptLimit caps how much of an unparseable error body is echoed
+// back into the returned error.
+const errorBodyExcerptLimit = 200
+
 func getError(response *okta.Response) (okta.Error, error) {
 	var errOkta okta.Error
 	bytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		return okta.Error{}, err
+		return okta.Error{}, bodyReadError(response, "read error body", err)
 	}
 
+	// An empty or non-JSON body used to surface as a bare "unexpected end of JSON
+	// input" with no status code, which made an empty 400 indistinguishable from
+	// an empty 403 in logs.
 	err = json.Unmarshal(bytes, &errOkta)
 	if err != nil {
-		return okta.Error{}, err
+		return okta.Error{}, bodyReadError(response, fmt.Sprintf("unparseable error body %q", bodyExcerpt(bytes)), err)
 	}
 
 	return errOkta, nil
+}
+
+// bodyReadError builds the error getError's callers return verbatim. The gRPC code
+// comes from the HTTP status so that an unreadable body and a readable one produce
+// the same classification for the same upstream failure -- a parseable body reaches
+// handleOktaResponseError and gets a code, and without this an unparseable one
+// would surface as codes.Unknown.
+func bodyReadError(response *okta.Response, what string, err error) error {
+	return uhttp.WrapErrors(
+		uhttp.GrpcCodeFromHTTPStatus(response.StatusCode),
+		fmt.Sprintf("okta-connectorv2: %s: %s", response.Status, what),
+		err,
+	)
 }
 
 // https://developer.okta.com/docs/reference/error-codes/
@@ -124,6 +145,27 @@ var oktaErrToGRPCError = map[string]codes.Code{
 	"E0000007": codes.NotFound,
 	"E0000008": codes.NotFound,
 	"E0000011": codes.Unauthenticated,
+}
+
+func bodyExcerpt(body []byte) string {
+	excerpt := strings.TrimSpace(string(body))
+	if len(excerpt) > errorBodyExcerptLimit {
+		return truncateAtRuneBoundary(excerpt, errorBodyExcerptLimit) + "..."
+	}
+	return excerpt
+}
+
+// truncateAtRuneBoundary cuts s to at most maxBytes without splitting a rune, so
+// the excerpt reaching an error message or a log field stays valid UTF-8.
+func truncateAtRuneBoundary(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 func handleOktaResponseError(resp *okta.Response, err error) error {

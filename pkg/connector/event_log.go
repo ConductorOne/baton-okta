@@ -73,7 +73,9 @@ func (connector *Okta) ListEvents(
 
 	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
 	if err != nil {
-		return nil, nil, nil, err
+		// Route through the shared handler like every other call site; bare, this
+		// returned an SDK error carrying no grpc code, no status, and no prefix.
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list system log events: %w", handleOktaResponseError(resp, err))
 	}
 
 	// MJP each log is not guaranteed to result in a v2.Event anymore, but it's still likely?
