@@ -12,7 +12,7 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
    - **Applications** — Okta apps; optional inactive apps via `--sync-inactive-apps`
    - **Roles** — Standard admin roles
    - **Custom roles / resource sets / bindings** — When `--sync-custom-roles` is enabled
-   - **Secrets (API tokens)** — When `--sync-secrets` is enabled
+   - **Secrets (API tokens)** — **Opt-in** resource type (`api-token`); `--sync-secrets` is deprecated but still honored
    - **Devices** — Okta-managed devices; **opt-in** resource type, off unless explicitly selected (see [Devices](#devices))
 
 2. Can the connector provision any resources? If so, which ones?
@@ -84,7 +84,7 @@ Consequences for setup docs:
 
 The users case is the dangerous one: the sync exits 0 and writes a bundle containing zero users, so a missing admin role presents as a successful empty sync rather than an error. Assigning Super Administrator makes both return data.
 
-**Requested scopes.** On this path the connector requests the four default read scopes, all four `*.manage` provisioning scopes, and `okta.logs.read` unconditionally, then adds `okta.apiTokens.read` when `--sync-secrets` is set and `okta.devices.read` when device sync is enabled. `okta.logs.read` backs the event feed's System Log reads (`GET /api/v1/logs`) and is unconditional because `EventFeeds` is always advertised, so there is no local opt-in to gate it on; without it `list_events` fails every run. Per the note in `connector.go`, a scope the app has not been granted drops from the issued token and only surfaces as a 403 on first use, so a read-only app still authenticates.
+**Requested scopes.** On this path the connector requests the four default read scopes, all four `*.manage` provisioning scopes, and `okta.logs.read` unconditionally, then adds `okta.apiTokens.read` when API token sync is enabled (`--sync-secrets` or an explicit `api-token` resource-type filter) and `okta.devices.read` when device sync is enabled. `okta.logs.read` backs the event feed's System Log reads (`GET /api/v1/logs`) and is unconditional because `EventFeeds` is always advertised, so there is no local opt-in to gate it on; without it `list_events` fails every run. Per the note in `connector.go`, a scope the app has not been granted drops from the issued token and only surfaces as a 403 on first use, so a read-only app still authenticates.
 
 **Console caveat for whoever writes customer docs.** During CXH-2092 / CXH-2124 validation, the Okta Admin Console's **Okta API Scopes** tab twice failed to persist scope grants with no error shown — the grants did not appear in `GET /api/v1/apps/{id}/grants`. `POST /api/v1/apps/{id}/grants` worked reliably. The customer-facing walkthrough directs readers to that tab, so it carries a note telling them to refresh and visually confirm the granted scopes.
 

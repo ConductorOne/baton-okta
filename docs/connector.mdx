@@ -359,7 +359,7 @@ Navigate to the **Okta API Scopes** tab and grant the scopes required for your u
    - `okta.roles.read` and `okta.apps.read` (required for sync)
    - `okta.users.manage`, `okta.groups.manage`, `okta.roles.manage`, `okta.apps.manage` (required for provisioning)
    - `okta.logs.read` (required for the event feed)
-   - `okta.apiTokens.read` (required when **Sync secrets** is enabled)
+   - `okta.apiTokens.read` (required when **Sync secrets** is enabled or the **API Token** resource type is enabled)
    - `okta.devices.read` (required when the **Device** resource type is enabled)
 
 <Note>
@@ -474,7 +474,7 @@ Enter your credentials:
 **Optional.** Inactive (disabled) Okta applications are synced by default. Clear the **Sync inactive apps** checkbox to exclude them.
 </Step>
 <Step>
-**Optional.** Enable **Sync secrets** to display them on the [Inventory page](/product/admin/inventory).
+**Optional.** Enable the **API Token** resource type in the connector's sync configuration to display Okta API tokens on the [Inventory page](/product/admin/inventory).
 </Step>
 <Step>
 **Optional.** Enter a list of user email domains that will be included in the connector's sync. If you do not specify any domains here, the connector will sync all available accounts regardless of email domain.

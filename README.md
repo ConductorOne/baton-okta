@@ -87,7 +87,7 @@ For syncing custom roles `--sync-custom-roles` must be provided. Its default val
 
 Devices are an opt-in resource type: enable the **Device** resource type in the connector's sync configuration to include it. Device sync is read-only; the connector does not manage device-to-user assignments.
 
-Secrets (Okta API tokens) sync only when `--sync-secrets` is provided. Its default value is `false`. They are read-only, and C1 displays them on the Inventory page.
+Secrets (Okta API tokens) are an opt-in resource type: enable the **API Token** resource type in the connector's sync configuration to include them. `--sync-secrets` is deprecated but still honored. They are read-only, and C1 displays them on the Inventory page.
 
 The connector also supports an event feed and targeted sync. The event feed streams a filtered set of Okta System Log events: user lifecycle and profile changes, application creation and update, group creation, group memberships added and removed, application assignment and admin-role grants, and SSO sign-ins. Targeted sync narrows a run to specific resource types or resource IDs via `--sync-resource-types` and `--sync-resources`.
 
@@ -232,7 +232,7 @@ Flags:
       --sync-inactive-apps                               Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
       --sync-resource-types strings                      The resource type IDs to sync ($BATON_SYNC_RESOURCE_TYPES)
       --sync-resources strings                           The resource IDs to sync ($BATON_SYNC_RESOURCES)
-      --sync-secrets                                     Whether to sync secrets or not ($BATON_SYNC_SECRETS)
+      --sync-secrets                                     Deprecated: enable the API Token resource type in the connector sync configuration instead. When true, API tokens are still synced. ($BATON_SYNC_SECRETS)
       --task-concurrency int                             The number of Baton tasks to run concurrently in service mode. Tasks may include sync, grant, revoke, and more. Minimum value is 1, maximum value is 100. ($BATON_TASK_CONCURRENCY) (default 3)
       --ticketing                                        This must be set to enable ticketing support ($BATON_TICKETING)
   -v, --version                                          version for baton-okta

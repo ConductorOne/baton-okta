@@ -15,7 +15,7 @@ import (
 
 type apiTokenResourceType struct {
 	resourceType *v2.ResourceType
-	clientV5     *oktav5.APIClient
+	connector    *Okta
 }
 
 func (o *apiTokenResourceType) Entitlements(ctx context.Context, resource *v2.Resource, attrs resource.SyncOpAttrs) ([]*v2.Entitlement, *resource.SyncOpResults, error) {
@@ -37,6 +37,10 @@ func (o *apiTokenResourceType) List(
 	resourceID *v2.ResourceId,
 	attrs resource.SyncOpAttrs,
 ) ([]*v2.Resource, *resource.SyncOpResults, error) {
+	if !o.connector.shouldFetchApiTokens() {
+		return nil, &resource.SyncOpResults{}, nil
+	}
+
 	token := &attrs.PageToken
 	bag, prevSerializedResp, err := parsePageToken(token.Token, &v2.ResourceId{ResourceType: resourceTypeApiToken.Id})
 	if err != nil {
@@ -47,7 +51,7 @@ func (o *apiTokenResourceType) List(
 	var resp *oktav5.APIResponse
 
 	if prevSerializedResp == "" {
-		apiTokens, resp, err = o.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
+		apiTokens, resp, err = o.connector.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to list api tokens: %w", err)
 		}
@@ -57,7 +61,7 @@ func (o *apiTokenResourceType) List(
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to deserialize page token: %w", err)
 		}
 
-		localOktaAPIResponse := oktav5.NewAPIResponse(prevResp.Response, o.clientV5, nil)
+		localOktaAPIResponse := oktav5.NewAPIResponse(prevResp.Response, o.connector.clientV5, nil)
 		if localOktaAPIResponse.HasNextPage() {
 			resp, err = localOktaAPIResponse.Next(&apiTokens)
 			if err != nil {
@@ -93,20 +97,24 @@ func (o *apiTokenResourceType) List(
 	return ret, &resource.SyncOpResults{NextPageToken: nextPageToken, Annotations: annos}, nil
 }
 
-func apiTokenBuilder(clientV5 *oktav5.APIClient) *apiTokenResourceType {
+func apiTokenBuilder(connector *Okta) *apiTokenResourceType {
 	return &apiTokenResourceType{
 		resourceType: resourceTypeApiToken,
-		clientV5:     clientV5,
+		connector:    connector,
 	}
 }
 
 func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {
+	if !o.connector.shouldFetchApiTokens() {
+		return nil, nil, nil
+	}
+
 	l := ctxzap.Extract(ctx)
 	l.Debug("getting api token", zap.String("api_token_id", resourceId.Resource))
 
 	var annos annotations.Annotations
 
-	apiToken, resp, err := o.clientV5.ApiTokenAPI.GetApiToken(ctx, resourceId.Resource).Execute()
+	apiToken, resp, err := o.connector.clientV5.ApiTokenAPI.GetApiToken(ctx, resourceId.Resource).Execute()
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to get api token: %w", err)
 	}
