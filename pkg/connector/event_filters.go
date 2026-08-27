@@ -132,7 +132,21 @@ var (
 		},
 	}
 	ApplicationLifecycleFilter = EventFilter{
-		EventTypes:  mapset.NewSet("app.lifecycle.create", "application.lifecycle.update"),
+		// Okta namespaces app lifecycle events under "application.lifecycle". The
+		// "app.lifecycle.create" this used to request is not a real event type, so
+		// app creations were never picked up.
+		//
+		// "delete" and "deactivate" are intentionally absent. Both leave the targeted
+		// sync with no resource to write: a deleted app is gone, and a deactivated one
+		// is filtered out by appResourceType.Get unless sync-inactive-apps is set. The
+		// SDK turns that nil resource into NotFound and records a task failure
+		// (resource_syncer.go), so emitting them costs a request and a failure metric
+		// while leaving the stale resource in place either way.
+		EventTypes: mapset.NewSet(
+			"application.lifecycle.create",
+			"application.lifecycle.update",
+			"application.lifecycle.activate",
+		),
 		TargetTypes: mapset.NewSet("AppInstance"),
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
 			if len(targetMap["AppInstance"]) != 1 {
@@ -203,6 +217,52 @@ var (
 			return nil
 		},
 	}
+	ApplicationMembershipRevokeFilter = EventFilter{
+		EventTypes:  mapset.NewSet("application.user_membership.remove"),
+		TargetTypes: mapset.NewSet("AppInstance", oktaLogTargetTypeUser),
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["AppInstance"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 AppInstance target, got %d", len(targetMap["AppInstance"]))
+			}
+			if len(targetMap[oktaLogTargetTypeUser]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[oktaLogTargetTypeUser]))
+			}
+			user := targetMap[oktaLogTargetTypeUser][0]
+			appInstance := targetMap["AppInstance"][0]
+
+			resource, err := sdkResource.NewResource(appInstance.DisplayName, resourceTypeApp, appInstance.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
+
+			rv.Event = &v2.Event_CreateRevokeEvent{
+				CreateRevokeEvent: &v2.CreateRevokeEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(resource, "access"),
+					Principal:   principal,
+				},
+			}
+
+			l.Debug("okta-event-feed: ApplicationMembershipRevokeFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeApp.Id),
+				zap.String("resource_id", appInstance.Id),
+				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("user_id", user.Id),
+			)
+			return nil
+		},
+	}
 	RoleMembershipFilter = EventFilter{
 		EventTypes:  mapset.NewSet("user.account.privilege.grant"),
 		TargetTypes: mapset.NewSet("ROLE", oktaLogTargetTypeUser),
@@ -246,6 +306,60 @@ var (
 					Principal:   principal,
 				},
 			}
+			return nil
+		},
+	}
+	RoleMembershipRevokeFilter = EventFilter{
+		EventTypes:  mapset.NewSet("user.account.privilege.revoke"),
+		TargetTypes: mapset.NewSet("ROLE", oktaLogTargetTypeUser),
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["ROLE"]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 ROLE target, got %d", len(targetMap["ROLE"]))
+			}
+			role := targetMap["ROLE"][0]
+
+			if len(targetMap[oktaLogTargetTypeUser]) != 1 {
+				return fmt.Errorf("okta-connectorv2: expected 1 User target, got %d", len(targetMap[oktaLogTargetTypeUser]))
+			}
+			user := targetMap[oktaLogTargetTypeUser][0]
+
+			// Same as RoleMembershipFilter: privilege events don't carry a usable
+			// role ID or type, so resolve the standard role by its label.
+			roleType := StandardRoleTypeFromLabel(role.DisplayName)
+			if roleType == nil {
+				return fmt.Errorf("okta-connectorv2: error getting role from label: %s", role.DisplayName)
+			}
+
+			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			principal, err := sdkResource.NewResource(user.DisplayName, resourceTypeUser, user.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
+			}
+
+			userTrait, err := sdkResource.NewUserTrait(sdkResource.WithEmail(user.AlternateId, true))
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating user trait: %w", err)
+			}
+			principal.Annotations = annotations.New(userTrait)
+
+			rv.Event = &v2.Event_CreateRevokeEvent{
+				CreateRevokeEvent: &v2.CreateRevokeEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(roleResource, "assigned"),
+					Principal:   principal,
+				},
+			}
+
+			l.Debug("okta-event-feed: RoleMembershipRevokeFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeRole.Id),
+				zap.String("resource_id", roleType.Type),
+				zap.String("role_display_name", role.DisplayName),
+				zap.String("user_id", user.Id),
+			)
 			return nil
 		},
 	}

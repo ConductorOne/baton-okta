@@ -15,6 +15,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// activeFilters is every filter requested from the Okta System Log. A filter that
+// is not listed here is never queried, so its event types are silently ignored.
+// MJP this will eventually come from config/request?
+var activeFilters = []EventFilter{
+	UsageFilter,
+	GroupChangeFilter,
+	ApplicationLifecycleFilter,
+	ApplicationMembershipFilter,
+	ApplicationMembershipRevokeFilter,
+	RoleMembershipFilter,
+	RoleMembershipRevokeFilter,
+	UserLifecycleFilter,
+	CreateGrantFilter,
+	CreateRevokeFilter,
+}
+
 func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
 	qp := queryParams(pToken.Size, pToken.Cursor)
 	if earliestEvent != nil {
@@ -39,17 +55,6 @@ func (connector *Okta) ListEvents(
 	pToken *pagination.StreamToken,
 ) ([]*v2.Event, *pagination.StreamState, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
-	// MJP this will eventually come from config/request?
-	activeFilters := []EventFilter{
-		UsageFilter,
-		GroupChangeFilter,
-		ApplicationLifecycleFilter,
-		ApplicationMembershipFilter,
-		RoleMembershipFilter,
-		UserLifecycleFilter,
-		CreateGrantFilter,
-		CreateRevokeFilter,
-	}
 
 	// Map from event type to possible filter matches
 	filterMap := make(map[string][]*EventFilter)
