@@ -30,6 +30,12 @@ const AccessDeniedErrorCode = "E0000006"
 
 const oktaURLScheme = "https"
 
+// Scopes requested only when the matching feature is enabled.
+const (
+	apiTokensReadScope = "okta.apiTokens.read" //nolint:gosec // not a credential; an OAuth 2.0 scope name
+	devicesReadScope   = "okta.devices.read"
+)
+
 // oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request.
 const oktaSDKAuthSentinel = "dpop-managed"
 
@@ -140,9 +146,37 @@ var (
 		"okta.roles.manage",
 		"okta.apps.manage",
 	}
+	// The event feed reads Okta's System Log (GET /api/v1/logs). Requested
+	// unconditionally on the OAuth path because EventFeeds is always advertised
+	// and C1 decides when to call ListEvents -- there is no local opt-in to gate
+	// on the way device sync has one.
+	eventFeedScopes = []string{
+		"okta.logs.read",
+	}
 
 	// TODO (santhosh) Add required scopes for secrets sync
 )
+
+// privateKeyScopes is every scope the OAuth path asks for at token exchange. Okta
+// issues a token carrying only the requested scopes the app has also granted, so a
+// scope the connector never requests is unreachable however the customer configures
+// the app -- which is what left the event feed failing on every run without
+// okta.logs.read here. Listing one costs nothing: an ungranted scope drops from the
+// issued token silently and only surfaces as a 403 on first use.
+func privateKeyScopes(cc *cfg.Okta, opts *cli.ConnectorOpts) []string {
+	scopes := make([]string, 0, len(defaultScopes)+len(provisioningScopes)+len(eventFeedScopes)+2)
+	scopes = append(scopes, defaultScopes...)
+	scopes = append(scopes, provisioningScopes...)
+	scopes = append(scopes, eventFeedScopes...)
+
+	if cc.SyncSecrets {
+		scopes = append(scopes, apiTokensReadScope)
+	}
+	if shouldSyncResourceType(opts, resourceTypeDevice.Id) {
+		scopes = append(scopes, devicesReadScope)
+	}
+	return scopes
+}
 
 // nil opts means this is capabilities/metadata generation, not a real sync.
 func shouldSyncResourceType(opts *cli.ConnectorOpts, resourceTypeID string) bool {
@@ -384,10 +418,7 @@ func parseOktaOrgURL(raw string) (*url.URL, error) {
 }
 
 func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
-	var (
-		oktaClient *okta.Client
-		scopes     = defaultScopes
-	)
+	var oktaClient *okta.Client
 
 	orgURL, err := parseOktaOrgURL(cc.Domain)
 	if err != nil {
@@ -448,16 +479,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		}
 		oktaClientV5 = oktav5.NewAPIClient(config)
 	case cfg.PrivateKeyGroup:
-		scopes = append(scopes, provisioningScopes...)
-
-		if cc.SyncSecrets {
-			scopes = append(scopes, "okta.apiTokens.read")
-		}
-
-		// An ungranted scope silently drops from the token and only surfaces as a 403 on first use.
-		if shouldSyncResourceType(opts, resourceTypeDevice.Id) {
-			scopes = append(scopes, "okta.devices.read")
-		}
+		scopes := privateKeyScopes(cc, opts)
 
 		dpopClient, err := oktaauth.NewDPoPHTTPClient(ctx, oktaauth.Config{
 			Domain:        domain,
