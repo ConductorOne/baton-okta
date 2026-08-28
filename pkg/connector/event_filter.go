@@ -22,6 +22,7 @@ type EventFilter struct {
 	// May contain additional targets.
 	TargetTypes mapset.Set[string]
 	// Required, will be called for each event that matches the filter.
+	// Leave rv.Event unset to skip the event without emitting anything.
 	EventHandler func(*zap.Logger, *oktaSDK.LogEvent, map[string][]*oktaSDK.LogTarget, *v2.Event) error
 }
 
@@ -106,6 +107,13 @@ func (filter *EventFilter) Handle(l *zap.Logger, event *oktaSDK.LogEvent) (*v2.E
 	err := filter.EventHandler(l, event, targetMap, rv)
 	if err != nil {
 		return nil, err
+	}
+
+	// A handler that set no event chose to skip it. Returning rv here would hand the
+	// feed consumer an Event with no oneof set, which it buckets as unknown and which
+	// fails the whole batch without advancing the checkpoint.
+	if rv.Event == nil {
+		return nil, nil
 	}
 
 	return rv, nil

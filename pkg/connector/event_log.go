@@ -84,10 +84,15 @@ func (connector *Okta) ListEvents(
 			if filter.Matches(log) {
 				event, err := filter.Handle(l, log)
 				// MJP we don't want to stop, we should just log the error and continue
-				if err != nil {
+				switch {
+				case err != nil:
 					l.Error("error handling event", zap.Error(err), zap.String("event_type", log.EventType))
-				} else {
+				case event != nil:
 					rv = append(rv, event)
+				default:
+					// The handler matched but had nothing to emit, and logged its reason
+					// at the skip site.
+					l.Debug("skipped event", zap.String("event_type", log.EventType))
 				}
 			}
 		}
