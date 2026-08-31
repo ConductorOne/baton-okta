@@ -652,3 +652,24 @@ func TestRoundTripper_PartialBodyReadIsNotTreatedAsEmpty(t *testing.T) {
 		t.Errorf("body = %q, want the arrived bytes preserved rather than overwritten", got)
 	}
 }
+
+// The token endpoint's error path excerpts an unparseable body the same way the
+// resource path does, so it has to cut on a rune boundary too. Reached when the
+// body carries no error/error_description for parseTokenError to pick up.
+func TestFormatTokenError_ExcerptStaysValidUTF8(t *testing.T) {
+	body := []byte(strings.Repeat("€", errorBodyExcerptLimit))
+	err := formatTokenError(http.StatusBadGateway, "502 Bad Gateway", "", "", body)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !utf8.ValidString(err.Error()) {
+		t.Errorf("error message is not valid UTF-8: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "502 Bad Gateway") {
+		t.Errorf("error = %q, want the status named", err)
+	}
+	// No error code was supplied, so no hint is appended after the excerpt.
+	if !strings.HasSuffix(err.Error(), "...") {
+		t.Errorf("error = %q, want the excerpt marked as truncated", err)
+	}
+}
