@@ -34,6 +34,14 @@ const (
 // name must not silently change the event-feed lookups.
 const oktaLogTargetTypeUser = "User"
 
+// Okta reports assignment and unassignment of standard admin roles under the same
+// user.account.privilege.grant event type and distinguishes them with an extra
+// target carrying one of these types. Wire values, like oktaLogTargetTypeUser.
+const (
+	oktaLogTargetRoleAssigned   = "ROLE_ASSIGNED"
+	oktaLogTargetRoleUnassigned = "ROLE_UNASSIGNED"
+)
+
 const (
 	profileFieldCreateInactive                = "create_inactive"
 	profileFieldAdditionalAttributes          = "additionalAttributes"

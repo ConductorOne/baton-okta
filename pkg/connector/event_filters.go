@@ -264,9 +264,35 @@ var (
 		},
 	}
 	RoleMembershipFilter = EventFilter{
+		// Okta reports both assignment and unassignment of standard admin roles under
+		// this one event type, distinguishing them with an extra ROLE_ASSIGNED or
+		// ROLE_UNASSIGNED target, so an unassignment has to emit a revoke. Custom role
+		// bindings (CUSTOM_ROLE_BINDING_ADDED / _REMOVED) reuse the event type as well
+		// but carry no ROLE target and belong to the custom-role resource type, so they
+		// are skipped here.
+		//
+		// user.account.privilege.revoke covers only the removal of a user's last role;
+		// RoleMembershipRevokeFilter handles that case.
 		EventTypes:  mapset.NewSet("user.account.privilege.grant"),
 		TargetTypes: mapset.NewSet("ROLE", oktaLogTargetTypeUser),
-		EventHandler: func(_ *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			assigned := len(targetMap[oktaLogTargetRoleAssigned]) > 0
+			unassigned := len(targetMap[oktaLogTargetRoleUnassigned]) > 0
+
+			switch {
+			case assigned && unassigned:
+				return fmt.Errorf("okta-connectorv2: event has both %s and %s targets", oktaLogTargetRoleAssigned, oktaLogTargetRoleUnassigned)
+			case !assigned && !unassigned:
+				// Custom role bindings land here, as would any discriminator Okta adds
+				// later. Defaulting to a grant would reaffirm access that may have just
+				// been removed, so skip rather than guess.
+				l.Debug("okta-event-feed: RoleMembershipFilter: no role assignment discriminator, skipping",
+					zap.String("event_type", event.EventType),
+					zap.String("event_id", event.Uuid),
+				)
+				return nil
+			}
+
 			if len(targetMap["ROLE"]) != 1 {
 				return fmt.Errorf("okta-connectorv2: expected 1 ROLE target, got %d", len(targetMap["ROLE"]))
 			}
@@ -277,11 +303,18 @@ var (
 			}
 			user := targetMap[oktaLogTargetTypeUser][0]
 
-			// for some reason we don't get the role ID (or type) formatted properly.
-			// hack to look it up via DisplayName
+			// The ROLE target's id is a camelCase name ("UserAdmin") and its alternateId
+			// is an assignment identifier, so neither is the role type the sync uses as a
+			// resource ID. Look it up by label instead.
 			roleType := StandardRoleTypeFromLabel(role.DisplayName)
 			if roleType == nil {
-				return fmt.Errorf("okta-connectorv2: error getting role from label: %s", role.DisplayName)
+				// Expected for custom roles and for any label missing from
+				// standardRoleTypes; there is no resource to point an event at.
+				l.Debug("okta-event-feed: RoleMembershipFilter: no standard role for label, skipping",
+					zap.String("role_display_name", role.DisplayName),
+					zap.String("event_id", event.Uuid),
+				)
+				return nil
 			}
 
 			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
@@ -300,12 +333,31 @@ var (
 			}
 			principal.Annotations = annotations.New(userTrait)
 
-			rv.Event = &v2.Event_CreateGrantEvent{
-				CreateGrantEvent: &v2.CreateGrantEvent{
-					Entitlement: sdkEntitlement.NewAssignmentEntitlement(roleResource, "assigned"),
-					Principal:   principal,
-				},
+			entitlement := sdkEntitlement.NewAssignmentEntitlement(roleResource, "assigned")
+			if assigned {
+				rv.Event = &v2.Event_CreateGrantEvent{
+					CreateGrantEvent: &v2.CreateGrantEvent{
+						Entitlement: entitlement,
+						Principal:   principal,
+					},
+				}
+			} else {
+				rv.Event = &v2.Event_CreateRevokeEvent{
+					CreateRevokeEvent: &v2.CreateRevokeEvent{
+						Entitlement: entitlement,
+						Principal:   principal,
+					},
+				}
 			}
+
+			l.Debug("okta-event-feed: RoleMembershipFilter",
+				zap.String("event_type", event.EventType),
+				zap.Bool("assigned", assigned),
+				zap.String("resource_type", resourceTypeRole.Id),
+				zap.String("resource_id", roleType.Type),
+				zap.String("role_display_name", role.DisplayName),
+				zap.String("user_id", user.Id),
+			)
 			return nil
 		},
 	}
@@ -327,7 +379,11 @@ var (
 			// role ID or type, so resolve the standard role by its label.
 			roleType := StandardRoleTypeFromLabel(role.DisplayName)
 			if roleType == nil {
-				return fmt.Errorf("okta-connectorv2: error getting role from label: %s", role.DisplayName)
+				l.Debug("okta-event-feed: RoleMembershipRevokeFilter: no standard role for label, skipping",
+					zap.String("role_display_name", role.DisplayName),
+					zap.String("event_id", event.Uuid),
+				)
+				return nil
 			}
 
 			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
