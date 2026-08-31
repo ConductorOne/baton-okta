@@ -306,7 +306,7 @@ func formatTokenError(httpStatusCode int, httpStatus, code, desc string, rawBody
 	default:
 		excerpt := strings.TrimSpace(string(rawBody))
 		if len(excerpt) > errorBodyExcerptLimit {
-			excerpt = excerpt[:errorBodyExcerptLimit] + "..."
+			excerpt = truncateAtRuneBoundary(excerpt, errorBodyExcerptLimit) + "..."
 		}
 		if excerpt != "" {
 			msg = fmt.Sprintf("token endpoint %s: %s", httpStatus, excerpt)
