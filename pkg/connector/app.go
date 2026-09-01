@@ -203,7 +203,14 @@ func (o *appResourceType) listAppGroupGrants(
 	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
 	appID := resource.Id.GetResource()
-	qp := queryParamsExpand(token.Size, page, expandGroup)
+	// The embedded group is only read to tell a dropped APP_GROUP from a synced
+	// one, which only matters under skip-app-groups. Requesting it otherwise
+	// pulls a full group object per assignment -- up to defaultLimit of them per
+	// page -- and discards every one.
+	qp := queryParams(token.Size, page)
+	if o.skipAppGroups {
+		qp = queryParamsExpand(token.Size, page, expandGroup)
+	}
 	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, appID, token, qp)
 	if err != nil {
 		return nil, nil, bag, err
@@ -258,6 +265,13 @@ func (o *appResourceType) listAppGroupGrants(
 	// being pushed, and Next only carries the page token forward. Once the
 	// assignments are exhausted the user phase is queued in the group phase's
 	// place, tagged with what this pass learned.
+	//
+	// A sync resuming on a pre-marker token runs the user phase a second time:
+	// the old code queued both phases up front and ran user first, so by the
+	// time the group phase lands here the stack is empty and the earlier pass
+	// is undetectable. The replay re-emits identical grant ids, so it is an
+	// idempotent upsert that costs one extra page-through per in-flight app and
+	// stops after the first sync on the new token shape.
 	bag.Pop()
 	if nextPage != "" {
 		bag.Push(pagination.PageState{
@@ -280,7 +294,7 @@ func (o *appResourceType) listAppGroupGrants(
 // return reports whether the type could be determined at all; Okta omits the
 // embed when the expand is unsupported or the caller lacks group read access.
 func appGroupAssignmentGroupType(assignment *okta.ApplicationGroupAssignment) (string, bool) {
-	if assignment == nil || assignment.Embedded == nil {
+	if assignment.Embedded == nil {
 		return "", false
 	}
 
