@@ -199,7 +199,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		filterEmailDomains = o.userFilters.includedEmailDomains
 	}
 	resourceSyncer = append(resourceSyncer,
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, filterEmailDomains, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.skipAppGroups, filterEmailDomains, o.client),
 	)
 
 	if o.SyncCustomRoles {

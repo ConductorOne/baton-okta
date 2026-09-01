@@ -25,6 +25,7 @@ type appResourceType struct {
 	domain           string
 	apiToken         string
 	syncInactiveApps bool
+	skipAppGroups    bool
 	userEmailFilters []string
 	client           *okta.Client
 }
@@ -32,24 +33,51 @@ type appResourceType struct {
 const (
 	appGrantGroup = "group"
 	appGrantUser  = "user"
+
+	// Okta reports how each app assignment was conferred: USER for a direct
+	// assignment, GROUP for one derived from group membership.
+	appUserScopeGroup = "GROUP"
+
+	// expandGroup asks Okta to embed the assigned group in the app group
+	// assignment response, which is the only way to read its type without a
+	// per-group lookup.
+	expandGroup = "group"
+
+	// appGrantUnsyncedMarker is appended to a phase's pagination ResourceID to
+	// carry "this app is assigned a group that was not synced" from the group
+	// pass to the user pass.
+	appGrantUnsyncedMarker = "unsynced"
 )
 
-var appGrantTypes = []string{
-	appGrantGroup,
-	appGrantUser,
+// appGrantPhaseID builds the pagination ResourceID for a phase, tagging it when
+// the app has a group source that was not synced.
+func appGrantPhaseID(phase string, unsyncedGroupSource bool) string {
+	if unsyncedGroupSource {
+		return phase + ":" + appGrantUnsyncedMarker
+	}
+	return phase
+}
+
+// parseAppGrantPhaseID splits a pagination ResourceID back into its phase and
+// the unsynced-group-source marker. A token written before the marker existed
+// parses as an untagged phase.
+func parseAppGrantPhaseID(resourceID string) (string, bool) {
+	phase, marker, tagged := strings.Cut(resourceID, ":")
+	return phase, tagged && marker == appGrantUnsyncedMarker
 }
 
 func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, skipAppGroups bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
 	return &appResourceType{
 		resourceType:     resourceTypeApp,
 		domain:           domain,
 		apiToken:         apiToken,
 		client:           client,
 		syncInactiveApps: syncInactiveApps,
+		skipAppGroups:    skipAppGroups,
 		userEmailFilters: filterEmailDomains,
 	}
 }
@@ -131,22 +159,24 @@ func (o *appResourceType) Grants(
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
 	}
 
-	switch bag.ResourceID() {
+	phase, unsyncedGroupSource := parseAppGrantPhaseID(bag.ResourceID())
+	switch phase {
 	case "":
 		bag.Pop()
-		for _, appGrantType := range appGrantTypes {
-			bag.Push(pagination.PageState{
-				ResourceTypeID: resourceTypeApp.Id,
-				ResourceID:     appGrantType,
-			})
-		}
+		// Only the group phase is queued here. It pushes the user phase itself
+		// once it has paged every assignment, so the state it pushes can carry
+		// whether this app has a group source the sync dropped.
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeApp.Id,
+			ResourceID:     appGrantGroup,
+		})
 	case appGrantGroup:
-		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, token, bag, page)
+		rv, annos, bag, err = o.listAppGroupGrants(ctx, resource, token, bag, page, unsyncedGroupSource)
 		if err != nil {
 			return nil, nil, err
 		}
 	case appGrantUser:
-		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, token, bag, page)
+		rv, annos, bag, err = o.listAppUsersGrants(ctx, resource, token, bag, page, unsyncedGroupSource)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -168,10 +198,13 @@ func (o *appResourceType) listAppGroupGrants(
 	token *pagination.Token,
 	bag *pagination.Bag,
 	page string,
+	unsyncedGroupSource bool,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
+	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
-	qp := queryParams(token.Size, page)
-	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, resource.Id.GetResource(), token, qp)
+	appID := resource.Id.GetResource()
+	qp := queryParamsExpand(token.Size, page, expandGroup)
+	applicationGroupAssignments, respCtx, err := listApplicationGroupAssignments(ctx, o.client, appID, token, qp)
 	if err != nil {
 		return nil, nil, bag, err
 	}
@@ -181,13 +214,32 @@ func (o *appResourceType) listAppGroupGrants(
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to parse response: %w", err)
 	}
 
-	err = bag.Next(nextPage)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
-	}
-
 	for _, applicationGroupAssignment := range applicationGroupAssignments {
 		groupID := applicationGroupAssignment.Id
+		groupType, groupTypeKnown := appGroupAssignmentGroupType(applicationGroupAssignment)
+
+		// The group syncer drops APP_GROUP resources when skip-app-groups is
+		// set, so the platform has nothing to expand this grant into. Record
+		// that and let the user pass keep emitting direct grants, which is the
+		// pre-existing behavior, rather than dropping the access entirely.
+		// An unreadable group type is treated the same way: without proof that
+		// the group was synced, suppressing the direct grant is not safe.
+		if o.skipAppGroups && (!groupTypeKnown || groupType == appGroupType) {
+			l.Debug("okta-connectorv2: app has a group source that was not synced; keeping direct app user grants",
+				zap.String("app_id", appID),
+				zap.String("group_id", groupID),
+				zap.String("group_type", groupType),
+				zap.Bool("group_type_known", groupTypeKnown),
+			)
+			unsyncedGroupSource = true
+
+			// Only skip the grant itself when the group is known to have been
+			// dropped; emitting it would point at a resource that never synced.
+			if groupTypeKnown {
+				continue
+			}
+		}
+
 		principalID := &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}
 		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
 			sdkGrant.WithAnnotation(
@@ -202,7 +254,52 @@ func (o *appResourceType) listAppGroupGrants(
 		))
 	}
 
+	// Advance by hand instead of bag.Next: the marker has to ride on the state
+	// being pushed, and Next only carries the page token forward. Once the
+	// assignments are exhausted the user phase is queued in the group phase's
+	// place, tagged with what this pass learned.
+	bag.Pop()
+	if nextPage != "" {
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeApp.Id,
+			ResourceID:     appGrantPhaseID(appGrantGroup, unsyncedGroupSource),
+			Token:          nextPage,
+		})
+	} else {
+		bag.Push(pagination.PageState{
+			ResourceTypeID: resourceTypeApp.Id,
+			ResourceID:     appGrantPhaseID(appGrantUser, unsyncedGroupSource),
+		})
+	}
+
 	return rv, annos, bag, nil
+}
+
+// appGroupAssignmentGroupType reads the assigned group's type out of the group
+// Okta embeds when the assignment is fetched with expand=group. The second
+// return reports whether the type could be determined at all; Okta omits the
+// embed when the expand is unsupported or the caller lacks group read access.
+func appGroupAssignmentGroupType(assignment *okta.ApplicationGroupAssignment) (string, bool) {
+	if assignment == nil || assignment.Embedded == nil {
+		return "", false
+	}
+
+	embeddedMap, ok := assignment.Embedded.(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+
+	groupMap, ok := embeddedMap["group"].(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+
+	groupType, ok := groupMap["type"].(string)
+	if !ok || groupType == "" {
+		return "", false
+	}
+
+	return groupType, true
 }
 
 func (o *appResourceType) listAppUsersGrants(
@@ -211,10 +308,13 @@ func (o *appResourceType) listAppUsersGrants(
 	token *pagination.Token,
 	bag *pagination.Bag,
 	page string,
+	unsyncedGroupSource bool,
 ) ([]*v2.Grant, annotations.Annotations, *pagination.Bag, error) {
+	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
+	appID := resource.Id.GetResource()
 	qp := queryParams(token.Size, page)
-	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, resource.Id.GetResource(), token, qp)
+	applicationUsers, respCtx, err := listApplicationUsers(ctx, o.client, appID, token, qp)
 	if err != nil {
 		return nil, nil, bag, err
 	}
@@ -229,25 +329,51 @@ func (o *appResourceType) listAppUsersGrants(
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch bag.Next: %w", err)
 	}
 
+	// When a group conferring access to this app was not synced, expansion
+	// cannot reattribute the affected users, so every app user keeps a direct
+	// grant. Correct source attribution is worth less than not losing access.
+	// The group pass is the only writer of this marker, and only sets it under
+	// skip-app-groups, so no extra flag check is needed here.
+	keepGroupScopedUsers := unsyncedGroupSource
+
 	for _, applicationUser := range applicationUsers {
 		// for okta v2, we only attempt to filter app users by email domains when a list is provided
 		if len(o.userEmailFilters) > 0 && !shouldIncludeOktaAppUser(applicationUser, o.userEmailFilters) {
 			continue
 		}
 
-		if strings.EqualFold(applicationUser.Scope, "GROUP") {
+		groupScoped := strings.EqualFold(applicationUser.Scope, appUserScopeGroup)
+
+		// Group-derived access is modeled as a group grant the platform expands,
+		// which records the group as the source. Emitting a user grant here as
+		// well would report that same access as a direct assignment.
+		if !keepGroupScopedUsers && groupScoped {
+			l.Debug("okta-connectorv2: skipping group-scoped app user; access is granted through the group",
+				zap.String("app_id", appID),
+				zap.String("user_id", applicationUser.Id),
+			)
 			continue
 		}
 
 		userID := applicationUser.Id
 		principalID := &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}
-		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
+		grantOpts := []sdkGrant.GrantOption{
 			sdkGrant.WithAnnotation(
 				&v2.V1Identifier{
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), userID),
 				},
 			),
-		))
+		}
+
+		// Reaching here while group-scoped means the conferring group was not
+		// synced, so no group membership exists for a reviewer to act on. Okta
+		// refuses a direct unassign for a group-scoped assignment, so the grant
+		// is not really revocable; mark it rather than implying it is.
+		if groupScoped {
+			grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.GrantImmutable{}))
+		}
+
+		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID, grantOpts...))
 	}
 
 	return rv, annos, bag, nil
