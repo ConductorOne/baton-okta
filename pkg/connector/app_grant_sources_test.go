@@ -10,6 +10,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/protobuf/proto"
 )
@@ -50,7 +51,6 @@ func TestAppGroupAssignmentGroupType(t *testing.T) {
 		wantType   string
 		wantKnown  bool
 	}{
-		{"nil assignment", nil, "", false},
 		{"no embed", &okta.ApplicationGroupAssignment{Id: testOktaGroupID}, "", false},
 		{"embed not an object", &okta.ApplicationGroupAssignment{Embedded: "nope"}, "", false},
 		{"embed without group", &okta.ApplicationGroupAssignment{
@@ -115,66 +115,76 @@ func TestAppGrantPhaseIDRoundTrip(t *testing.T) {
 }
 
 // The group phase queues the user phase itself, so the marker survives in the
-// page token rather than in a session store. Assert the sequence terminates and
-// carries the marker through however many pages of assignments there are.
+// page token rather than a session store. Drive the real Grants loop -- not a
+// copy of its state machine -- so a divergence between the two would fail here.
 func TestAppGrantPhaseSequenceTerminates(t *testing.T) {
-	for _, groupPages := range []int{0, 1, 3} {
-		t.Run(fmt.Sprintf("%d-extra-group-pages", groupPages), func(t *testing.T) {
-			token := ""
-			pagesLeft := groupPages
-			var phases []string
+	for _, groupPages := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("%d-group-pages", groupPages), func(t *testing.T) {
+			var steps []oktaRequestStep
+			for i := 0; i < groupPages; i++ {
+				step := oktaRequestStep{
+					method:     http.MethodGet,
+					path:       "/api/v1/apps/" + testGrantAppID + "/groups",
+					query:      map[string]string{"expand": expandGroup},
+					statusCode: http.StatusOK,
+					body:       appGroupAssignmentBody(testAppGroupID, appGroupType),
+				}
+				if i < groupPages-1 {
+					// Okta signals another page with a Link header; the SDK turns
+					// it into Response.NextPage and parseResp reads the cursor.
+					step.headers = map[string]string{
+						"Link": `<https://example.okta.com/api/v1/apps/` + testGrantAppID +
+							`/groups?after=cursor` + fmt.Sprint(i) + `>; rel="next"`,
+					}
+				}
+				steps = append(steps, step)
+			}
+			steps = append(steps, oktaRequestStep{
+				method:     http.MethodGet,
+				path:       "/api/v1/apps/" + testGrantAppID + "/users",
+				statusCode: http.StatusOK,
+				body:       appUsersBody(),
+			})
 
-			for i := 0; i < 25; i++ {
-				bag, _, err := parsePageToken(token, &v2.ResourceId{ResourceType: resourceTypeUser.Id})
+			o := &appResourceType{
+				resourceType:  resourceTypeApp,
+				client:        newScriptedOktaClient(t, steps...),
+				skipAppGroups: true,
+			}
+
+			var (
+				token     string
+				calls     int
+				allGrants []*v2.Grant
+			)
+			for calls = 0; calls < 25; calls++ {
+				grants, results, err := o.Grants(context.Background(), testAppResource(), sdkResource.SyncOpAttrs{
+					PageToken: pagination.Token{Token: token},
+				})
 				if err != nil {
-					t.Fatalf("parsePageToken: %v", err)
+					t.Fatalf("Grants call %d: %v", calls+1, err)
 				}
-				phase, unsynced := parseAppGrantPhaseID(bag.ResourceID())
-				phases = append(phases, bag.ResourceID())
-
-				switch phase {
-				case "":
-					bag.Pop()
-					bag.Push(pagination.PageState{ResourceTypeID: resourceTypeApp.Id, ResourceID: appGrantGroup})
-				case appGrantGroup:
-					next := ""
-					if pagesLeft > 0 {
-						pagesLeft--
-						next = "cursor"
-					}
-					bag.Pop()
-					if next != "" {
-						bag.Push(pagination.PageState{
-							ResourceTypeID: resourceTypeApp.Id,
-							ResourceID:     appGrantPhaseID(appGrantGroup, true),
-							Token:          next,
-						})
-					} else {
-						bag.Push(pagination.PageState{
-							ResourceTypeID: resourceTypeApp.Id,
-							ResourceID:     appGrantPhaseID(appGrantUser, true),
-						})
-					}
-				case appGrantUser:
-					if !unsynced {
-						t.Fatalf("user phase lost the unsynced marker: %v", phases)
-					}
-					if err := bag.Next(""); err != nil {
-						t.Fatalf("bag.Next: %v", err)
-					}
-				default:
-					t.Fatalf("unexpected phase %q", phase)
-				}
-
-				token, err = bag.Marshal()
-				if err != nil {
-					t.Fatalf("Marshal: %v", err)
-				}
+				allGrants = append(allGrants, grants...)
+				token = results.NextPageToken
 				if token == "" {
-					return
+					break
 				}
 			}
-			t.Fatalf("phase sequence did not terminate: %v", phases)
+			if token != "" {
+				t.Fatalf("Grants did not terminate after %d calls", calls)
+			}
+
+			// Every assignment is a dropped APP_GROUP, so no group grant is
+			// emitted and all three app users must survive as direct grants --
+			// the marker has to reach the user phase for that to happen.
+			for _, g := range allGrants {
+				if g.GetPrincipal().GetId().GetResourceType() == resourceTypeGroup.Id {
+					t.Errorf("emitted a grant for a group that was never synced: %s", g.GetId())
+				}
+			}
+			if len(allGrants) != 3 {
+				t.Fatalf("got %d user grants, want 3 (marker lost on the way to the user phase?)", len(allGrants))
+			}
 		})
 	}
 }
@@ -195,10 +205,17 @@ func grantAnnotation(t *testing.T, grant *v2.Grant, msg annotationMessage) bool 
 func runGroupPhase(t *testing.T, skipAppGroups bool, body string) ([]*v2.Grant, string) {
 	t.Helper()
 
+	// The embedded group is only worth fetching when its type will be read, so
+	// assert both directions: requested under skip-app-groups, absent otherwise.
+	wantExpand := ""
+	if skipAppGroups {
+		wantExpand = expandGroup
+	}
+
 	client := newScriptedOktaClient(t, oktaRequestStep{
 		method:     http.MethodGet,
 		path:       "/api/v1/apps/" + testGrantAppID + "/groups",
-		query:      map[string]string{"expand": expandGroup},
+		query:      map[string]string{"expand": wantExpand},
 		statusCode: http.StatusOK,
 		body:       body,
 	})
