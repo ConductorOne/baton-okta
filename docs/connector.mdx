@@ -52,6 +52,17 @@ The connector surfaces whatever value Okta returns, so any future group types Ok
 Use this attribute in policies and access profiles to verify that bindings and grants reference the intended kind of group, especially when an Okta-native group and an app push group share the same name.
 </Note>
 
+<Note>
+**Continuous sync via event feed.** In addition to scheduled full syncs, the Okta connector polls Okta's system log for near-real-time changes and applies them between syncs ([continuous sync](/baton/faq#syncing)). This works with either authentication method. Event feed coverage varies by resource type:
+
+| Resource | Events captured |
+| :--- | :--- |
+| Accounts | Lifecycle changes: create, activate, deactivate, suspend, unsuspend, reactivate, profile updates |
+| Groups | Membership changes: group creation, user membership add/remove |
+| Applications | Lifecycle and membership changes: create, update, activate, user membership add/remove |
+| Roles | Membership changes: role grant/revoke via privilege events |
+</Note>
+
 The Okta connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
 The Okta connector supports account deprovisioning through C1 resource deletion. It first deactivates the user to the `DEPROVISIONED` state and then permanently deletes the user. The same operations are available separately through the `deactivate_user` and `delete_user` connector actions. These operations require an API token or OAuth app with `okta.users.manage` scope.
@@ -319,7 +330,7 @@ In Okta, navigate to **Applications** > **Applications** and click **Create App 
 Select **API Services** and click **Next**.
 </Step>
 <Step>
-Give the app a name (e.g., "ConductorOne Integration") and click **Save**.
+Give the app a name (e.g., "C1 Integration") and click **Save**.
 </Step>
 <Step>
 On the app's **General** tab, note the **Client ID**.
@@ -533,14 +544,14 @@ stringData:
   BATON_DOMAIN: <Your Okta domain>
 
   # Optional: include if you want C1 to provision access using this connector
-  BATON_PROVISIONING: true
+  BATON_PROVISIONING: "true"
 
   # Optional: exclude Okta push groups (APP_GROUP type) from sync
-  # BATON_SKIP_APP_GROUPS: true
+  # BATON_SKIP_APP_GROUPS: "true"
 
   # Optional: inactive (disabled) Okta applications are synced by default.
   # Set this to false to exclude them.
-  # BATON_SYNC_INACTIVE_APPS: false
+  # BATON_SYNC_INACTIVE_APPS: "false"
 ```
 
 See the connector's README or run `--help` to see all available configuration flags and environment variables.
@@ -563,7 +574,7 @@ spec:
     metadata:
       labels:
         app: baton-okta
-        baton: true
+        baton: "true"
         baton-app: okta
     spec:
       containers:
