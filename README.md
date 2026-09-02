@@ -28,7 +28,7 @@ Or auth using a public/private keypair (OAuth 2.0 client credentials with `priva
 ```
 BATON_AUTH_METHOD=private-key-group \
 BATON_OKTA_CLIENT_ID=appClientID \
-BATON_OKTA_PRIVATE_KEY='auth.key' \
+BATON_OKTA_PRIVATE_KEY="$(cat auth.key)" \
 BATON_OKTA_PRIVATE_KEY_ID=appKID \
 BATON_DOMAIN=domain-1234.okta.com baton-okta
 baton resources
@@ -37,7 +37,8 @@ baton resources
 Notes for OAuth setup:
 
 - `BATON_AUTH_METHOD=private-key-group` is required when authenticating via OAuth — without it the CLI defaults to the API Token field group and refuses to start with `field api-token of type string is marked as required but it has a zero-value`.
-- The private key must be a PEM-encoded **RSA** key. Both **PKCS#1** (`-----BEGIN RSA PRIVATE KEY-----`) and **PKCS#8** (`-----BEGIN PRIVATE KEY-----`, what `openssl genrsa` produces by default) are accepted, so no conversion step is needed. Elliptic-curve keys are rejected — Okta's DPoP implementation requires RSA.
+- `BATON_OKTA_PRIVATE_KEY` takes the key **contents**, not a path to the key file — hence `"$(cat auth.key)"` above. The private key must be a PEM-encoded **RSA** key. Both **PKCS#1** (`-----BEGIN RSA PRIVATE KEY-----`) and **PKCS#8** (`-----BEGIN PRIVATE KEY-----`, what `openssl genrsa` produces by default) are accepted, so converting between them is not necessary. Elliptic-curve keys are rejected — Okta's DPoP implementation requires RSA.
+- Configuring through the C1 connector form instead of the CLI? The **Okta Private Key** field holds a single line, so the key goes in with each line break written as a literal `\n`; a pasted multi-line PEM fails with `no PEM block found`. See [`docs/connector.mdx`](docs/connector.mdx). The multi-line PEM above applies to the CLI and environment-variable paths only.
 - **DPoP is supported** and needs no Okta-side change: leave the app's **Proof of Possession** setting at Okta's default. Earlier revisions of this file and of `docs/connector.mdx` told you to disable DPoP; that instruction described the pre-DPoP connector and was removed in CXH-2198.
 - The API Services app **must be assigned an admin role** on its **Admin Roles** tab. Granting OAuth scopes is not sufficient. Without a role, most endpoints return `403`, but `GET /api/v1/users` returns `200` with an empty list — so the sync succeeds and finds zero accounts.
 - See [`docs/connector.mdx`](docs/connector.mdx) for the complete Okta-side setup and [`docs/docs-info.md`](docs/docs-info.md) for the internal detail on key handling, DPoP, and scopes.
