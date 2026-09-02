@@ -248,17 +248,29 @@ func (o *appResourceType) listAppGroupGrants(
 		}
 
 		principalID := &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: groupID}
-		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID,
+		grantOpts := []sdkGrant.GrantOption{
 			sdkGrant.WithAnnotation(
 				&v2.V1Identifier{
 					Id: fmtGrantIdV1(V1MembershipEntitlementID(resource.Id.Resource), groupID),
 				},
 			),
-			sdkGrant.WithAnnotation(&v2.GrantExpandable{
+		}
+
+		// Reaching here with an unreadable type under skip-app-groups means the
+		// group may be an APP_GROUP the group syncer dropped. Pointing the
+		// expansion at an entitlement that was never synced would add a
+		// dangling edge on top of the dangling principal; the direct grants the
+		// marker keeps already carry that access, so degrade to no attribution
+		// rather than attribution to something that does not exist. The type is
+		// only read under the flag, so with it off this always attaches.
+		if groupTypeKnown || !o.skipAppGroups {
+			grantOpts = append(grantOpts, sdkGrant.WithAnnotation(&v2.GrantExpandable{
 				EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
 				Shallow:        true,
-			}),
-		))
+			}))
+		}
+
+		rv = append(rv, sdkGrant.NewGrant(resource, "access", principalID, grantOpts...))
 	}
 
 	// Advance by hand instead of bag.Next: the marker has to ride on the state

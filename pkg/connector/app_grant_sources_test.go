@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -30,12 +32,27 @@ func testAppResource() *v2.Resource {
 	}
 }
 
+// testAssignment describes one app group assignment. An empty groupType omits
+// the _embedded.group object, standing in for an expand Okta did not honor.
+type testAssignment struct {
+	id        string
+	groupType string
+}
+
 // appGroupAssignmentBody mirrors the shape Okta returns for
 // GET /api/v1/apps/{appId}/groups?expand=group.
-func appGroupAssignmentBody(groupID, groupType string) string {
-	return `[{"id":"` + groupID + `","priority":0,"_embedded":{"group":` +
-		`{"id":"` + groupID + `","type":"` + groupType + `",` +
-		`"profile":{"name":"example-group","description":"example"}}}}]`
+func appGroupAssignmentBody(assignments ...testAssignment) string {
+	parts := make([]string, 0, len(assignments))
+	for _, a := range assignments {
+		if a.groupType == "" {
+			parts = append(parts, `{"id":"`+a.id+`","priority":0}`)
+			continue
+		}
+		parts = append(parts, `{"id":"`+a.id+`","priority":0,"_embedded":{"group":`+
+			`{"id":"`+a.id+`","type":"`+a.groupType+`",`+
+			`"profile":{"name":"example-group","description":"example"}}}}`)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
 
 func TestAppGroupAssignmentGroupType(t *testing.T) {
@@ -127,7 +144,7 @@ func TestAppGrantPhaseSequenceTerminates(t *testing.T) {
 					path:       "/api/v1/apps/" + testGrantAppID + "/groups",
 					query:      map[string]string{"expand": expandGroup},
 					statusCode: http.StatusOK,
-					body:       appGroupAssignmentBody(testAppGroupID, appGroupType),
+					body:       appGroupAssignmentBody(testAssignment{testAppGroupID, appGroupType}),
 				}
 				if i < groupPages-1 {
 					// Okta signals another page with a Link header; the SDK turns
@@ -202,7 +219,7 @@ func grantAnnotation(t *testing.T, grant *v2.Grant, msg annotationMessage) bool 
 	return found
 }
 
-func runGroupPhase(t *testing.T, skipAppGroups bool, body string) ([]*v2.Grant, string) {
+func runGroupPhase(t *testing.T, skipAppGroups bool, incomingMarker bool, body string) ([]*v2.Grant, string) {
 	t.Helper()
 
 	// The embedded group is only worth fetching when its type will be read, so
@@ -224,7 +241,7 @@ func runGroupPhase(t *testing.T, skipAppGroups bool, body string) ([]*v2.Grant, 
 	bag := &pagination.Bag{}
 	bag.Push(pagination.PageState{ResourceTypeID: resourceTypeApp.Id, ResourceID: appGrantGroup})
 
-	grants, _, bag, err := o.listAppGroupGrants(context.Background(), testAppResource(), &pagination.Token{Size: 50}, bag, "", false)
+	grants, _, bag, err := o.listAppGroupGrants(context.Background(), testAppResource(), &pagination.Token{Size: 50}, bag, "", incomingMarker)
 	if err != nil {
 		t.Fatalf("listAppGroupGrants: %v", err)
 	}
@@ -232,53 +249,88 @@ func runGroupPhase(t *testing.T, skipAppGroups bool, body string) ([]*v2.Grant, 
 }
 
 func TestListAppGroupGrants(t *testing.T) {
+	unsyncedPhase := appGrantUser + ":" + appGrantUnsyncedMarker
+
 	cases := []struct {
-		name          string
-		skipAppGroups bool
-		body          string
-		wantGrants    int
-		wantNextPhase string
+		name           string
+		skipAppGroups  bool
+		incomingMarker bool
+		assignments    []testAssignment
+		wantGroups     []string
+		wantExpandable bool
+		wantNextPhase  string
 	}{
 		{
 			// The group syncer drops the resource, so a grant would dangle and
 			// expansion has nothing to reattribute the members to.
 			name:          "app group skipped marks the app and emits nothing",
 			skipAppGroups: true,
-			body:          appGroupAssignmentBody(testAppGroupID, appGroupType),
-			wantGrants:    0,
-			wantNextPhase: appGrantUser + ":" + appGrantUnsyncedMarker,
+			assignments:   []testAssignment{{testAppGroupID, appGroupType}},
+			wantGroups:    nil,
+			wantNextPhase: unsyncedPhase,
 		},
 		{
-			name:          "app group is ordinary when the flag is off",
-			skipAppGroups: false,
-			body:          appGroupAssignmentBody(testAppGroupID, appGroupType),
-			wantGrants:    1,
-			wantNextPhase: appGrantUser,
+			name:           "app group is ordinary when the flag is off",
+			skipAppGroups:  false,
+			assignments:    []testAssignment{{testAppGroupID, appGroupType}},
+			wantGroups:     []string{testAppGroupID},
+			wantExpandable: true,
+			wantNextPhase:  appGrantUser,
 		},
 		{
-			name:          "okta group is unaffected by the flag",
-			skipAppGroups: true,
-			body:          appGroupAssignmentBody(testOktaGroupID, "OKTA_GROUP"),
-			wantGrants:    1,
-			wantNextPhase: appGrantUser,
+			name:           "okta group is unaffected by the flag",
+			skipAppGroups:  true,
+			assignments:    []testAssignment{{testOktaGroupID, "OKTA_GROUP"}},
+			wantGroups:     []string{testOktaGroupID},
+			wantExpandable: true,
+			wantNextPhase:  appGrantUser,
 		},
 		{
 			// Without proof the group synced, suppressing its members' direct
-			// grants is unsafe, so the app is marked but the grant still goes out.
-			name:          "unreadable group type fails closed",
-			skipAppGroups: true,
-			body:          `[{"id":"` + testOktaGroupID + `","priority":0}]`,
-			wantGrants:    1,
-			wantNextPhase: appGrantUser + ":" + appGrantUnsyncedMarker,
+			// grants is unsafe, so the app is marked but the grant still goes
+			// out -- without an expansion edge into an entitlement that may
+			// never have been synced.
+			name:           "unreadable group type fails closed and does not expand",
+			skipAppGroups:  true,
+			assignments:    []testAssignment{{testOktaGroupID, ""}},
+			wantGroups:     []string{testOktaGroupID},
+			wantExpandable: false,
+			wantNextPhase:  unsyncedPhase,
+		},
+		{
+			// The mixed app is the only place the two skip-app-groups settings
+			// diverge: the ordinary group still expands normally, and the
+			// dropped APP_GROUP alongside it still marks the app.
+			name:           "mixed app keeps the ordinary group and still marks the app",
+			skipAppGroups:  true,
+			assignments:    []testAssignment{{testOktaGroupID, "OKTA_GROUP"}, {testAppGroupID, appGroupType}},
+			wantGroups:     []string{testOktaGroupID},
+			wantExpandable: true,
+			wantNextPhase:  unsyncedPhase,
+		},
+		{
+			// A marker set on an earlier page has to ride out on the state this
+			// page pushes, or a multi-page app silently loses it.
+			name:           "marker from an earlier page survives a clean page",
+			skipAppGroups:  true,
+			incomingMarker: true,
+			assignments:    []testAssignment{{testOktaGroupID, "OKTA_GROUP"}},
+			wantGroups:     []string{testOktaGroupID},
+			wantExpandable: true,
+			wantNextPhase:  unsyncedPhase,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			grants, nextPhase := runGroupPhase(t, tc.skipAppGroups, tc.body)
+			grants, nextPhase := runGroupPhase(t, tc.skipAppGroups, tc.incomingMarker, appGroupAssignmentBody(tc.assignments...))
 
-			if len(grants) != tc.wantGrants {
-				t.Fatalf("emitted %d grants, want %d", len(grants), tc.wantGrants)
+			var got []string
+			for _, g := range grants {
+				got = append(got, g.GetPrincipal().GetId().GetResource())
+			}
+			if !slices.Equal(got, tc.wantGroups) {
+				t.Fatalf("group grants = %v, want %v", got, tc.wantGroups)
 			}
 			if nextPhase != tc.wantNextPhase {
 				t.Errorf("next phase = %q, want %q", nextPhase, tc.wantNextPhase)
@@ -286,8 +338,13 @@ func TestListAppGroupGrants(t *testing.T) {
 
 			for _, g := range grants {
 				expandable := &v2.GrantExpandable{}
-				if !grantAnnotation(t, g, expandable) {
-					t.Fatalf("group grant is missing GrantExpandable; members would never be attributed")
+				found := grantAnnotation(t, g, expandable)
+				if found != tc.wantExpandable {
+					t.Fatalf("grant for %s has GrantExpandable = %t, want %t",
+						g.GetPrincipal().GetId().GetResource(), found, tc.wantExpandable)
+				}
+				if !found {
+					continue
 				}
 				want := "group:" + g.GetPrincipal().GetId().GetResource() + ":member"
 				if ids := expandable.GetEntitlementIds(); len(ids) != 1 || ids[0] != want {

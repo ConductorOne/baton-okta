@@ -29,6 +29,7 @@ var _ connectorbuilder.ResourceActionProvider = (*groupResourceType)(nil)
 var _ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
 
 const usersCountProfileKey = "users_count"
+const appsCountProfileKey = "apps_count"
 const groupTypeProfileKey = "type"
 const builtInGroupType = "BUILT_IN"
 const appGroupType = "APP_GROUP"
@@ -155,12 +156,30 @@ func (o *groupResourceType) Grants(
 	switch bag.ResourceTypeID() {
 	case resourceTypeUser.Id:
 		usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
+		appsCount, appsOk := sdkResource.GetProfileInt64Value(resource.GetProfile(), appsCountProfileKey)
+
+		// users_count comes from Okta's group stats embed, which is an aggregate
+		// rather than a live membership count; Okta documents no freshness
+		// guarantee for it. Skipping the member listing when it reads zero
+		// leaves the group with no member grants, and app access conferred by a
+		// group is expanded from exactly those grants -- so for an app-assigned
+		// group a count that lags real membership drops access outright instead
+		// of merely showing an empty group. Keep the call-saving skip only for
+		// groups that grant no app access, where an empty listing costs nothing.
+		// An absent apps_count is treated as "may confer access".
+		mayConferAppAccess := !appsOk || appsCount > 0
 
 		var annos annotations.Annotations
 		nextPage := ""
-		if !ok || usersCount > 0 {
+		if !ok || usersCount > 0 || mayConferAppAccess {
 			if !ok {
 				l.Debug("okta-connectorv2: making list group users call because users_count profile attribute was not present")
+			}
+			if ok && usersCount == 0 {
+				l.Debug("okta-connectorv2: listing group users despite users_count 0 because the group is assigned to apps",
+					zap.String("group_id", groupID),
+					zap.Int64("apps_count", appsCount),
+				)
 			}
 
 			qp := queryParams(token.Size, page)
@@ -404,7 +423,7 @@ func groupProfileMap(group *okta.Group) map[string]interface{} {
 	}
 
 	if appCount, exists := getGroupAppsCount(group); exists {
-		profileMap["apps_count"] = int64(appCount)
+		profileMap[appsCountProfileKey] = int64(appCount)
 	}
 
 	return profileMap
