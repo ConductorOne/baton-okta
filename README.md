@@ -103,8 +103,10 @@ With `--provisioning` enabled, the connector supports:
 - **Group create, modify, and delete** (group delete via `--delete-resource`)
 - **enable_user / disable_user** lifecycle actions — `enable_user` unsuspends a `SUSPENDED` account and activates a `STAGED` one (no activation email); `disable_user` suspends an enabled account
 - **deactivate_user / delete_user** user resource actions — explicitly deprovision or permanently delete a selected Okta user from a workflow
-- **update_profile** — update an existing user's profile attributes (manual invocation, typed fields)
-- **update_user** — global profile update from a `user_profile` JSON object; this is the action C1's automated profile-push pipeline invokes
+- **update_profile** — update an existing user's profile attributes (manual invocation, typed fields); `user_id` is a resource selector (`{"resource_type_id":"user","resource_id":"00u…"}`), produced by a workflow step's resource picker
+- **update_user** — global profile update from a `user_profile` JSON object; `user_id` is a plain string (the raw Okta ID). This is the action C1's automated profile-push pipeline invokes, since a push rule looks up a global action by this shape
+
+Both actions write the same Okta profile via the same API call — the `user_id` shape is what actually decides which one a caller can invoke, not just the typed-fields-vs-JSON-blob distinction. The SDK does not coerce between the two shapes, so passing the wrong one fails with `InvalidArgument` before any Okta call is made. See [docs/connector.mdx](docs/connector.mdx) and [docs/docs-info.md](docs/docs-info.md#connector-capabilities) for the full detail.
 
 `disable_user` is intentionally reversible suspension. `deactivate_user` is destructive deprovisioning that retains the Okta user record, while `delete_user` and C1 account deprovisioning ensure deactivation and then permanently remove it. Okta `STAGED` users (created but not activated — cannot sign in to Okta) sync as disabled in C1. See [docs/docs-info.md](docs/docs-info.md#lifecycle-and-deprovisioning-actions) and [docs/connector.mdx](docs/connector.mdx).
 

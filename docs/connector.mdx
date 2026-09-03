@@ -115,12 +115,12 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 
 | Automation step | Actions offered | How the target is selected |
 |-----------------|-----------------|----------------------------|
-| [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) | `deactivate_user`, `delete_user`, `create`, `modify_group` | Varies by action. The two user actions use a resource selector on the **User** resource type. `modify_group` takes the Okta group ID as a plain text field, and `create` has no target at all. |
+| [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) | `deactivate_user`, `delete_user`, `update_profile`, `create`, `modify_group` | Varies by action. The three user actions use a resource selector on the **User** resource type. `modify_group` takes the Okta group ID as a plain text field, and `create` has no target at all. |
 | Account lifecycle action | `enable_user`, `disable_user` | The step's own **Target account** selector — either the account in context or a specific account. |
 
-In the Perform connector action step, actions are listed under their resource type and display name rather than their raw action name: `deactivate_user` and `delete_user` appear as **`user - Deactivate User`** and **`user - Delete User`**, and `modify_group` as **`group - Modify Group`**. An action with no display name registered falls back to its raw name, so `create` appears as **`group - create`**.
+In the Perform connector action step, actions are listed under their resource type and display name rather than their raw action name: `deactivate_user`, `delete_user`, and `update_profile` appear as **`user - Deactivate User`**, **`user - Delete User`**, and **`user - Update User Profile`**, and `modify_group` as **`group - Modify Group`**. An action with no display name registered falls back to its raw name, so `create` appears as **`group - create`**.
 
-`enable_user` and `disable_user` take `user_id` as a plain string, and `modify_group` takes `group_id` the same way. Pass the raw Okta ID (for example `00u1abc2def3GHI4jk5`), not the C1 resource ID — the connector sends the value to Okta unchanged, and a C1 resource ID returns a not-found error. `deactivate_user` and `delete_user` take a resource selector instead, so the Okta ID is resolved for you.
+`enable_user`, `disable_user` and `update_user` take `user_id` as a plain string, and `modify_group` takes `group_id` the same way. Pass the raw Okta ID (for example `00u1abc2def3GHI4jk5`), not the C1 resource ID — the connector sends the value to Okta unchanged, and a C1 resource ID returns a not-found error. `deactivate_user`, `delete_user`, and `update_profile` take a resource selector instead, so the Okta ID is resolved for you.
 
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
@@ -132,10 +132,6 @@ In the Perform connector action step, actions are listed under their resource ty
 | update_user | `user_id` (string, required), `user_profile` (JSON object, required) | Updates a user's profile from a JSON object of Okta profile attributes — accepts any attribute, not limited to update_profile's curated list. This is the action C1's automated profile-push pipeline uses. |
 | create | `name` (string, required), `description` (string), `userMembers` (resource ID list) | Creates a new Okta group with optional initial members |
 | modify_group | `group_id` (string, required), `name` (string), `description` (string) | Updates the name and/or description of an existing Okta group. Returns success without calling the Okta API if the supplied values already match the group's current name and description (idempotent). |
-
-<Note>
-`update_user` (global action, takes `user_profile` as a JSON object) is the action required for C1's automated profile-push pipeline — a push rule that syncs Okta profile fields specifically looks up this global action shape. `update_profile` (resource-scoped, individual typed fields) is for manual/UX invocation from a workflow step; it does not satisfy the push-rule lookup on its own. Named profile fields and `user_profile` JSON keys use Okta's camelCase attribute names (e.g. `firstName`, not `first_name`).
-</Note>
 
 <Warning>
 `deactivate_user`, `delete_user`, and C1 account deprovisioning are destructive. Deactivation removes the user's assigned-app provisioning and can destroy downstream data such as email or files. Deletion permanently removes the Okta user and cannot be recovered. Use workflow approval gates where appropriate.
