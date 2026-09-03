@@ -126,7 +126,7 @@ var (
 		Id:          "api-token",
 		DisplayName: "API Token",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_SECRET},
-		Annotations: v1AnnotationsForResourceType("api-token", true, capabilityPermissions("okta.apiTokens.read")),
+		Annotations: v1AnnotationsForResourceType("api-token", true, capabilityPermissions("okta.apiTokens.read"), &v2.OptInRequired{}),
 	}
 	resourceTypeDevice = &v2.ResourceType{
 		Id:          "device",
@@ -169,13 +169,19 @@ func privateKeyScopes(cc *cfg.Okta, opts *cli.ConnectorOpts) []string {
 	scopes = append(scopes, provisioningScopes...)
 	scopes = append(scopes, eventFeedScopes...)
 
-	if cc.SyncSecrets {
+	if cc.SyncSecrets || apiTokenSyncRequested(opts) {
 		scopes = append(scopes, apiTokensReadScope)
 	}
 	if shouldSyncResourceType(opts, resourceTypeDevice.Id) {
 		scopes = append(scopes, devicesReadScope)
 	}
 	return scopes
+}
+
+// apiTokenSyncRequested reports whether the sync filter explicitly opts into the
+// api-token resource type. An unfiltered sync does not: api-token is OptInRequired.
+func apiTokenSyncRequested(opts *cli.ConnectorOpts) bool {
+	return opts != nil && opts.SyncFilterIsExplicit() && opts.WillSyncResourceType(resourceTypeApiToken.Id)
 }
 
 // nil opts means this is capabilities/metadata generation, not a real sync.
@@ -185,6 +191,8 @@ func shouldSyncResourceType(opts *cli.ConnectorOpts, resourceTypeID string) bool
 	}
 	return opts.WillSyncResourceType(resourceTypeID)
 }
+
+var _ connectorbuilder.ConnectorBuilderV2 = (*Okta)(nil)
 
 func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	resourceSyncer := []connectorbuilder.ResourceSyncerV2{
@@ -210,36 +218,20 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		)
 	}
 
-	if o.SyncSecrets {
-		resourceSyncer = append(resourceSyncer, apiTokenBuilder(o.clientV5))
-	}
+	resourceSyncer = append(resourceSyncer, apiTokenBuilder(o))
 
 	return resourceSyncer
 }
 
-func (c *Okta) ListResourceTypes(ctx context.Context, request *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
-	resourceTypes := []*v2.ResourceType{
-		resourceTypeUser,
-		resourceTypeGroup,
-		resourceTypeRole,
-		resourceTypeApp,
+// shouldFetchApiTokens reports whether API token resources should be fetched from Okta.
+// The api-token type is always advertised (OptInRequired). Fetching happens when the
+// deprecated --sync-secrets flag is set, or when the sync filter explicitly includes
+// api-token (C1 resource-type opt-in). A full unfiltered CLI sync does not fetch tokens.
+func (o *Okta) shouldFetchApiTokens() bool {
+	if o.SyncSecrets || o.opts == nil {
+		return true
 	}
-
-	if c.SyncCustomRoles {
-		resourceTypes = append(resourceTypes, resourceTypeCustomRole, resourceTypeResourceSets, resourceTypeResourceSetsBindings)
-	}
-
-	if c.SyncSecrets {
-		resourceTypes = append(resourceTypes, resourceTypeApiToken)
-	}
-
-	if shouldSyncResourceType(c.opts, resourceTypeDevice.Id) {
-		resourceTypes = append(resourceTypes, resourceTypeDevice)
-	}
-
-	return &v2.ResourceTypesServiceListResourceTypesResponse{
-		List: resourceTypes,
-	}, nil
+	return apiTokenSyncRequested(o.opts)
 }
 
 func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {

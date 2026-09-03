@@ -174,7 +174,7 @@
     {
       "name": "sync-secrets",
       "displayName": "Sync secrets",
-      "description": "Whether to sync secrets or not",
+      "description": "Deprecated: enable the API Token resource type in the connector sync configuration instead. When true, API tokens are still synced.",
       "boolField": {}
     },
     {

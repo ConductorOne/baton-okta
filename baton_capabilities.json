@@ -23,6 +23,9 @@
                 "permission": "okta.apiTokens.read"
               }
             ]
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
           }
         ]
       },
@@ -36,7 +39,8 @@
             "permission": "okta.apiTokens.read"
           }
         ]
-      }
+      },
+      "optInRequired": true
     },
     {
       "resourceType": {

@@ -75,7 +75,7 @@ var (
 	)
 	syncSecrets = field.BoolField("sync-secrets",
 		field.WithDisplayName("Sync secrets"),
-		field.WithDescription("Whether to sync secrets or not"),
+		field.WithDescription("Deprecated: enable the API Token resource type in the connector sync configuration instead. When true, API tokens are still synced."),
 		field.WithDefaultValue(false),
 	)
 	filterEmailDomains = field.StringSliceField("filter-email-domains",
