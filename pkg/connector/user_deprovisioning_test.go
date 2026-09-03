@@ -26,6 +26,7 @@ type oktaRequestStep struct {
 	query      map[string]string
 	statusCode int
 	body       string
+	headers    map[string]string
 }
 
 func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client {
@@ -55,6 +56,9 @@ func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client 
 			if got := r.URL.Query().Get(key); got != want {
 				t.Errorf("request %d query %s = %q, want %q", next, key, got, want)
 			}
+		}
+		for key, value := range step.headers {
+			w.Header().Set(key, value)
 		}
 		writeOktaTestResponse(w, step.statusCode, step.body)
 	}))

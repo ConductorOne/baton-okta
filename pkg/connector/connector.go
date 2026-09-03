@@ -39,6 +39,10 @@ const (
 // oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request.
 const oktaSDKAuthSentinel = "dpop-managed"
 
+// oktaRateLimitMaxBackoffSeconds covers Okta's ~60s rate-limit reset window; the bigger
+// fix is classifying 429 as Unavailable (rateLimitError) so provisioning retries at all.
+const oktaRateLimitMaxBackoffSeconds = 60
+
 type Okta struct {
 	client              *okta.Client
 	clientV5            *oktav5.APIClient
@@ -460,6 +464,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			okta.WithCache(cc.Cache),
 			okta.WithCacheTti(cacheTTI),
 			okta.WithCacheTtl(cacheTTL),
+			okta.WithRateLimitMaxBackOff(oktaRateLimitMaxBackoffSeconds),
 		)
 		if err != nil {
 			return nil, nil, err
@@ -501,6 +506,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			okta.WithCache(cc.Cache),
 			okta.WithCacheTti(cacheTTI),
 			okta.WithCacheTtl(cacheTTL),
+			okta.WithRateLimitMaxBackOff(oktaRateLimitMaxBackoffSeconds),
 		)
 		if err != nil {
 			return nil, nil, err
