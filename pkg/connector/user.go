@@ -669,13 +669,13 @@ func getCredentialOption(ctx context.Context, credentialOptions *v2.LocalCredent
 	plaintextPassword, err := crypto.GeneratePassword(ctx, credentialOptions)
 	if err != nil {
 		if errors.Is(err, crypto.ErrInvalidCredentialOptions) {
-			return nil, "", errors.New("unsupported credential options")
+			return nil, "", status.Error(codes.InvalidArgument, "okta-connectorv2: unsupported credential options")
 		}
 		return nil, "", err
 	}
 
 	if plaintextPassword == "" {
-		return nil, "", errors.New("okta-connectorv2: password must not be empty")
+		return nil, "", status.Error(codes.InvalidArgument, "okta-connectorv2: password must not be empty")
 	}
 
 	if credentialOptions.GetPlaintextPassword() != nil {
