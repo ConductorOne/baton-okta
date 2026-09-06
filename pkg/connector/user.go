@@ -662,6 +662,25 @@ func getCredentialOption(ctx context.Context, credentialOptions *v2.LocalCredent
 		return nil, "", nil
 	}
 
+	// PasswordConstraint has no SDK validation rules. Reject only constraints
+	// that cannot be generated, before the SDK can allocate or read entropy.
+	if random := credentialOptions.GetRandomPassword(); random != nil {
+		remaining := random.GetLength()
+		for _, constraint := range random.GetConstraints() {
+			minimum := int64(constraint.GetMinCount())
+			if minimum == 0 {
+				continue
+			}
+			if constraint.GetCharSet() == "" {
+				return nil, "", status.Error(codes.InvalidArgument, "okta-connectorv2: positive password constraint requires a character set")
+			}
+			if minimum > remaining {
+				return nil, "", status.Error(codes.InvalidArgument, "okta-connectorv2: password constraint minimums exceed requested length")
+			}
+			remaining -= minimum
+		}
+	}
+
 	// The SDK's crypto.GeneratePassword handles both options: it returns the
 	// supplied plaintext unchanged (never regenerating a caller-provided
 	// bootstrap password) and honors the requested random length and
@@ -671,6 +690,11 @@ func getCredentialOption(ctx context.Context, credentialOptions *v2.LocalCredent
 		if errors.Is(err, crypto.ErrInvalidCredentialOptions) {
 			return nil, "", status.Error(codes.InvalidArgument, "okta-connectorv2: unsupported credential options")
 		}
+		if errors.Is(err, crypto.ErrInvalidPasswordLength) {
+			return nil, "", status.Error(codes.InvalidArgument, "okta-connectorv2: requested password length is not supported")
+		}
+		// Preserve non-sentinel SDK errors, including runtime/entropy failures;
+		// only its exported input-validation sentinels are normalized here.
 		return nil, "", err
 	}
 

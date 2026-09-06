@@ -95,6 +95,8 @@ The end-to-end provider sign-in-policy and employee-takeover requirement remains
 
 <Note>
 **Protected bootstrap credentials.** Use the SDK encrypted-password input, not an ordinary profile attribute or action argument. The connector preserves the supplied password after SDK decryption and does not return it. Generated passwords honor the requested SDK length and constraints; generated material is returned only through the SDK protected-result path. Configure encrypted result recipients before generation. The SDK rejects combining supplied-password input with returned-credential encryption configurations; credential storage and delivery remain the caller's responsibility.
+
+Generated passwords require at least eight characters. The SDK's explicit invalid-credential-option and invalid-password-length errors are returned as `InvalidArgument` before provider writes. A narrow pre-generation check also rejects positive-count constraints with an empty character set or minimum counts exceeding the requested length; zero-count constraints and valid/default modes are unchanged. Other SDK, entropy, cancellation, and provider failures propagate unchanged. No replacement generator, arbitrary new password limits, or universal input-error classification is introduced.
 </Note>
 
 <Note>

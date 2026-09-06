@@ -1,12 +1,16 @@
 package connector
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/crypto/providers/jwk"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -92,6 +96,7 @@ func TestCreateAccountInvalidCredentialsDoNotWrite(t *testing.T) {
 	}{
 		{"empty supplied", suppliedPasswordCreds(""), nil},
 		{"unsupported options", &v2.LocalCredentialOptions{}, nil},
+		{"short generated", randomPasswordCreds(4), nil},
 		{"federated supplied", suppliedPasswordCreds("fixture-only"), map[string]any{"provider_type": "FEDERATION"}},
 		{"federated generated", randomPasswordCreds(32), map[string]any{"provider_type": "FEDERATION"}},
 	} {
@@ -101,6 +106,71 @@ func TestCreateAccountInvalidCredentialsDoNotWrite(t *testing.T) {
 			require.Error(t, err)
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
 			require.Zero(t, server.Requests())
+		})
+	}
+}
+
+func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
+	encryptionProvider := &jwk.JWKEncryptionProvider{}
+	recipient, privateKey, err := encryptionProvider.GenerateKey(t.Context())
+	require.NoError(t, err)
+	for _, test := range []struct {
+		name        string
+		constraints []*v2.PasswordConstraint
+		invalid     bool
+	}{
+		{"positive empty charset", []*v2.PasswordConstraint{{MinCount: 1}}, true},
+		{"minimums exceed length", []*v2.PasswordConstraint{{MinCount: 5, CharSet: "A"}, {MinCount: 4, CharSet: "1"}}, true},
+		{"exact length boundary", []*v2.PasswordConstraint{{MinCount: 4, CharSet: "A"}, {MinCount: 4, CharSet: "1"}}, false},
+		{"zero count empty charset", []*v2.PasswordConstraint{{}}, false},
+		{"default constraints", nil, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var createdPassword string
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Credentials struct {
+						Password struct {
+							Value string `json:"value"`
+						} `json:"password"`
+					} `json:"credentials"`
+				}
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				createdPassword = body.Credentials.Password.Value
+				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
+			})
+			provider := newTestServerClient(t, mux)
+			user := userBuilder(&Okta{client: provider.client, strictAccountCreation: true})
+			accountManager, err := connectorbuilder.NewConnector(t.Context(), &filteredReadTestConnector{user: user})
+			require.NoError(t, err)
+			result, err := accountManager.CreateAccount(t.Context(), &v2.CreateAccountRequest{
+				AccountInfo: bootstrapAccountInfo(t, map[string]any{"create_inactive": true}),
+				CredentialOptions: v2.CredentialOptions_builder{
+					RandomPassword: &v2.CredentialOptions_RandomPassword{Length: 8, Constraints: test.constraints},
+				}.Build(),
+				EncryptionConfigs: []*v2.EncryptionConfig{recipient},
+				ResourceTypeId:    resourceTypeUser.Id,
+			})
+			if test.invalid {
+				require.Equal(t, codes.InvalidArgument, status.Code(err))
+				require.Nil(t, result)
+				require.Zero(t, provider.Requests())
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, result.GetSuccess())
+			require.Equal(t, testOktaUserID, result.GetSuccess().GetResource().GetId().GetResource())
+			require.Equal(t, int32(1), provider.Requests())
+			require.Len(t, createdPassword, 8)
+			if test.name == "exact length boundary" {
+				require.Equal(t, 4, strings.Count(createdPassword, "A"))
+				require.Equal(t, 4, strings.Count(createdPassword, "1"))
+			}
+			require.Len(t, result.GetEncryptedData(), 1)
+			recovered, err := encryptionProvider.Decrypt(t.Context(), result.GetEncryptedData()[0], privateKey)
+			require.NoError(t, err)
+			require.Equal(t, createdPassword, string(recovered.GetBytes()), "caller must recover the generated provider password through SDK encryption")
 		})
 	}
 }
