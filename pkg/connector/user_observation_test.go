@@ -9,6 +9,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/okta/okta-sdk-golang/v2/okta"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -85,10 +86,6 @@ func TestUserResourceGetReflectsOutOfBandStatusChange(t *testing.T) {
 	if _, ok := res1.GetProfile().GetFields()["c1_okta_transitioning_to_status"]; ok {
 		t.Fatalf("first Get must not fabricate transition metadata when provider omits it")
 	}
-	// Fresh-observation marker present on targeted Get.
-	if !res1.GetProfile().GetFields()["c1_okta_fresh_observation"].GetBoolValue() {
-		t.Fatalf("first Get missing c1_okta_fresh_observation marker")
-	}
 	// Timestamps are exposed as nonsecret provider facts.
 	for _, key := range []string{"c1_okta_status_changed_at", "c1_okta_password_changed_at", "c1_okta_last_updated_at"} {
 		if _, ok := res1.GetProfile().GetFields()[key]; !ok {
@@ -114,10 +111,8 @@ func TestUserResourceGetReflectsOutOfBandStatusChange(t *testing.T) {
 	}
 }
 
-// TestUserResourceGetOutcomes pins the distinct qualified outcomes of a
-// targeted Get: provider 404 is NotFound, a configured-filter exclusion is
-// PermissionDenied with an explicit reason (not bare nil/absence), and an
-// empty provider payload is Unknown, not successful absence.
+// Get preserves SDK skip compatibility while retaining a machine-readable filter
+// qualifier; malformed provider data is still an error rather than absence.
 func TestUserResourceGetOutcomes(t *testing.T) {
 	t.Run("provider 404 is NotFound", func(t *testing.T) {
 		var requests uint32
@@ -137,7 +132,7 @@ func TestUserResourceGetOutcomes(t *testing.T) {
 		}
 	})
 
-	t.Run("configured filter exclusion is PermissionDenied not absence", func(t *testing.T) {
+	t.Run("configured filter exclusion retains a qualifier", func(t *testing.T) {
 		var requests uint32
 		server := newUserGetFixtureServer(t, func() int { return http.StatusOK }, func() string { return oktaUserFullJSON("ACTIVE", "") }, &requests)
 		client := newCachedOktaTestClient(t, server)
@@ -150,8 +145,17 @@ func TestUserResourceGetOutcomes(t *testing.T) {
 		if res != nil {
 			t.Fatalf("resource = %v, want nil", res)
 		}
-		if status.Code(err) != codes.PermissionDenied {
-			t.Fatalf("err code = %v, want PermissionDenied (got: %v)", status.Code(err), err)
+		if status.Code(err) != codes.NotFound {
+			t.Fatalf("err code = %v, want qualified NotFound (got: %v)", status.Code(err), err)
+		}
+		qualified := false
+		for _, detail := range status.Convert(err).Details() {
+			if info, ok := detail.(*errdetails.ErrorInfo); ok && info.Reason == "RESOURCE_FILTERED" {
+				qualified = true
+			}
+		}
+		if !qualified {
+			t.Fatal("filter exclusion lost its machine-readable qualifier")
 		}
 	})
 
@@ -211,11 +215,8 @@ func TestGetUserFreshKeepsTransitionField(t *testing.T) {
 	}
 }
 
-// TestFreshUserResourceMetadata guards the metadata contract directly: the
-// marker is present, transition is exposed only when nonempty, absent
-// timestamps are omitted (not zero dates), and the raw/aggregate status fields
-// set by userResource are unchanged.
-func TestFreshUserResourceMetadata(t *testing.T) {
+// Native state metadata remains stable and does not self-certify read freshness.
+func TestUserResourceStableMetadata(t *testing.T) {
 	user := &okta.User{
 		Id:                    testOktaUserID,
 		Status:                "STAGED",
@@ -223,14 +224,11 @@ func TestFreshUserResourceMetadata(t *testing.T) {
 		Profile:               &okta.UserProfile{"email": "test@example.com", "login": "test@example.com"},
 	}
 
-	res, err := freshUserResource(user, false)
+	res, err := userResource(user, false)
 	if err != nil {
-		t.Fatalf("freshUserResource: %v", err)
+		t.Fatalf("userResource: %v", err)
 	}
 	fields := res.GetProfile().GetFields()
-	if !fields["c1_okta_fresh_observation"].GetBoolValue() {
-		t.Fatalf("missing fresh-observation marker")
-	}
 	if got := fields["c1_okta_transitioning_to_status"].GetStringValue(); got != "ACTIVE" {
 		t.Fatalf("transition = %q, want ACTIVE", got)
 	}
@@ -247,9 +245,9 @@ func TestFreshUserResourceMetadata(t *testing.T) {
 	// No transition reported → no metadata entry.
 	userNoTransition := *user
 	userNoTransition.TransitioningToStatus = ""
-	res2, err := freshUserResource(&userNoTransition, false)
+	res2, err := userResource(&userNoTransition, false)
 	if err != nil {
-		t.Fatalf("freshUserResource (no transition): %v", err)
+		t.Fatalf("userResource (no transition): %v", err)
 	}
 	if _, ok := res2.GetProfile().GetFields()["c1_okta_transitioning_to_status"]; ok {
 		t.Fatalf("empty transition must not produce metadata")

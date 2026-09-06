@@ -32,14 +32,6 @@ func TestCustomProfileCannotForgeFreshObservation(t *testing.T) {
 	require.NotContains(t, fields, "c1_okta_transitioning_to_status")
 	require.NotContains(t, fields, "c1_okta_status_changed_at", "zero dates are not observed facts")
 	require.Equal(t, changed.Format(time.RFC3339Nano), fields["c1_okta_password_changed_at"].GetStringValue())
-	before := time.Now()
-	fresh, err := freshUserResource(user, false)
-	after := time.Now()
-	require.NoError(t, err)
-	observed, err := time.Parse(time.RFC3339Nano, fresh.GetProfile().GetFields()["c1_okta_observed_at"].GetStringValue())
-	require.NoError(t, err)
-	require.False(t, observed.Before(before))
-	require.False(t, observed.After(after))
 }
 
 func TestFreshUserLookupKeepsOneEncodedSegment(t *testing.T) {

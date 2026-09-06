@@ -119,7 +119,7 @@ Optional keys in the account creation profile (see [docs/connector.mdx](docs/con
 | `provider_type` | `OKTA` / `FEDERATION` | `FEDERATION` creates a federated user (no Okta password). Use with the **no-password** credential option. |
 | `send_activation_email` | `"true"` / `"false"` (string; bool also accepted at runtime) | Default `true`. Account-creation schema is `StringField` (same as the siblings below). When `false`, activates without sending Okta's activation email. |
 | `create_inactive` | `"true"` / `"false"` (string; bool also accepted at runtime) | Schema `StringField`. Create as staged; skips activation. |
-| `password_change_on_login_required` | `"true"` / `"false"` (string; bool also accepted at runtime) | Applied with supplied or generated passwords. Mandatory change conflicts with inactive creation and suppressed activation email; rejected before any provider write. |
+| `password_change_on_login_required` | `"true"` / `"false"` (string; bool also accepted at runtime) | Strict for supplied passwords; generated-password validation follows `--strict-account-creation`. Unsupported strict combinations fail before provider writes. |
 | `additionalAttributes` | object | Extra Okta profile attributes. |
 
 Precedence notes:
@@ -128,9 +128,9 @@ Precedence notes:
 - `password_change_on_login_required` is inert on the no-password credential path (same as before this feature).
 - All three boolean-ish profile keys share the same `StringField` schema shape so C1 string mappings are consistent. A key present with the wrong type fails the request instead of being ignored. Only an absent or null key falls back to its default.
 
-Passwords use the SDK protected credential path. Supplied bytes are preserved and not returned; generated material honors the requested length/constraints and is returned for SDK encryption to the configured destination. `force_change_at_next_login` is honored together with the profile flag. **The staged mandatory-takeover recipe remains an unsatisfied provider-policy/certification gate**: the connector rejects unsupported combinations and never activates then expires a password as a workaround.
+Passwords use the SDK protected credential path. Supplied bytes are preserved and not returned; generated material honors requested length/constraints and is returned for SDK encryption. Enable `--strict-account-creation` for strict generated-password bootstrap. It defaults off for legacy configurations; supplied passwords are always strict. Legacy unenforceable options produce a warning and are never takeover evidence. **The staged mandatory-takeover recipe remains an unsatisfied provider-policy/certification gate**; no activate-then-expire workaround is added.
 
-Unresolved duplicates and unconfirmed post-create activation/readback return **Action Required** with available correlation, not unqualified success. Returned creation snapshots are not current-state proof. Targeted user `Get` bypasses the SDK cache and exposes connector-owned observation time, raw/transition status and present provider timestamps; custom profile attributes cannot forge the observation marker.
+Unresolved duplicates and unconfirmed creation/activation outcomes return **Action Required** with available correlation. Activation readback observes the created ID directly without applying sync-population filters. Targeted `Get` bypasses cache and retains stable provider status/timestamps without a volatile profile clock. Filtered results carry `NotFound` plus standard `ErrorInfo` reason `RESOURCE_FILTERED`; callers must not mistake that for provider absence. Malformed successes remain errors.
 
 Example (no activation email; string form matching C1 string mappings):
 

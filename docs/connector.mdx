@@ -73,18 +73,18 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 
 | Field | Values | Default | What it does |
 | :--- | :--- | :--- | :--- |
-| **Password Change Required on Login** | `True` / `False` | Off | When creating an account with a supplied or generated password, requires password replacement at first login only on a supported active-create path. Unsupported inactive combinations fail before creation. |
+| **Password Change Required on Login** | `True` / `False` | Off | Requires a supported active-create password change. Supplied-password requests always validate strictly; generated-password requests use the connector's strict-validation setting. |
 | **Create Inactive** | `True` / `False` | Off | Creates the user in Okta as staged (inactive) without activating them. |
 | **Send Activation Email** | `True` / `False` | `True` | When set to `False`, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
 | **Provider Type** | `OKTA` / `FEDERATION` | Okta's default (local) provider | Set to `FEDERATION` to create a federated user with no local Okta password. Common in hub-and-spoke / Org2Org designs where the hub IdP owns credentials. |
 | **Additional Attributes** | Map of Okta profile keys | — | Extra Okta profile attributes (standard or custom schema) to set on the user. |
 
 <Note>
-**Provider Type** `FEDERATION` cannot be combined with a supplied or generated password: federated users do not have a local Okta password. **Send Activation Email** `False` cannot be combined with mandatory password change when creating with a password. **Create Inactive** `True` also cannot be combined with that requirement. The connector rejects these unsupported combinations before creating, activating, or expiring a user. The SDK credential option `force_change_at_next_login` cannot be silently ignored. With the legacy no-password profile option, Password Change Required on Login has no effect; use a separately authorized enrollment flow.
+**Provider Type** `FEDERATION` cannot be combined with a supplied or generated password. **Strict account creation validation** (`--strict-account-creation`, default `false`) preserves legacy configurations while providing a fail-before-write path for generated-password bootstrap. Supplied-password requests are always strict, even when this flag is off. Strict supplied/generated requests reject inactive creation plus mandatory change, and strict validation rejects SDK force-change without a password. The pre-existing random-password conflict between suppressed activation email and the profile's mandatory-change flag remains an error on non-inactive creation; legacy inactive precedence is preserved.
 </Note>
 
 <Warning>
-**Mandatory employee takeover is not established by staged activation.** Earlier versions silently ignored Password Change Required on Login during inactive creation; that combination now fails closed. Valid inactive creation with a protected supplied password remains supported, and `enable_user` still activates a bound `STAGED` account or unsuspends a `SUSPENDED` one without rotating the password.
+**Mandatory employee takeover is not established by staged activation.** Strict validation rejects unsupported inactive/mandatory-change combinations before any provider request. Legacy random/no-password configurations retain their previously accepted behavior with a non-secret warning when a password-change option cannot be enforced; legacy compatibility is not evidence of takeover. Lifecycle integrations using generated passwords must enable strict validation. Supplied-password bootstrap is strict intrinsically. The flag does not make staged mandatory takeover possible; `enable_user` still only activates or unsuspends without rotating the password.
 
 Okta documents [`nextLogin=changePassword`](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/user/other/createuser.md) only with `activate=true`. The [activation endpoint](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/userlifecycle/other/activateuser.md) does not accept a next-login requirement. Activating and then expiring a password leaves an intervening sign-in window; this connector does not perform that sequence.
 
@@ -110,9 +110,9 @@ After verifying the returned provider identity is the account bound to the inten
 </Note>
 
 <Note>
-**Fresh state and correlation.** Targeted user `Get` bypasses the SDK GET cache and preserves `transitioningToStatus`. It adds `c1_okta_fresh_observation` and `c1_okta_observed_at`; ordinary sync/create snapshots are not stamped fresh merely because they were processed. Resource profiles preserve raw status plus present `c1_okta_transitioning_to_status`, `c1_okta_status_changed_at`, `c1_okta_password_changed_at`, and `c1_okta_last_updated_at` facts. Missing fields remain unknown, and these connector-owned metadata fields cannot be supplied by custom profile attributes.
+**Fresh state and correlation.** Targeted user `Get` bypasses the SDK GET cache and preserves `transitioningToStatus`. Read time belongs in the caller's observation receipt, not in a volatile persisted profile field. Resource profiles retain raw status and present provider-native `c1_okta_transitioning_to_status`, `c1_okta_status_changed_at`, `c1_okta_password_changed_at`, and `c1_okta_last_updated_at` facts. Missing fields remain unknown; custom profile attributes cannot forge these connector-owned facts.
 
-A filtered user is an explicit permission/filter error, not absence. Missing/incomplete or mismatched identity data is not adopted. Use a targeted read to reconcile the retained provider ID instead of creating a replacement account or assuming a full sync will resolve it. Provider timestamps are observations, not proof that an employee changed a credential or completed enrollment.
+A filtered user returns gRPC `NotFound` with standard `google.rpc.ErrorInfo` reason `RESOURCE_FILTERED` and domain `baton-okta`. The SDK can skip it during targeted sync, while point-read consumers must inspect the qualifier and must not treat filtering as authoritative absence. Malformed provider successes remain errors. Activation readback uses the explicitly created provider ID directly, not sync-population filtering, and retains partial/unknown outcomes. Provider timestamps do not establish employee takeover.
 </Note>
 
 <Note>

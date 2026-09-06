@@ -94,7 +94,7 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 
 	t.Run("inactive + mandatory change rejected before write for supplied password", func(t *testing.T) {
 		t.Parallel()
-		params, followUp, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, inactiveChange), suppliedPasswordCreds("pw-32-chars-long-enough"), "")
+		params, followUp, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactiveChange), suppliedPasswordCreds("pw-32-chars-long-enough"), "", true)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "create_inactive")
 		require.Nil(t, params)
@@ -103,7 +103,7 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 
 	t.Run("inactive + mandatory change rejected before write for generated password", func(t *testing.T) {
 		t.Parallel()
-		params, followUp, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, inactiveChange), randomPasswordCreds(32), "")
+		params, followUp, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactiveChange), randomPasswordCreds(32), "", true)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "create_inactive")
 		require.Nil(t, params)
@@ -116,15 +116,15 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 			PlaintextPassword:      &v2.LocalCredentialOptions_PlaintextPassword{PlaintextPassword: "pw"},
 			ForceChangeAtNextLogin: true,
 		}.Build()
-		_, _, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, inactive), creds, "")
+		_, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactive), creds, "", true)
 		require.Error(t, err)
 	})
 
 	t.Run("staged email suppression + mandatory change rejected before write", func(t *testing.T) {
 		t.Parallel()
-		_, _, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, noEmailChange), suppliedPasswordCreds("pw-32-chars-long-enough"), "")
+		_, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, noEmailChange), suppliedPasswordCreds("pw-32-chars-long-enough"), "", true)
 		require.Error(t, err)
-		_, _, err = getAccountCreationQueryParams(bootstrapAccountInfo(t, noEmailChange), randomPasswordCreds(32), "")
+		_, _, err = getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, noEmailChange), randomPasswordCreds(32), "", true)
 		require.Error(t, err)
 	})
 
@@ -134,13 +134,13 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 			NoPassword:             &v2.LocalCredentialOptions_NoPassword{},
 			ForceChangeAtNextLogin: true,
 		}.Build()
-		_, _, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, nil), creds, "")
+		_, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, nil), creds, "", true)
 		require.Error(t, err)
 	})
 
 	t.Run("inactive create with supplied password and no change request is allowed and stays staged", func(t *testing.T) {
 		t.Parallel()
-		params, followUp, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, inactive), suppliedPasswordCreds("pw-32-chars-long-enough"), "")
+		params, followUp, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactive), suppliedPasswordCreds("pw-32-chars-long-enough"), "", true)
 		require.NoError(t, err)
 		require.NotNil(t, params)
 		require.NotNil(t, params.Activate)
@@ -154,7 +154,7 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 		creds := v2.LocalCredentialOptions_builder{
 			NoPassword: &v2.LocalCredentialOptions_NoPassword{},
 		}.Build()
-		params, followUp, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, inactiveChange), creds, "")
+		params, followUp, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactiveChange), creds, "", true)
 		require.NoError(t, err)
 		require.NotNil(t, params.Activate)
 		require.False(t, *params.Activate)
@@ -163,7 +163,7 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 
 	t.Run("activating create with mandatory change on supplied password sets nextLogin", func(t *testing.T) {
 		t.Parallel()
-		params, followUp, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, map[string]any{"password_change_on_login_required": true}), suppliedPasswordCreds("pw"), "")
+		params, followUp, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, map[string]any{"password_change_on_login_required": true}), suppliedPasswordCreds("pw"), "", true)
 		require.NoError(t, err)
 		require.Equal(t, "changePassword", params.NextLogin)
 		require.NotNil(t, params.Activate)
@@ -177,7 +177,7 @@ func TestAccountCreationQueryParams_Guard(t *testing.T) {
 			PlaintextPassword:      &v2.LocalCredentialOptions_PlaintextPassword{PlaintextPassword: "pw"},
 			ForceChangeAtNextLogin: true,
 		}.Build()
-		params, _, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, nil), creds, "")
+		params, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, nil), creds, "", true)
 		require.NoError(t, err)
 		require.Equal(t, "changePassword", params.NextLogin)
 		require.True(t, *params.Activate)
@@ -208,7 +208,7 @@ func TestCreateAccount_GuardMakesZeroProviderWrites(t *testing.T) {
 				} else {
 					creds.SetForceChangeAtNextLogin(true)
 				}
-				resp, plaintexts, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(
+				resp, plaintexts, _, err := userBuilder(&Okta{client: server.client, strictAccountCreation: mode == "generated"}).CreateAccount(
 					t.Context(), bootstrapAccountInfo(t, flags), creds)
 				require.Error(t, err)
 				require.Nil(t, resp)

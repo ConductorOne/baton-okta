@@ -23,6 +23,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -420,17 +421,6 @@ func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, erro
 	return ret, nil
 }
 
-// freshUserResource marks a provider point read, not employee takeover.
-func freshUserResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, error) {
-	res, err := userResource(user, skipSecondaryEmails)
-	if err != nil {
-		return nil, err
-	}
-	res.Profile.Fields["c1_okta_fresh_observation"] = structpb.NewBoolValue(true)
-	res.Profile.Fields["c1_okta_observed_at"] = structpb.NewStringValue(time.Now().UTC().Format(time.RFC3339Nano))
-	return res, nil
-}
-
 func (o *userResourceType) CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error) {
 	return &v2.CredentialDetailsAccountProvisioning{
 		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{
@@ -465,11 +455,11 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	params, suppressActivationEmail, err := getAccountCreationQueryParams(accountInfo, credentialOptions, providerType)
+	params, suppressActivationEmail, err := getAccountCreationQueryParams(ctx, accountInfo, credentialOptions, providerType, r.connector.strictAccountCreation)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	providerCredentials, err := applyProviderCredentials(nil, providerType, credentialOptions)
+	providerCredentials, err := applyProviderCredentials(providerType, credentialOptions)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -612,15 +602,25 @@ func (r *userResourceType) CreateAccount(
 		}
 		return needsAction(createdResource, "activation could not be confirmed", err, nil)
 	}
-	current, annos, readErr := r.Get(ctx, &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: user.Id}, nil)
-	if readErr != nil || current == nil || current.GetId().GetResource() != user.Id {
+	observed, respCtx, readErr := getUserFresh(ctx, r.connector.client, user.Id)
+	var annos annotations.Annotations
+	if respCtx != nil && respCtx.OktaResponse != nil {
+		response := respCtx.OktaResponse
+		if limit, err := ratelimit.ExtractRateLimitData(response.StatusCode, &response.Header); err == nil {
+			annos.WithRateLimiting(limit)
+		}
+	}
+	if readErr != nil || observed == nil || observed.Id != user.Id {
 		if readErr == nil {
 			readErr = status.Error(codes.DataLoss, "activation readback did not identify the created user")
 		}
 		return needsAction(createdResource, "activation was acknowledged but fresh state is unconfirmed", readErr, annos)
 	}
-	fields := current.GetProfile().GetFields()
-	if fields["c1_okta_raw_user_status"].GetStringValue() == userStatusStaged || fields["c1_okta_transitioning_to_status"].GetStringValue() != "" {
+	current, err := userResource(observed, r.connector.skipSecondaryEmails)
+	if err != nil {
+		return needsAction(createdResource, "activation readback was incomplete", err, annos)
+	}
+	if observed.Status == userStatusStaged || observed.TransitioningToStatus != "" {
 		return &v2.CreateAccountResponse_InProgressResult{Resource: current, IsCreateAccountResult: true}, plaintextData, annos, nil
 	}
 	return &v2.CreateAccountResponse_SuccessResult{Resource: current}, plaintextData, annos, nil
@@ -631,12 +631,11 @@ func (r *userResourceType) CreateAccount(
 // cannot also carry an Okta password: both supplied and generated passwords are
 // rejected here, before any provider write.
 func applyProviderCredentials(
-	creds *okta.UserCredentials,
 	providerType string,
 	credentialOptions *v2.LocalCredentialOptions,
 ) (*okta.UserCredentials, error) {
 	if providerType != providerTypeFederation {
-		return creds, nil
+		return nil, nil
 	}
 
 	if credentialOptions.GetRandomPassword() != nil {
@@ -646,15 +645,10 @@ func applyProviderCredentials(
 		return nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a supplied password credential option", profileFieldProviderType, providerTypeFederation)
 	}
 
-	if creds == nil {
-		creds = &okta.UserCredentials{}
-	}
-	creds.Provider = &okta.AuthenticationProvider{
+	return &okta.UserCredentials{Provider: &okta.AuthenticationProvider{
 		Type: providerTypeFederation,
 		Name: providerTypeFederation,
-	}
-
-	return creds, nil
+	}}, nil
 }
 
 // getCredentialOption translates SDK credential options into Okta credentials.
@@ -744,110 +738,62 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	return profile, nil
 }
 
-// getAccountCreationQueryParams builds Create User query params and whether a
-// follow-up ActivateUser(sendEmail=false) is required.
-//
-// The mandatory first-login password change is requested either through the
-// SDK's LocalCredentialOptions.ForceChangeAtNextLogin or the legacy
-// password_change_on_login_required profile field; both are honored. Okta only
-// applies nextLogin=changePassword when activate=true, and its ActivateUser
-// endpoint offers no equivalent, so a mandatory-change request combined with a
-// staged creation (create_inactive=true or send_activation_email=false) is
-// rejected here: accepting it would report a successful create while silently
-// dropping the takeover requirement (and any post-create activate-then-expire
-// composite would leave a forbidden direct-login window before the expiry write).
-// Provider-side mandatory first-login takeover for staged creates remains an
-// unsatisfied certification boundary, not a delivered recipe.
-func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions, providerType string) (*query.Params, bool, error) {
+// getAccountCreationQueryParams preserves legacy caller behavior unless strict
+// validation is enabled. Supplied passwords are new functionality and always strict.
+func getAccountCreationQueryParams(
+	ctx context.Context,
+	accountInfo *v2.AccountInfo,
+	credentialOptions *v2.LocalCredentialOptions,
+	providerType string,
+	strictValidation bool,
+) (*query.Params, bool, error) {
 	pMap := accountInfo.GetProfile().AsMap()
-	params := &query.Params{}
-
-	// Without provider=true Okta ignores credentials.provider.
-	if providerType == providerTypeFederation {
-		params.Provider = true
-	}
-
-	// create_inactive applies regardless of credential type
+	params := &query.Params{Provider: providerType == providerTypeFederation}
 	createInactive, err := parseBoolProfileField(pMap, profileFieldCreateInactive, false)
 	if err != nil {
 		return nil, false, err
 	}
-
-	// send_activation_email defaults to true to preserve existing behavior
 	sendActivationEmail, err := parseBoolProfileField(pMap, profileFieldSendActivationEmail, true)
 	if err != nil {
 		return nil, false, err
 	}
-
-	// Validated on every credential path so an invalid value is never silently
-	// dropped. Honored from the legacy profile flag OR the SDK's
-	// ForceChangeAtNextLogin, so an explicit request through either surface is
-	// never dropped.
-	requirePasswordChanged, err := parseBoolProfileField(pMap, profileFieldPasswordChangeOnLoginRequired, false)
+	profileChange, err := parseBoolProfileField(pMap, profileFieldPasswordChangeOnLoginRequired, false)
 	if err != nil {
 		return nil, false, err
 	}
-	forceChangeAtNextLogin := credentialOptions.GetForceChangeAtNextLogin()
-	mandatoryChange := requirePasswordChanged || forceChangeAtNextLogin
-
+	forceChange := credentialOptions.GetForceChangeAtNextLogin()
+	strict := strictValidation || credentialOptions.GetPlaintextPassword() != nil
 	hasPassword := credentialOptions.GetRandomPassword() != nil || credentialOptions.GetPlaintextPassword() != nil
-
-	// An explicit force-change request on a path that carries no Okta password
-	// (no-password or federation) can never be honored: Okta's nextLogin only
-	// operates on a password-bearing create. The legacy profile flag keeps its
-	// documented inert behavior on the no-password path for compatibility, but
-	// the SDK force-change option must not silently succeed.
-	if !hasPassword && forceChangeAtNextLogin {
-		return nil, false, fmt.Errorf(
-			"okta-connectorv2: force_change_at_next_login=true requires a password credential option (random or supplied)",
-		)
+	mandatoryChange := profileChange
+	if strict {
+		mandatoryChange = mandatoryChange || forceChange
+		if !hasPassword && forceChange {
+			return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: strict force_change_at_next_login requires a password")
+		}
+		if createInactive && hasPassword && mandatoryChange {
+			return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: create_inactive cannot enforce mandatory password change")
+		}
 	}
-
-	// A mandatory-change request cannot ride a staged creation: Okta documents
-	// nextLogin=changePassword as applying only with activate=true, and
-	// ActivateUser has no equivalent parameter. Reject before any provider
-	// write rather than silently dropping the takeover requirement.
-	if createInactive && hasPassword && mandatoryChange {
-		return nil, false, fmt.Errorf(
-			"okta-connectorv2: %s=true cannot enforce mandatory password change (%s or force_change_at_next_login); use a supported activating create",
-			profileFieldCreateInactive, profileFieldPasswordChangeOnLoginRequired,
-		)
-	}
-
-	// create_inactive wins over send_activation_email for the staged outcome:
-	// the user stays staged and no activation follow-up runs. (mandatoryChange
-	// was rejected above on password-bearing paths; on no-password paths the
-	// legacy profile flag stays inert per existing documented behavior.)
-	if createInactive {
+	suppressActivationEmail := false
+	switch {
+	case createInactive:
 		params.Activate = ToPtr(false)
-		return params, false, nil
-	}
-
-	// Staging to suppress the activation email also cannot carry a mandatory
-	// change: the follow-up ActivateUser(sendEmail=false) has no nextLogin
-	// parameter. The legacy profile flag conflict was already rejected on
-	// random-password creates; supplied-password creates must not silently
-	// drop it either. On the no-password path the flag remains inert
-	// (pre-existing behavior).
-	if !sendActivationEmail && hasPassword && mandatoryChange {
-		return nil, false, fmt.Errorf(
-			"okta-connectorv2: %s=false cannot be combined with %s=true or force_change_at_next_login",
-			profileFieldSendActivationEmail, profileFieldPasswordChangeOnLoginRequired,
-		)
-	}
-
-	if !sendActivationEmail {
-		// Stage the user so no activation email is sent; the caller activates with sendEmail=false.
+	case !sendActivationEmail:
+		// This conflict was already rejected for legacy random-password callers.
+		if hasPassword && mandatoryChange {
+			return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: send_activation_email=false cannot enforce mandatory password change")
+		}
 		params.Activate = ToPtr(false)
-		return params, true, nil
-	}
-
-	if mandatoryChange && hasPassword {
+		suppressActivationEmail = true
+	case hasPassword && mandatoryChange:
 		params.NextLogin = "changePassword"
 		params.Activate = ToPtr(true)
 	}
-
-	return params, false, nil
+	if (profileChange || forceChange) && params.NextLogin == "" {
+		ctxzap.Extract(ctx).Warn("okta-connectorv2: legacy account creation cannot enforce the requested password change; not takeover evidence",
+			zap.Bool("strict_validation", strict), zap.Bool("create_inactive", createInactive), zap.Bool("password_credential", hasPassword))
+	}
+	return params, suppressActivationEmail, nil
 }
 
 // parseObjectProfileField reads an account-creation field declared as a map in the
@@ -953,17 +899,21 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 		return nil, annos, status.Errorf(codes.FailedPrecondition, "okta-connectorv2: expected user %s but received %s", resourceId.GetResource(), user.Id)
 	}
 
-	// for okta v2, we only attempt to filter users by email domains when a list is provided.
-	// A configured-filter exclusion is an explicit FILTERED outcome (PermissionDenied with
-	// reason), distinct from provider 404 NotFound and from absence.
+	// NotFound preserves the SDK targeted-sync skip behavior. ErrorInfo makes a
+	// filtered observation distinguishable from authoritative provider absence.
 	if !o.connector.shouldIncludeUser(user) {
-		return nil, annos, status.Error(codes.PermissionDenied, fmt.Sprintf(
-			"okta-connectorv2: user %s excluded by configured email-domain filter",
-			resourceId.Resource,
-		))
+		filtered, err := status.New(codes.NotFound, "okta-connectorv2: user excluded by configured email-domain filter").WithDetails(&errdetails.ErrorInfo{
+			Reason:   "RESOURCE_FILTERED",
+			Domain:   "baton-okta",
+			Metadata: map[string]string{"resource_type": resourceTypeUser.Id, "resource_id": resourceId.GetResource(), "filter": "email_domain"},
+		})
+		if err != nil {
+			return nil, annos, err
+		}
+		return nil, annos, filtered.Err()
 	}
 
-	resource, err := freshUserResource(user, o.connector.skipSecondaryEmails)
+	resource, err := userResource(user, o.connector.skipSecondaryEmails)
 	if err != nil {
 		return nil, annos, err
 	}
