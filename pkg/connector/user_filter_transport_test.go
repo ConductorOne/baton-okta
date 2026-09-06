@@ -92,11 +92,10 @@ func TestFilteredReadQualifierSurvivesSDKAndGRPC(t *testing.T) {
 func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 	for _, source := range []string{"profile", "credential", "both"} {
 		t.Run(source, func(t *testing.T) {
-			var activateQuery, nextLoginQuery string
+			var captured atomic.Value
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-				activateQuery = r.URL.Query().Get("activate")
-				nextLoginQuery = r.URL.Query().Get("nextLogin")
+				captured.Store(createRequestSnapshot{activate: r.URL.Query().Get("activate"), nextLogin: r.URL.Query().Get("nextLogin")})
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			provider := newTestServerClient(t, mux)
@@ -131,8 +130,10 @@ func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 				ResourceTypeId:    resourceTypeUser.Id,
 			})
 			require.NoError(t, err)
-			require.Equal(t, "false", activateQuery)
-			require.Empty(t, nextLoginQuery, "legacy provider requests stay unchanged")
+			require.NotNil(t, captured.Load())
+			observed := captured.Load().(createRequestSnapshot)
+			require.Equal(t, "false", observed.activate)
+			require.Empty(t, observed.nextLogin, "legacy provider requests stay unchanged")
 			require.NotNil(t, response.GetSuccess(), "legacy outcome type must remain unchanged")
 			require.Equal(t, testOktaUserID, response.GetSuccess().GetResource().GetId().GetResource())
 			info := &errdetails.ErrorInfo{}
@@ -152,10 +153,10 @@ func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 func TestLegacyQualifierSurvivesPartialCreateAccountGRPC(t *testing.T) {
 	for _, outcome := range []string{"action-required", "in-progress"} {
 		t.Run(outcome, func(t *testing.T) {
-			var activateQuery string
+			var captured atomic.Value
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-				activateQuery = r.URL.Query().Get("activate")
+				captured.Store(createRequestSnapshot{activate: r.URL.Query().Get("activate")})
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			mux.HandleFunc("POST /api/v1/users/"+testOktaUserID+"/lifecycle/activate", func(w http.ResponseWriter, _ *http.Request) {
@@ -191,7 +192,9 @@ func TestLegacyQualifierSurvivesPartialCreateAccountGRPC(t *testing.T) {
 				ResourceTypeId:    resourceTypeUser.Id,
 			})
 			require.NoError(t, err)
-			require.Equal(t, "false", activateQuery)
+			require.NotNil(t, captured.Load())
+			observed := captured.Load().(createRequestSnapshot)
+			require.Equal(t, "false", observed.activate)
 			require.Nil(t, response.GetSuccess(), "partial creation must retain its non-success outcome")
 			if outcome == "action-required" {
 				require.NotNil(t, response.GetActionRequired())

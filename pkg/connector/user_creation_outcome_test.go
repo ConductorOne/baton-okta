@@ -132,7 +132,7 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 		{"default constraints", 8, nil, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			var createdPassword string
+			var passwordSnapshot atomic.Value
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
 				var body struct {
@@ -147,7 +147,7 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 					http.Error(w, "invalid request body", http.StatusBadRequest)
 					return
 				}
-				createdPassword = body.Credentials.Password.Value
+				passwordSnapshot.Store(body.Credentials.Password.Value)
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			provider := newTestServerClient(t, mux)
@@ -169,6 +169,8 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			require.NotNil(t, passwordSnapshot.Load())
+			createdPassword := passwordSnapshot.Load().(string)
 			require.NotNil(t, result.GetSuccess())
 			require.Equal(t, testOktaUserID, result.GetSuccess().GetResource().GetId().GetResource())
 			require.Equal(t, int32(1), provider.Requests())
@@ -191,7 +193,7 @@ func TestSDKPartialCreatePreservesEncryptedPassword(t *testing.T) {
 	require.NoError(t, err)
 	for _, outcome := range []string{"action-required", "in-progress"} {
 		t.Run(outcome, func(t *testing.T) {
-			var createdPassword string
+			var passwordSnapshot atomic.Value
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
 				var body struct {
@@ -206,7 +208,7 @@ func TestSDKPartialCreatePreservesEncryptedPassword(t *testing.T) {
 					http.Error(w, "invalid request body", http.StatusBadRequest)
 					return
 				}
-				createdPassword = body.Credentials.Password.Value
+				passwordSnapshot.Store(body.Credentials.Password.Value)
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			mux.HandleFunc("POST /api/v1/users/"+testOktaUserID+"/lifecycle/activate", func(w http.ResponseWriter, _ *http.Request) {
@@ -233,6 +235,8 @@ func TestSDKPartialCreatePreservesEncryptedPassword(t *testing.T) {
 				ResourceTypeId:    resourceTypeUser.Id,
 			})
 			require.NoError(t, err)
+			require.NotNil(t, passwordSnapshot.Load())
+			createdPassword := passwordSnapshot.Load().(string)
 			require.Nil(t, result.GetSuccess())
 			if outcome == "action-required" {
 				require.NotNil(t, result.GetActionRequired())

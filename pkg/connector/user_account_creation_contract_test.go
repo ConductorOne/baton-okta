@@ -45,6 +45,14 @@ func randomPasswordCreds(length int64) *v2.LocalCredentialOptions {
 	}.Build()
 }
 
+// Publish this completed request snapshot atomically; never mutate it afterward.
+type createRequestSnapshot struct {
+	body      okta.CreateUserRequest
+	activate  string
+	provider  string
+	nextLogin string
+}
+
 // newTestServerClient wires an Okta SDK client to a local httptest server
 // behind the given mux, counting every provider request. It is the counting
 // counterpart of newScriptedOktaClient for fixtures that must assert exact
@@ -230,10 +238,10 @@ func TestCreateAccount_SuppliedInactiveInsert(t *testing.T) {
 
 	const supplied = "bootstrap-supplied-password-32-chars!"
 
-	var createBody okta.CreateUserRequest
-	var createQueryActivate string
+	var captured atomic.Value
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+		var createBody okta.CreateUserRequest
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %s, want POST", r.Method)
 		}
@@ -242,7 +250,7 @@ func TestCreateAccount_SuppliedInactiveInsert(t *testing.T) {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
-		createQueryActivate = r.URL.Query().Get("activate")
+		captured.Store(createRequestSnapshot{body: createBody, activate: r.URL.Query().Get("activate")})
 		// Staged response: no credentials echoed, id present.
 		writeOktaTestResponse(
 			w,
@@ -258,6 +266,8 @@ func TestCreateAccount_SuppliedInactiveInsert(t *testing.T) {
 		"create_inactive": true,
 	}), suppliedPasswordCreds(supplied))
 	require.NoError(t, err)
+	require.NotNil(t, captured.Load())
+	observed := captured.Load().(createRequestSnapshot)
 
 	success, ok := resp.(*v2.CreateAccountResponse_SuccessResult)
 	require.True(t, ok, "expected SuccessResult, got %T", resp)
@@ -266,22 +276,24 @@ func TestCreateAccount_SuppliedInactiveInsert(t *testing.T) {
 
 	// Exactly one provider write: the staged insert. No activation, no email.
 	require.Equal(t, int32(1), server.Requests())
-	require.Equal(t, "false", createQueryActivate, "inactive create must send activate=false")
-	require.Equal(t, supplied, createBody.Credentials.Password.Value, "supplied password must reach the write unchanged")
+	require.Equal(t, "false", observed.activate, "inactive create must send activate=false")
+	require.Equal(t, supplied, observed.body.Credentials.Password.Value, "supplied password must reach the write unchanged")
 	require.Nil(t, plaintexts, "supplied mode must not return credential material")
 }
 
 func TestCreateAccount_RandomLengthAndResultMaterial(t *testing.T) {
 	t.Parallel()
 
-	var createBody okta.CreateUserRequest
+	var captured atomic.Value
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+		var createBody okta.CreateUserRequest
 		if err := json.NewDecoder(r.Body).Decode(&createBody); err != nil {
 			t.Errorf("decoding request body: %v", err)
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
+		captured.Store(createRequestSnapshot{body: createBody})
 		writeOktaTestResponse(
 			w,
 			http.StatusOK,
@@ -294,13 +306,15 @@ func TestCreateAccount_RandomLengthAndResultMaterial(t *testing.T) {
 
 	resp, plaintexts, _, err := builder.CreateAccount(t.Context(), bootstrapAccountInfo(t, nil), randomPasswordCreds(32))
 	require.NoError(t, err)
+	require.NotNil(t, captured.Load())
+	observed := captured.Load().(createRequestSnapshot)
 	_, ok := resp.(*v2.CreateAccountResponse_SuccessResult)
 	require.True(t, ok, "expected SuccessResult, got %T", resp)
 
 	require.Len(t, plaintexts, 1)
 	require.Equal(t, "password", plaintexts[0].Name)
 	require.Len(t, plaintexts[0].Bytes, 32, "requested 32-char random password must not be capped")
-	require.Equal(t, createBody.Credentials.Password.Value, string(plaintexts[0].Bytes), "return the password actually assigned, not a fresh generation")
+	require.Equal(t, observed.body.Credentials.Password.Value, string(plaintexts[0].Bytes), "return the password actually assigned, not a fresh generation")
 }
 
 func TestCreateAccount_UnresolvedDuplicateIsActionRequired(t *testing.T) {
