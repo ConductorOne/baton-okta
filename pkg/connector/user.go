@@ -638,10 +638,10 @@ func applyProviderCredentials(
 	}
 
 	if credentialOptions.GetRandomPassword() != nil {
-		return nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a random password credential option", profileFieldProviderType, providerTypeFederation)
+		return nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: %s=%s cannot be combined with a random password credential option", profileFieldProviderType, providerTypeFederation)
 	}
 	if credentialOptions.GetPlaintextPassword() != nil {
-		return nil, fmt.Errorf("okta-connectorv2: %s=%s cannot be combined with a supplied password credential option", profileFieldProviderType, providerTypeFederation)
+		return nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: %s=%s cannot be combined with a supplied password credential option", profileFieldProviderType, providerTypeFederation)
 	}
 
 	return &okta.UserCredentials{Provider: &okta.AuthenticationProvider{

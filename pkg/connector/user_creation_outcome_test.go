@@ -86,23 +86,20 @@ func TestCreateAccountDuplicateLookupCannotAdoptAnotherLogin(t *testing.T) {
 
 func TestCreateAccountInvalidCredentialsDoNotWrite(t *testing.T) {
 	for _, test := range []struct {
-		name            string
-		options         *v2.LocalCredentialOptions
-		profile         map[string]any
-		invalidArgument bool
+		name    string
+		options *v2.LocalCredentialOptions
+		profile map[string]any
 	}{
-		{"empty supplied", suppliedPasswordCreds(""), nil, true},
-		{"unsupported options", &v2.LocalCredentialOptions{}, nil, true},
-		{"federated supplied", suppliedPasswordCreds("fixture-only"), map[string]any{"provider_type": "FEDERATION"}, false},
-		{"federated generated", randomPasswordCreds(32), map[string]any{"provider_type": "FEDERATION"}, false},
+		{"empty supplied", suppliedPasswordCreds(""), nil},
+		{"unsupported options", &v2.LocalCredentialOptions{}, nil},
+		{"federated supplied", suppliedPasswordCreds("fixture-only"), map[string]any{"provider_type": "FEDERATION"}},
+		{"federated generated", randomPasswordCreds(32), map[string]any{"provider_type": "FEDERATION"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := newTestServerClient(t, http.NewServeMux())
 			_, _, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(t.Context(), bootstrapAccountInfo(t, test.profile), test.options)
 			require.Error(t, err)
-			if test.invalidArgument {
-				require.Equal(t, codes.InvalidArgument, status.Code(err))
-			}
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
 			require.Zero(t, server.Requests())
 		})
 	}
