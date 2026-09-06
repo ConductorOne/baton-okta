@@ -142,7 +142,11 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 						} `json:"password"`
 					} `json:"credentials"`
 				}
-				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding request body: %v", err)
+					http.Error(w, "invalid request body", http.StatusBadRequest)
+					return
+				}
 				createdPassword = body.Credentials.Password.Value
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
@@ -197,7 +201,11 @@ func TestSDKPartialCreatePreservesEncryptedPassword(t *testing.T) {
 						} `json:"password"`
 					} `json:"credentials"`
 				}
-				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding request body: %v", err)
+					http.Error(w, "invalid request body", http.StatusBadRequest)
+					return
+				}
 				createdPassword = body.Credentials.Password.Value
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})

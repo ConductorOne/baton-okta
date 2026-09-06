@@ -126,7 +126,7 @@ A filtered user returns gRPC `NotFound` with standard `google.rpc.ErrorInfo` rea
 
 This additive filter qualifier is scoped to user reads. At the SDK boundary, `NotFound` still takes the existing targeted-sync skip path; the qualifier lets lifecycle callers distinguish filtering from provider absence. Application and group filtering behavior is not changed by this user-lifecycle contract. No lifecycle-absence certification is claimed for other resource families when their existing result cannot distinguish filtering from absence.
 
-The tested SDK baseline for these user-read and partial-create contracts is `baton-sdk v0.29.0`, the exact version pinned in `go.mod`. Its `syncer.getResourceFromConnector` explicitly treats `NotFound` as a skip; the connector's SDK/local-gRPC fixture preserves both that status and the filter qualifier. Older SDK versions and different hosted event-reconciliation implementations are not certified by this PR without equivalent verification.
+`baton-sdk v0.29.0` was the inspected and tested baseline when these contracts were introduced; `go.mod` identifies the currently pinned dependency. The SDK/local-gRPC fixture asserts `NotFound` plus `ErrorInfo` reason `RESOURCE_FILTERED` and domain `baton-okta`, proving transport preservation. The inspected SDK's `syncer.getResourceFromConnector` source establishes its separate `NotFound`-skip behavior. SDK upgrades must rerun the behavioral fixtures and recheck the targeted-sync consumer; transport assertions alone do not certify every future or differently hosted event-reconciliation path.
 </Note>
 
 <Note>

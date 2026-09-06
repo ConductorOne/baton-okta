@@ -92,10 +92,11 @@ func TestFilteredReadQualifierSurvivesSDKAndGRPC(t *testing.T) {
 func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 	for _, source := range []string{"profile", "credential", "both"} {
 		t.Run(source, func(t *testing.T) {
+			var activateQuery, nextLoginQuery string
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, "false", r.URL.Query().Get("activate"))
-				require.Empty(t, r.URL.Query().Get("nextLogin"), "legacy provider requests stay unchanged")
+				activateQuery = r.URL.Query().Get("activate")
+				nextLoginQuery = r.URL.Query().Get("nextLogin")
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			provider := newTestServerClient(t, mux)
@@ -130,6 +131,8 @@ func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 				ResourceTypeId:    resourceTypeUser.Id,
 			})
 			require.NoError(t, err)
+			require.Equal(t, "false", activateQuery)
+			require.Empty(t, nextLoginQuery, "legacy provider requests stay unchanged")
 			require.NotNil(t, response.GetSuccess(), "legacy outcome type must remain unchanged")
 			require.Equal(t, testOktaUserID, response.GetSuccess().GetResource().GetId().GetResource())
 			info := &errdetails.ErrorInfo{}
@@ -149,9 +152,10 @@ func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 func TestLegacyQualifierSurvivesPartialCreateAccountGRPC(t *testing.T) {
 	for _, outcome := range []string{"action-required", "in-progress"} {
 		t.Run(outcome, func(t *testing.T) {
+			var activateQuery string
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, "false", r.URL.Query().Get("activate"))
+				activateQuery = r.URL.Query().Get("activate")
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			mux.HandleFunc("POST /api/v1/users/"+testOktaUserID+"/lifecycle/activate", func(w http.ResponseWriter, _ *http.Request) {
@@ -187,6 +191,7 @@ func TestLegacyQualifierSurvivesPartialCreateAccountGRPC(t *testing.T) {
 				ResourceTypeId:    resourceTypeUser.Id,
 			})
 			require.NoError(t, err)
+			require.Equal(t, "false", activateQuery)
 			require.Nil(t, response.GetSuccess(), "partial creation must retain its non-success outcome")
 			if outcome == "action-required" {
 				require.NotNil(t, response.GetActionRequired())

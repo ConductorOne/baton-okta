@@ -237,7 +237,11 @@ func TestCreateAccount_SuppliedInactiveInsert(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %s, want POST", r.Method)
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&createBody))
+		if err := json.NewDecoder(r.Body).Decode(&createBody); err != nil {
+			t.Errorf("decoding request body: %v", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		createQueryActivate = r.URL.Query().Get("activate")
 		// Staged response: no credentials echoed, id present.
 		writeOktaTestResponse(
@@ -273,7 +277,11 @@ func TestCreateAccount_RandomLengthAndResultMaterial(t *testing.T) {
 	var createBody okta.CreateUserRequest
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&createBody))
+		if err := json.NewDecoder(r.Body).Decode(&createBody); err != nil {
+			t.Errorf("decoding request body: %v", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		writeOktaTestResponse(
 			w,
 			http.StatusOK,

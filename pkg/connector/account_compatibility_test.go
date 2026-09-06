@@ -23,7 +23,11 @@ func TestLegacyCreationPreservesRequestsWithDiagnostics(t *testing.T) {
 			activate := ""
 			mux := http.NewServeMux()
 			mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding request body: %v", err)
+					http.Error(w, "invalid request body", http.StatusBadRequest)
+					return
+				}
 				activate = r.URL.Query().Get("activate")
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
@@ -135,7 +139,11 @@ func TestAccountActivationInProgressRetainsFreshResourceAndPassword(t *testing.T
 			var created okta.CreateUserRequest
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-				require.NoError(t, json.NewDecoder(r.Body).Decode(&created))
+				if err := json.NewDecoder(r.Body).Decode(&created); err != nil {
+					t.Errorf("decoding request body: %v", err)
+					http.Error(w, "invalid request body", http.StatusBadRequest)
+					return
+				}
 				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 			})
 			mux.HandleFunc("POST /api/v1/users/"+testOktaUserID+"/lifecycle/activate", func(w http.ResponseWriter, _ *http.Request) {
@@ -162,15 +170,17 @@ func TestAccountActivationInProgressRetainsFreshResourceAndPassword(t *testing.T
 }
 
 func TestFederatedNoPasswordAccountUsesProviderSemantics(t *testing.T) {
+	var created okta.CreateUserRequest
+	var providerQuery, activateQuery string
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-		var created okta.CreateUserRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&created))
-		require.Equal(t, "true", r.URL.Query().Get("provider"), "Okta ignores credentials.provider without this query option")
-		require.Equal(t, "false", r.URL.Query().Get("activate"))
-		require.Equal(t, providerTypeFederation, created.Credentials.Provider.Type)
-		require.Equal(t, providerTypeFederation, created.Credentials.Provider.Name)
-		require.Nil(t, created.Credentials.Password)
+		if err := json.NewDecoder(r.Body).Decode(&created); err != nil {
+			t.Errorf("decoding request body: %v", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		providerQuery = r.URL.Query().Get("provider")
+		activateQuery = r.URL.Query().Get("activate")
 		writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
 	})
 	server := newTestServerClient(t, mux)
@@ -178,6 +188,13 @@ func TestFederatedNoPasswordAccountUsesProviderSemantics(t *testing.T) {
 	result, plaintext, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(t.Context(),
 		bootstrapAccountInfo(t, map[string]any{"provider_type": providerTypeFederation, "create_inactive": true}), opts)
 	require.NoError(t, err)
+	require.Equal(t, "true", providerQuery, "Okta ignores credentials.provider without this query option")
+	require.Equal(t, "false", activateQuery)
+	require.NotNil(t, created.Credentials)
+	require.NotNil(t, created.Credentials.Provider)
+	require.Equal(t, providerTypeFederation, created.Credentials.Provider.Type)
+	require.Equal(t, providerTypeFederation, created.Credentials.Provider.Name)
+	require.Nil(t, created.Credentials.Password)
 	success, ok := result.(*v2.CreateAccountResponse_SuccessResult)
 	require.True(t, ok)
 	require.Equal(t, testOktaUserID, success.GetResource().GetId().GetResource())
