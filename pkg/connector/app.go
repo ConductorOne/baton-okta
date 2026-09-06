@@ -30,8 +30,9 @@ type appResourceType struct {
 }
 
 const (
-	appGrantGroup = "group"
-	appGrantUser  = "user"
+	appGrantGroup   = "group"
+	appGrantUser    = "user"
+	appStatusActive = "ACTIVE"
 )
 
 var appGrantTypes = []string{
@@ -613,7 +614,7 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 		return nil, annos, nil
 	}
 
-	if !o.syncInactiveApps && app.Status != userStatusActive {
+	if !o.syncInactiveApps && app.Status != appStatusActive {
 		return nil, annos, nil
 	}
 

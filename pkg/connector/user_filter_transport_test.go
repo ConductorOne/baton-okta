@@ -145,3 +145,67 @@ func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyQualifierSurvivesPartialCreateAccountGRPC(t *testing.T) {
+	for _, outcome := range []string{"action-required", "in-progress"} {
+		t.Run(outcome, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, "false", r.URL.Query().Get("activate"))
+				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
+			})
+			mux.HandleFunc("POST /api/v1/users/"+testOktaUserID+"/lifecycle/activate", func(w http.ResponseWriter, _ *http.Request) {
+				if outcome == "action-required" {
+					writeOktaTestResponse(w, http.StatusServiceUnavailable, `{}`)
+					return
+				}
+				writeOktaTestResponse(w, http.StatusOK, `{}`)
+			})
+			mux.HandleFunc("GET /api/v1/users/"+testOktaUserID, func(w http.ResponseWriter, _ *http.Request) {
+				writeOktaTestResponse(w, http.StatusOK, oktaUserFullJSON(userStatusStaged, ""))
+			})
+			provider := newTestServerClient(t, mux)
+			user := userBuilder(&Okta{client: provider.client})
+			connector, err := connectorbuilder.NewConnector(t.Context(), &filteredReadTestConnector{user: user})
+			require.NoError(t, err)
+			listenConfig := net.ListenConfig{}
+			listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer listener.Close()
+			server := grpc.NewServer()
+			v2.RegisterAccountManagerServiceServer(server, connector)
+			defer server.Stop()
+			go func() { _ = server.Serve(listener) }()
+			connection, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			require.NoError(t, err)
+			defer connection.Close()
+			response, err := v2.NewAccountManagerServiceClient(connection).CreateAccount(t.Context(), &v2.CreateAccountRequest{
+				AccountInfo: bootstrapAccountInfo(t, map[string]any{
+					"send_activation_email": false, profileFieldPasswordChangeOnLoginRequired: true,
+				}),
+				CredentialOptions: v2.CredentialOptions_builder{NoPassword: &v2.CredentialOptions_NoPassword{}}.Build(),
+				ResourceTypeId:    resourceTypeUser.Id,
+			})
+			require.NoError(t, err)
+			require.Nil(t, response.GetSuccess(), "partial creation must retain its non-success outcome")
+			if outcome == "action-required" {
+				require.NotNil(t, response.GetActionRequired())
+				require.Equal(t, testOktaUserID, response.GetActionRequired().GetResource().GetId().GetResource())
+				require.Equal(t, int32(2), provider.Requests(), "unknown activation must not be replayed")
+			} else {
+				require.NotNil(t, response.GetInProgress())
+				require.Equal(t, testOktaUserID, response.GetInProgress().GetResource().GetId().GetResource())
+				require.Equal(t, int32(3), provider.Requests())
+			}
+			responseAnnotations := annotations.Annotations(response.GetAnnotations())
+			info := &errdetails.ErrorInfo{}
+			found, err := responseAnnotations.Pick(info)
+			require.NoError(t, err)
+			require.True(t, found, "partial outcomes must retain the non-enforcement qualifier")
+			require.Equal(t, "LEGACY_PASSWORD_CHANGE_NOT_ENFORCED", info.Reason)
+			require.Equal(t, "baton-okta", info.Domain)
+			require.Equal(t, map[string]string{profileFieldPasswordChangeOnLoginRequired: "true"}, info.Metadata)
+			require.Empty(t, response.GetEncryptedData())
+		})
+	}
+}

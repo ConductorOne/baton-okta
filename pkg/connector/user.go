@@ -792,6 +792,8 @@ func getAccountCreationQueryParams(
 	if (profileChange || forceChange) && params.NextLogin == "" {
 		ctxzap.Extract(ctx).Warn("okta-connectorv2: legacy account creation cannot enforce the requested password change; not takeover evidence",
 			zap.Bool("strict_validation", strict), zap.Bool("create_inactive", createInactive), zap.Bool("password_credential", hasPassword))
+		// CreateAccount returns at most one ErrorInfo annotation. Preserve this
+		// invariant: SDK Annotations.Pick returns only the first match by type.
 		unenforced := &errdetails.ErrorInfo{
 			Reason:   "LEGACY_PASSWORD_CHANGE_NOT_ENFORCED",
 			Domain:   "baton-okta",
