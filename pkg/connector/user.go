@@ -665,6 +665,9 @@ func getCredentialOption(ctx context.Context, credentialOptions *v2.LocalCredent
 	// PasswordConstraint has no SDK validation rules. Reject only constraints
 	// that cannot be generated, before the SDK can allocate or read entropy.
 	if random := credentialOptions.GetRandomPassword(); random != nil {
+		if err := random.Validate(); err != nil {
+			return nil, "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: invalid random password options: %v", err)
+		}
 		remaining := random.GetLength()
 		for _, constraint := range random.GetConstraints() {
 			minimum := int64(constraint.GetMinCount())

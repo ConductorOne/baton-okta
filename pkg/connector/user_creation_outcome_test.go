@@ -116,14 +116,18 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 	require.NoError(t, err)
 	for _, test := range []struct {
 		name        string
+		length      int64
 		constraints []*v2.PasswordConstraint
 		invalid     bool
 	}{
-		{"positive empty charset", []*v2.PasswordConstraint{{MinCount: 1}}, true},
-		{"minimums exceed length", []*v2.PasswordConstraint{{MinCount: 5, CharSet: "A"}, {MinCount: 4, CharSet: "1"}}, true},
-		{"exact length boundary", []*v2.PasswordConstraint{{MinCount: 4, CharSet: "A"}, {MinCount: 4, CharSet: "1"}}, false},
-		{"zero count empty charset", []*v2.PasswordConstraint{{}}, false},
-		{"default constraints", nil, false},
+		{"below SDK length range", 4, nil, true},
+		{"above SDK length range", 65, nil, true},
+		{"positive empty charset", 8, []*v2.PasswordConstraint{{MinCount: 1}}, true},
+		{"minimums exceed length", 8, []*v2.PasswordConstraint{{MinCount: 5, CharSet: "A"}, {MinCount: 4, CharSet: "1"}}, true},
+		{"exact length boundary", 8, []*v2.PasswordConstraint{{MinCount: 4, CharSet: "A"}, {MinCount: 4, CharSet: "1"}}, false},
+		{"SDK maximum length", 64, nil, false},
+		{"zero count empty charset", 8, []*v2.PasswordConstraint{{}}, false},
+		{"default constraints", 8, nil, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var createdPassword string
@@ -147,7 +151,7 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 			result, err := accountManager.CreateAccount(t.Context(), &v2.CreateAccountRequest{
 				AccountInfo: bootstrapAccountInfo(t, map[string]any{"create_inactive": true}),
 				CredentialOptions: v2.CredentialOptions_builder{
-					RandomPassword: &v2.CredentialOptions_RandomPassword{Length: 8, Constraints: test.constraints},
+					RandomPassword: &v2.CredentialOptions_RandomPassword{Length: test.length, Constraints: test.constraints},
 				}.Build(),
 				EncryptionConfigs: []*v2.EncryptionConfig{recipient},
 				ResourceTypeId:    resourceTypeUser.Id,
@@ -162,7 +166,7 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 			require.NotNil(t, result.GetSuccess())
 			require.Equal(t, testOktaUserID, result.GetSuccess().GetResource().GetId().GetResource())
 			require.Equal(t, int32(1), provider.Requests())
-			require.Len(t, createdPassword, 8)
+			require.Len(t, createdPassword, int(test.length))
 			if test.name == "exact length boundary" {
 				require.Equal(t, 4, strings.Count(createdPassword, "A"))
 				require.Equal(t, 4, strings.Count(createdPassword, "1"))
