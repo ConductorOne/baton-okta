@@ -25,8 +25,10 @@ import (
 )
 
 // TODO: use isNotFoundError() since E0000008 is also a not found error
-const ResourceNotFoundExceptionErrorCode = "E0000007"
-const AccessDeniedErrorCode = "E0000006"
+const (
+	ResourceNotFoundExceptionErrorCode = "E0000007"
+	AccessDeniedErrorCode              = "E0000006"
+)
 
 const oktaURLScheme = "https"
 
@@ -294,7 +296,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 				profileFieldPasswordChangeOnLoginRequired: {
 					DisplayName: "Password Change Required on Login",
 					Required:    false,
-					Description: "When creating accounts with a random password setting this to 'true' will require the user to change their password on first login.",
+					Description: "Require first-login password change for a supplied or generated password. Unsupported with inactive creation or suppressed activation email.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},

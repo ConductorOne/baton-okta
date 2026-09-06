@@ -22,18 +22,24 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-var _ connectorbuilder.ResourceActionProvider = (*groupResourceType)(nil)
-var _ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
+var (
+	_ connectorbuilder.ResourceActionProvider   = (*groupResourceType)(nil)
+	_ connectorbuilder.ResourceDeleterV2Limited = (*groupResourceType)(nil)
+)
 
-const usersCountProfileKey = "users_count"
-const groupTypeProfileKey = "type"
-const builtInGroupType = "BUILT_IN"
-const appGroupType = "APP_GROUP"
-const oktaGroupType = "OKTA_GROUP"
-const apiPathGetGroupFmt = "/api/v1/groups/%s"
+const (
+	usersCountProfileKey = "users_count"
+	groupTypeProfileKey  = "type"
+	builtInGroupType     = "BUILT_IN"
+	appGroupType         = "APP_GROUP"
+	oktaGroupType        = "OKTA_GROUP"
+	apiPathGetGroupFmt   = "/api/v1/groups/%s"
+)
 
 // maxDescriptionBytes is the per-field budget the connector protocol enforces on
 // Resource.Description and Entitlement.Description.
@@ -539,7 +545,19 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 
 	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
-		return nil, handleOktaResponseError(response, err)
+		err = handleOktaResponseError(response, err)
+		// A provider-qualified not-found (the membership does not exist) is an
+		// already-revoked outcome, not a failure — but only when Okta itself
+		// qualified the absence; timeouts and permission errors stay errors and
+		// never become a claimed no-op.
+		if status.Code(err) == codes.NotFound {
+			l.Debug("okta-connector: membership is already revoked",
+				zap.String("group_id", groupId),
+				zap.String("principal_id", userId),
+			)
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		}
+		return nil, err
 	}
 
 	if response != nil {

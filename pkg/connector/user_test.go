@@ -441,14 +441,17 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantActivate: boolPtr(false),
 		},
 		{
-			name: "create_inactive wins over password_change",
+			// This combination was previously accepted with the
+			// change flag silently dropped (NextLogin=""). Okta only applies
+			// nextLogin=changePassword on an activating create, so the staged
+			// form cannot enforce it — reject before any provider write.
+			name: "create_inactive with password_change is rejected",
 			profile: map[string]interface{}{
 				"create_inactive":                   true,
 				"password_change_on_login_required": true,
 			},
-			creds:         randomPassword,
-			wantActivate:  boolPtr(false),
-			wantNextLogin: "",
+			creds:   randomPassword,
+			wantErr: true,
 		},
 		{
 			name: "password_change_on_login_required with random-password",
@@ -1014,7 +1017,7 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 			"first_name": "Test",
 			"last_name":  "User",
 			"email":      "test.user@example.com",
-			"login":      "testuser",
+			"login":      "test@example.com",
 		})
 		if err != nil {
 			t.Fatalf("structpb.NewStruct: %v", err)
@@ -1027,7 +1030,7 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 	t.Run("deprovisioned existing account fails loud", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users", statusCode: http.StatusBadRequest, body: dupLoginBody},
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/testuser", statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/test@example.com", statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 		)
 
 		resp, _, _, err := userBuilder(&Okta{client: client}).CreateAccount(t.Context(), accountInfo(t), noPassword)
@@ -1045,7 +1048,7 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 	t.Run("staged existing account is adopted as already-exists", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users", statusCode: http.StatusBadRequest, body: dupLoginBody},
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/testuser", statusCode: http.StatusOK, body: oktaUserResponse(userStatusStaged)},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/test@example.com", statusCode: http.StatusOK, body: oktaUserResponse(userStatusStaged)},
 		)
 
 		resp, _, _, err := userBuilder(&Okta{client: client}).CreateAccount(t.Context(), accountInfo(t), noPassword)
