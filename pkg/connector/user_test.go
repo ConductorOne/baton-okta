@@ -607,7 +607,7 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			}
 			accountInfo := &v2.AccountInfo{Profile: s}
 
-			got, suppress, err := getAccountCreationQueryParams(t.Context(), accountInfo, tt.creds, tt.providerType, false)
+			got, suppress, _, err := getAccountCreationQueryParams(t.Context(), accountInfo, tt.creds, tt.providerType, false)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

@@ -125,12 +125,14 @@ Optional keys in the account creation profile (see [docs/connector.mdx](docs/con
 Precedence notes:
 
 - `create_inactive=true` wins over `send_activation_email` — the user stays staged; no activation follow-up runs.
-- `password_change_on_login_required` is inert on the no-password credential path (same as before this feature).
+- `password_change_on_login_required` remains inert on the no-password credential path only in legacy mode. Strict validation rejects a profile or SDK mandatory-change requirement when there is no password to change.
 - All three boolean-ish profile keys share the same `StringField` schema shape so C1 string mappings are consistent. A key present with the wrong type fails the request instead of being ignored. Only an absent or null key falls back to its default.
 
 Passwords use the SDK protected credential path. Supplied bytes are preserved and not returned; generated material honors requested length/constraints and is returned for SDK encryption. Enable `--strict-account-creation` for strict generated-password bootstrap. It defaults off for legacy configurations; supplied passwords are always strict. Legacy unenforceable options produce a warning and are never takeover evidence. **The staged mandatory-takeover recipe remains an unsatisfied provider-policy/certification gate**; no activate-then-expire workaround is added.
 
 Unresolved duplicates and unconfirmed creation/activation outcomes return **Action Required** with available correlation. Activation readback observes the created ID directly without applying sync-population filters. Targeted `Get` bypasses cache and retains stable provider status/timestamps without a volatile profile clock. Filtered results carry `NotFound` plus standard `ErrorInfo` reason `RESOURCE_FILTERED`; callers must not mistake that for provider absence. Malformed successes remain errors.
+
+When legacy compatibility does not apply a requested password-change option, `CreateAccountResponse.annotations` carries a standard `google.rpc.ErrorInfo`: domain `baton-okta`, reason `LEGACY_PASSWORD_CHANGE_NOT_ENFORCED`. Its metadata includes only the unenforced requested options (`password_change_on_login_required` and/or `force_change_at_next_login`, each `"true"`). It contains no credential material. The legacy outcome type and provider requests remain unchanged; consumers must not treat that creation success as enforced takeover.
 
 Example (no activation email; string form matching C1 string mappings):
 

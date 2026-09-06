@@ -613,7 +613,7 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 		return nil, annos, nil
 	}
 
-	if !o.syncInactiveApps && app.Status != "ACTIVE" {
+	if !o.syncInactiveApps && app.Status != userStatusActive {
 		return nil, annos, nil
 	}
 

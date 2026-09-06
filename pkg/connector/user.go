@@ -455,7 +455,7 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	params, suppressActivationEmail, err := getAccountCreationQueryParams(ctx, accountInfo, credentialOptions, providerType, r.connector.strictAccountCreation)
+	params, suppressActivationEmail, annos, err := getAccountCreationQueryParams(ctx, accountInfo, credentialOptions, providerType, r.connector.strictAccountCreation)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -590,20 +590,19 @@ func (r *userResourceType) CreateAccount(
 	}
 	createdResource, err := userResource(user, r.connector.skipSecondaryEmails)
 	if err != nil {
-		return needsAction(nil, "resource construction needs reconciliation", err, nil)
+		return needsAction(nil, "resource construction needs reconciliation", err, annos)
 	}
 	if !suppressActivationEmail {
-		return &v2.CreateAccountResponse_SuccessResult{Resource: createdResource}, plaintextData, nil, nil
+		return &v2.CreateAccountResponse_SuccessResult{Resource: createdResource}, plaintextData, annos, nil
 	}
 	_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
 	if err != nil || activateResp == nil || activateResp.StatusCode != http.StatusOK {
 		if err == nil {
 			err = status.Error(codes.Unknown, "activation returned an unexpected response")
 		}
-		return needsAction(createdResource, "activation could not be confirmed", err, nil)
+		return needsAction(createdResource, "activation could not be confirmed", err, annos)
 	}
 	observed, respCtx, readErr := getUserFresh(ctx, r.connector.client, user.Id)
-	var annos annotations.Annotations
 	if respCtx != nil && respCtx.OktaResponse != nil {
 		response := respCtx.OktaResponse
 		if limit, err := ratelimit.ExtractRateLimitData(response.StatusCode, &response.Header); err == nil {
@@ -746,20 +745,20 @@ func getAccountCreationQueryParams(
 	credentialOptions *v2.LocalCredentialOptions,
 	providerType string,
 	strictValidation bool,
-) (*query.Params, bool, error) {
+) (*query.Params, bool, annotations.Annotations, error) {
 	pMap := accountInfo.GetProfile().AsMap()
 	params := &query.Params{Provider: providerType == providerTypeFederation}
 	createInactive, err := parseBoolProfileField(pMap, profileFieldCreateInactive, false)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	sendActivationEmail, err := parseBoolProfileField(pMap, profileFieldSendActivationEmail, true)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	profileChange, err := parseBoolProfileField(pMap, profileFieldPasswordChangeOnLoginRequired, false)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	forceChange := credentialOptions.GetForceChangeAtNextLogin()
 	strict := strictValidation || credentialOptions.GetPlaintextPassword() != nil
@@ -767,11 +766,11 @@ func getAccountCreationQueryParams(
 	mandatoryChange := profileChange
 	if strict {
 		mandatoryChange = mandatoryChange || forceChange
-		if !hasPassword && forceChange {
-			return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: strict force_change_at_next_login requires a password")
+		if !hasPassword && mandatoryChange {
+			return nil, false, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: strict mandatory password change requires a password")
 		}
 		if createInactive && hasPassword && mandatoryChange {
-			return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: create_inactive cannot enforce mandatory password change")
+			return nil, false, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: create_inactive cannot enforce mandatory password change")
 		}
 	}
 	suppressActivationEmail := false
@@ -781,7 +780,7 @@ func getAccountCreationQueryParams(
 	case !sendActivationEmail:
 		// This conflict was already rejected for legacy random-password callers.
 		if hasPassword && mandatoryChange {
-			return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: send_activation_email=false cannot enforce mandatory password change")
+			return nil, false, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: send_activation_email=false cannot enforce mandatory password change")
 		}
 		params.Activate = ToPtr(false)
 		suppressActivationEmail = true
@@ -789,11 +788,24 @@ func getAccountCreationQueryParams(
 		params.NextLogin = "changePassword"
 		params.Activate = ToPtr(true)
 	}
+	var annos annotations.Annotations
 	if (profileChange || forceChange) && params.NextLogin == "" {
 		ctxzap.Extract(ctx).Warn("okta-connectorv2: legacy account creation cannot enforce the requested password change; not takeover evidence",
 			zap.Bool("strict_validation", strict), zap.Bool("create_inactive", createInactive), zap.Bool("password_credential", hasPassword))
+		unenforced := &errdetails.ErrorInfo{
+			Reason:   "LEGACY_PASSWORD_CHANGE_NOT_ENFORCED",
+			Domain:   "baton-okta",
+			Metadata: make(map[string]string),
+		}
+		if profileChange {
+			unenforced.Metadata[profileFieldPasswordChangeOnLoginRequired] = strconv.FormatBool(profileChange)
+		}
+		if forceChange {
+			unenforced.Metadata["force_change_at_next_login"] = strconv.FormatBool(forceChange)
+		}
+		annos.Append(unenforced)
 	}
-	return params, suppressActivationEmail, nil
+	return params, suppressActivationEmail, annos, nil
 }
 
 // parseObjectProfileField reads an account-creation field declared as a map in the
@@ -908,7 +920,8 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 			Metadata: map[string]string{"resource_type": resourceTypeUser.Id, "resource_id": resourceId.GetResource(), "filter": "email_domain"},
 		})
 		if err != nil {
-			return nil, annos, err
+			// Without the qualifier, NotFound would falsely imply provider absence.
+			return nil, annos, status.Errorf(codes.Internal, "okta-connectorv2: failed to encode configured-filter exclusion: %v", err)
 		}
 		return nil, annos, filtered.Err()
 	}

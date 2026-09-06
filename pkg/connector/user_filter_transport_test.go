@@ -88,3 +88,60 @@ func TestFilteredReadQualifierSurvivesSDKAndGRPC(t *testing.T) {
 	require.Error(t, err)
 	require.NotEqual(t, codes.NotFound, status.Code(err), "malformed success is not absence or a filter skip")
 }
+
+func TestLegacyPasswordChangeQualifierSurvivesCreateAccountGRPC(t *testing.T) {
+	for _, source := range []string{"profile", "credential", "both"} {
+		t.Run(source, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, "false", r.URL.Query().Get("activate"))
+				require.Empty(t, r.URL.Query().Get("nextLogin"), "legacy provider requests stay unchanged")
+				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
+			})
+			provider := newTestServerClient(t, mux)
+			user := userBuilder(&Okta{client: provider.client})
+			connector, err := connectorbuilder.NewConnector(t.Context(), &filteredReadTestConnector{user: user})
+			require.NoError(t, err)
+			listenConfig := net.ListenConfig{}
+			listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer listener.Close()
+			server := grpc.NewServer()
+			v2.RegisterAccountManagerServiceServer(server, connector)
+			defer server.Stop()
+			go func() { _ = server.Serve(listener) }()
+			connection, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			require.NoError(t, err)
+			defer connection.Close()
+			opts := v2.CredentialOptions_builder{NoPassword: &v2.CredentialOptions_NoPassword{}}.Build()
+			flags := map[string]any{"create_inactive": true}
+			expected := make(map[string]string)
+			if source != "credential" {
+				flags[profileFieldPasswordChangeOnLoginRequired] = true
+				expected[profileFieldPasswordChangeOnLoginRequired] = "true"
+			}
+			if source != "profile" {
+				opts.SetForceChangeAtNextLogin(true)
+				expected["force_change_at_next_login"] = "true"
+			}
+			response, err := v2.NewAccountManagerServiceClient(connection).CreateAccount(t.Context(), &v2.CreateAccountRequest{
+				AccountInfo:       bootstrapAccountInfo(t, flags),
+				CredentialOptions: opts,
+				ResourceTypeId:    resourceTypeUser.Id,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, response.GetSuccess(), "legacy outcome type must remain unchanged")
+			require.Equal(t, testOktaUserID, response.GetSuccess().GetResource().GetId().GetResource())
+			info := &errdetails.ErrorInfo{}
+			responseAnnotations := annotations.Annotations(response.GetAnnotations())
+			found, err := responseAnnotations.Pick(info)
+			require.NoError(t, err)
+			require.True(t, found, "non-enforcement must be visible to the public SDK caller")
+			require.Equal(t, "LEGACY_PASSWORD_CHANGE_NOT_ENFORCED", info.Reason)
+			require.Equal(t, "baton-okta", info.Domain)
+			require.Equal(t, expected, info.Metadata, "only actually unenforced options, never credentials or unrelated profile data")
+			require.Empty(t, response.GetEncryptedData())
+			require.Equal(t, int32(1), provider.Requests())
+		})
+	}
+}
