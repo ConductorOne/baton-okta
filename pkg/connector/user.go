@@ -674,10 +674,11 @@ func getCredentialOption(ctx context.Context, credentialOptions *v2.LocalCredent
 		return nil, "", err
 	}
 
+	if plaintextPassword == "" {
+		return nil, "", errors.New("okta-connectorv2: password must not be empty")
+	}
+
 	if credentialOptions.GetPlaintextPassword() != nil {
-		if plaintextPassword == "" {
-			return nil, "", errors.New("okta-connectorv2: supplied password must not be empty")
-		}
 		// Supplied mode: the caller already holds the password; no material is returned.
 		return &okta.UserCredentials{
 			Password: &okta.PasswordCredential{
@@ -883,9 +884,9 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 
 	var annos annotations.Annotations
 
-	// Resource Get has no freshness selector; always take the fresh path so the
-	// returned resource is a current point observation (one wire GET, bypassing
-	// the SDK GET cache). The ordinary cached path stays on List/sync.
+	// This is the current-state user point-read surface. Even targeted sync and
+	// grant expansion deliberately take one wire GET rather than stale SDK data.
+	// Full-sync List remains paginated and does not fan out into Get per user.
 	user, respCtx, err := getUserFresh(ctx, o.connector.client, resourceId.Resource)
 	if err != nil {
 		// Provider-qualified absence stays NotFound; everything else (timeout,

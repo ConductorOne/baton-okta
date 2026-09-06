@@ -114,7 +114,11 @@ After verifying the returned provider identity is the account bound to the inten
 <Note>
 **Fresh state and correlation.** Targeted user `Get` bypasses the SDK GET cache and preserves `transitioningToStatus`. Read time belongs in the caller's observation receipt, not in a volatile persisted profile field. Resource profiles retain raw status and present provider-native `c1_okta_transitioning_to_status`, `c1_okta_status_changed_at`, `c1_okta_password_changed_at`, and `c1_okta_last_updated_at` facts. Missing fields remain unknown; custom profile attributes cannot forge these connector-owned facts.
 
+Each targeted user `Get`, including targeted sync and grant expansion, intentionally makes one provider read instead of using the SDK GET cache; otherwise an out-of-band lifecycle change could be hidden by a cached response. These reads count against Okta's org rate limits, so callers must bound targeted workloads accordingly. Full-sync user listing remains paginated and does not add a per-user `Get` fanout. This is a current-state observation contract, not a large-org capacity certification or a new freshness-selector protocol.
+
 A filtered user returns gRPC `NotFound` with standard `google.rpc.ErrorInfo` reason `RESOURCE_FILTERED` and domain `baton-okta`. The SDK can skip it during targeted sync, while point-read consumers must inspect the qualifier and must not treat filtering as authoritative absence. Malformed provider successes remain errors. Activation readback uses the explicitly created provider ID directly, not sync-population filtering, and retains partial/unknown outcomes. Provider timestamps do not establish employee takeover.
+
+This additive filter qualifier is scoped to user reads. At the SDK boundary, `NotFound` still takes the existing targeted-sync skip path; the qualifier lets lifecycle callers distinguish filtering from provider absence. Application and group filtering behavior is not changed by this user-lifecycle contract. No lifecycle-absence certification is claimed for other resource families when their existing result cannot distinguish filtering from absence.
 </Note>
 
 <Note>
