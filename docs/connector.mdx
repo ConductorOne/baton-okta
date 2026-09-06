@@ -112,7 +112,9 @@ Default **Create Account** does not leave users staged: the connector activates 
 
 Retrying Create Account never activates, renames, or changes the password of a duplicate. A resolved duplicate is returned unchanged; an unresolved lookup returns **Action Required**, not an unqualified already-exists result. If activation or its readback could not be confirmed, the result retains the created identity and generated credential material through the protected SDK result channel. Its resource is explicitly a creation snapshot, not proof that the account is still staged. A correlated read that still reports staged after activation returns **In Progress**.
 
-After verifying the returned provider identity is the account bound to the intended request, use `enable_user` to request activation. Do not activate an unrelated duplicate account or treat this as evidence that the first-login takeover gate has been met.
+**In Progress is a nonterminal create outcome, not a completed provision.** A fresh read that reports `transitioningToStatus` remains In Progress even when its target is active. Callers must retain the correlated provider ID and protected credential result, then use bounded fresh observations to establish settled state; they must not replay creation or activation merely because the result is nonterminal. This connector does not certify that every hosting consumer automatically schedules that follow-up. Hosting/orchestration compatibility must be verified before relying on the new outcome; no benign-success interpretation is assumed.
+
+If a fresh correlated read confirms the intended account is staged with no transition pending and activation is still required, use `enable_user` to request activation. Do not activate an unrelated duplicate account or treat this as evidence that the first-login takeover gate has been met.
 </Note>
 
 <Note>
@@ -123,6 +125,8 @@ Each targeted user `Get`, including targeted sync and grant expansion, intention
 A filtered user returns gRPC `NotFound` with standard `google.rpc.ErrorInfo` reason `RESOURCE_FILTERED` and domain `baton-okta`. The SDK can skip it during targeted sync, while point-read consumers must inspect the qualifier and must not treat filtering as authoritative absence. Malformed provider successes remain errors. Activation readback uses the explicitly created provider ID directly, not sync-population filtering, and retains partial/unknown outcomes. Provider timestamps do not establish employee takeover.
 
 This additive filter qualifier is scoped to user reads. At the SDK boundary, `NotFound` still takes the existing targeted-sync skip path; the qualifier lets lifecycle callers distinguish filtering from provider absence. Application and group filtering behavior is not changed by this user-lifecycle contract. No lifecycle-absence certification is claimed for other resource families when their existing result cannot distinguish filtering from absence.
+
+The tested SDK baseline for these user-read and partial-create contracts is `baton-sdk v0.29.0`, the exact version pinned in `go.mod`. Its `syncer.getResourceFromConnector` explicitly treats `NotFound` as a skip; the connector's SDK/local-gRPC fixture preserves both that status and the filter qualifier. Older SDK versions and different hosted event-reconciliation implementations are not certified by this PR without equivalent verification.
 </Note>
 
 <Note>

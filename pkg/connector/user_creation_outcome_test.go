@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/crypto/providers/jwk"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -175,6 +177,78 @@ func TestSDKCreateAccountPasswordConstraints(t *testing.T) {
 			recovered, err := encryptionProvider.Decrypt(t.Context(), result.GetEncryptedData()[0], privateKey)
 			require.NoError(t, err)
 			require.Equal(t, createdPassword, string(recovered.GetBytes()), "caller must recover the generated provider password through SDK encryption")
+		})
+	}
+}
+
+func TestSDKPartialCreatePreservesEncryptedPassword(t *testing.T) {
+	encryptionProvider := &jwk.JWKEncryptionProvider{}
+	recipient, privateKey, err := encryptionProvider.GenerateKey(t.Context())
+	require.NoError(t, err)
+	for _, outcome := range []string{"action-required", "in-progress"} {
+		t.Run(outcome, func(t *testing.T) {
+			var createdPassword string
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Credentials struct {
+						Password struct {
+							Value string `json:"value"`
+						} `json:"password"`
+					} `json:"credentials"`
+				}
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				createdPassword = body.Credentials.Password.Value
+				writeOktaTestResponse(w, http.StatusOK, oktaUserResponse(userStatusStaged))
+			})
+			mux.HandleFunc("POST /api/v1/users/"+testOktaUserID+"/lifecycle/activate", func(w http.ResponseWriter, _ *http.Request) {
+				if outcome == "action-required" {
+					writeOktaTestResponse(w, http.StatusServiceUnavailable, `{}`)
+					return
+				}
+				writeOktaTestResponse(w, http.StatusOK, `{}`)
+			})
+			mux.HandleFunc("GET /api/v1/users/"+testOktaUserID, func(w http.ResponseWriter, _ *http.Request) {
+				writeOktaTestResponse(w, http.StatusOK, oktaUserFullJSON(userStatusActive, userStatusActive))
+			})
+			provider := newTestServerClient(t, mux)
+			user := userBuilder(&Okta{client: provider.client})
+			accountManager, err := connectorbuilder.NewConnector(t.Context(), &filteredReadTestConnector{user: user})
+			require.NoError(t, err)
+			result, err := accountManager.CreateAccount(t.Context(), &v2.CreateAccountRequest{
+				AccountInfo: bootstrapAccountInfo(t, map[string]any{"send_activation_email": false}),
+				CredentialOptions: v2.CredentialOptions_builder{
+					RandomPassword:         &v2.CredentialOptions_RandomPassword{Length: 32},
+					ForceChangeAtNextLogin: true,
+				}.Build(),
+				EncryptionConfigs: []*v2.EncryptionConfig{recipient},
+				ResourceTypeId:    resourceTypeUser.Id,
+			})
+			require.NoError(t, err)
+			require.Nil(t, result.GetSuccess())
+			if outcome == "action-required" {
+				require.NotNil(t, result.GetActionRequired())
+				require.Equal(t, testOktaUserID, result.GetActionRequired().GetResource().GetId().GetResource())
+				require.Equal(t, int32(2), provider.Requests())
+			} else {
+				require.NotNil(t, result.GetInProgress())
+				require.Equal(t, testOktaUserID, result.GetInProgress().GetResource().GetId().GetResource())
+				require.Equal(t, userStatusActive, result.GetInProgress().GetResource().GetStatus().GetDetails())
+				require.Equal(t, int32(3), provider.Requests())
+			}
+			responseAnnotations := annotations.Annotations(result.GetAnnotations())
+			info := &errdetails.ErrorInfo{}
+			found, err := responseAnnotations.Pick(info)
+			require.NoError(t, err)
+			require.True(t, found, "partial encrypted results must retain the legacy non-enforcement qualifier")
+			require.Equal(t, "LEGACY_PASSWORD_CHANGE_NOT_ENFORCED", info.Reason)
+			require.Equal(t, "baton-okta", info.Domain)
+			require.Equal(t, map[string]string{"force_change_at_next_login": "true"}, info.Metadata)
+			require.Len(t, createdPassword, 32)
+			require.Len(t, result.GetEncryptedData(), 1, "partial creation must preserve the caller's only generated credential copy")
+			recovered, err := encryptionProvider.Decrypt(t.Context(), result.GetEncryptedData()[0], privateKey)
+			require.NoError(t, err)
+			require.Equal(t, createdPassword, string(recovered.GetBytes()))
 		})
 	}
 }

@@ -619,6 +619,8 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return needsAction(createdResource, "activation readback was incomplete", err, annos)
 	}
+	// A reported transition is still pending even if its target is ACTIVE.
+	// Retain the resource and protected credential; do not certify completion.
 	if observed.Status == userStatusStaged || observed.TransitioningToStatus != "" {
 		return &v2.CreateAccountResponse_InProgressResult{Resource: current, IsCreateAccountResult: true}, plaintextData, annos, nil
 	}
