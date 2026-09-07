@@ -68,10 +68,11 @@ func oktaUserFullJSON(status, transitioning string) string {
 // change (ACTIVE → SUSPENDED). A cached Get would return the stale first
 // payload for the second observation.
 func TestUserResourceGetReflectsOutOfBandStatusChange(t *testing.T) {
-	current := oktaUserFullJSON("ACTIVE", "")
+	var current atomic.Value
+	current.Store(oktaUserFullJSON("ACTIVE", ""))
 
 	var requests uint32
-	server := newUserGetFixtureServer(t, func() int { return http.StatusOK }, func() string { return current }, &requests)
+	server := newUserGetFixtureServer(t, func() int { return http.StatusOK }, func() string { return current.Load().(string) }, &requests)
 	client := newCachedOktaTestClient(t, server)
 
 	o := &userResourceType{connector: &Okta{client: client, userFilters: &userFilterConfig{}}}
@@ -94,7 +95,7 @@ func TestUserResourceGetReflectsOutOfBandStatusChange(t *testing.T) {
 	}
 
 	// Out-of-band provider change: status flips and a transition is reported.
-	current = oktaUserFullJSON("SUSPENDED", "DEPROVISIONED")
+	current.Store(oktaUserFullJSON("SUSPENDED", "DEPROVISIONED"))
 
 	res2, _, err := o.Get(t.Context(), userResourceID(), nil)
 	if err != nil {
