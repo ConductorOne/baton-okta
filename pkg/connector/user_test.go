@@ -441,14 +441,13 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantActivate: boolPtr(false),
 		},
 		{
-			name: "create_inactive wins over password_change",
+			name: "legacy inactive creation preserves staged behavior",
 			profile: map[string]interface{}{
 				"create_inactive":                   true,
 				"password_change_on_login_required": true,
 			},
-			creds:         randomPassword,
-			wantActivate:  boolPtr(false),
-			wantNextLogin: "",
+			creds:        randomPassword,
+			wantActivate: boolPtr(false),
 		},
 		{
 			name: "password_change_on_login_required with random-password",
@@ -608,7 +607,7 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			}
 			accountInfo := &v2.AccountInfo{Profile: s}
 
-			got, suppress, err := getAccountCreationQueryParams(accountInfo, tt.creds, tt.providerType)
+			got, suppress, _, err := getAccountCreationQueryParams(t.Context(), accountInfo, tt.creds, tt.providerType, false)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -826,102 +825,6 @@ func TestGetProviderType(t *testing.T) {
 	}
 }
 
-func TestApplyProviderCredentials(t *testing.T) {
-	noPassword := v2.LocalCredentialOptions_builder{
-		NoPassword: &v2.LocalCredentialOptions_NoPassword{},
-	}.Build()
-
-	randomPassword := v2.LocalCredentialOptions_builder{
-		RandomPassword: &v2.LocalCredentialOptions_RandomPassword{Length: 12},
-	}.Build()
-
-	tests := []struct {
-		name         string
-		creds        *okta.UserCredentials
-		providerType string
-		credentials  *v2.LocalCredentialOptions
-		wantProvider bool
-		wantNilCreds bool
-		wantErr      bool
-	}{
-		{
-			name:         "no provider type leaves credentials untouched",
-			creds:        nil,
-			providerType: "",
-			credentials:  noPassword,
-			wantNilCreds: true,
-		},
-		{
-			name:         "okta provider type leaves credentials untouched",
-			creds:        &okta.UserCredentials{Password: &okta.PasswordCredential{Value: "secret"}},
-			providerType: providerTypeOkta,
-			credentials:  randomPassword,
-		},
-		{
-			name:         "federation allocates credentials when none exist",
-			creds:        nil,
-			providerType: providerTypeFederation,
-			credentials:  noPassword,
-			wantProvider: true,
-		},
-		{
-			name:         "federation sets provider on existing credentials",
-			creds:        &okta.UserCredentials{},
-			providerType: providerTypeFederation,
-			credentials:  noPassword,
-			wantProvider: true,
-		},
-		{
-			name:         "federation rejects random password",
-			creds:        &okta.UserCredentials{Password: &okta.PasswordCredential{Value: "secret"}},
-			providerType: providerTypeFederation,
-			credentials:  randomPassword,
-			wantErr:      true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := applyProviderCredentials(tt.creds, tt.providerType, tt.credentials)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if tt.wantNilCreds {
-				if got != nil {
-					t.Fatalf("credentials = %+v, want nil", got)
-				}
-				return
-			}
-			if got == nil {
-				t.Fatal("credentials are nil, want non-nil")
-			}
-
-			if !tt.wantProvider {
-				if got.Provider != nil {
-					t.Errorf("Provider = %+v, want nil", got.Provider)
-				}
-				return
-			}
-			if got.Provider == nil {
-				t.Fatal("Provider is nil, want FEDERATION")
-			}
-			if got.Provider.Type != providerTypeFederation {
-				t.Errorf("Provider.Type = %q, want %q", got.Provider.Type, providerTypeFederation)
-			}
-			if got.Provider.Name != providerTypeFederation {
-				t.Errorf("Provider.Name = %q, want %q", got.Provider.Name, providerTypeFederation)
-			}
-		})
-	}
-}
-
 func TestIsDuplicateLoginError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1014,7 +917,7 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 			"first_name": "Test",
 			"last_name":  "User",
 			"email":      "test.user@example.com",
-			"login":      "testuser",
+			"login":      "test@example.com",
 		})
 		if err != nil {
 			t.Fatalf("structpb.NewStruct: %v", err)
@@ -1027,7 +930,7 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 	t.Run("deprovisioned existing account fails loud", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users", statusCode: http.StatusBadRequest, body: dupLoginBody},
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/testuser", statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/test@example.com", statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 		)
 
 		resp, _, _, err := userBuilder(&Okta{client: client}).CreateAccount(t.Context(), accountInfo(t), noPassword)
@@ -1045,7 +948,7 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 	t.Run("staged existing account is adopted as already-exists", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users", statusCode: http.StatusBadRequest, body: dupLoginBody},
-			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/testuser", statusCode: http.StatusOK, body: oktaUserResponse(userStatusStaged)},
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/test@example.com", statusCode: http.StatusOK, body: oktaUserResponse(userStatusStaged)},
 		)
 
 		resp, _, _, err := userBuilder(&Okta{client: client}).CreateAccount(t.Context(), accountInfo(t), noPassword)

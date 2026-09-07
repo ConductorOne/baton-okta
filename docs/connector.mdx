@@ -73,18 +73,36 @@ When you configure account provisioning for Okta, C1 shows the following optiona
 
 | Field | Values | Default | What it does |
 | :--- | :--- | :--- | :--- |
-| **Password Change Required on Login** | `True` / `False` | Off | When creating an account with a random password, requires the user to change that password on first login. |
+| **Password Change Required on Login** | `True` / `False` | Off | Requires a supported active-create password change. Supplied-password requests always validate strictly; generated-password requests use the connector's strict-validation setting. |
 | **Create Inactive** | `True` / `False` | Off | Creates the user in Okta as staged (inactive) without activating them. |
 | **Send Activation Email** | `True` / `False` | `True` | When set to `False`, activates the user without sending Okta's activation email. Use this when C1 (or another system) owns user communication. |
 | **Provider Type** | `OKTA` / `FEDERATION` | Okta's default (local) provider | Set to `FEDERATION` to create a federated user with no local Okta password. Common in hub-and-spoke / Org2Org designs where the hub IdP owns credentials. |
 | **Additional Attributes** | Map of Okta profile keys | — | Extra Okta profile attributes (standard or custom schema) to set on the user. |
 
 <Note>
-**Provider Type** `FEDERATION` cannot be combined with a random-password credential option (federated users have no Okta password). **Send Activation Email** `False` cannot be combined with **Password Change Required on Login** `True` when creating with a random password (that combination cannot set Okta's change-password-on-login flag). With a no-password credential option, Password Change Required on Login has no effect and does not conflict. If **Create Inactive** is `True`, the connector leaves the user staged and does not run the activation step — Create Inactive takes precedence over Send Activation Email.
+**Provider Type** `FEDERATION` cannot be combined with a supplied or generated password. **Strict account creation validation** (`--strict-account-creation`, default `false`) preserves legacy configurations while providing a fail-before-write path for generated-password bootstrap. Supplied-password requests are always strict, even when this flag is off. Strict supplied/generated requests reject inactive creation plus mandatory change, and strict validation rejects either a profile or SDK mandatory-change requirement without a password. The existing rejection of password-change plus suppressed activation email remains unchanged.
+</Note>
+
+<Warning>
+**Mandatory employee takeover is not established by staged activation.** Strict validation rejects unsupported inactive/mandatory-change combinations before any provider request. Legacy random/no-password configurations retain their previously accepted behavior with a non-secret warning when a password-change option cannot be enforced; legacy compatibility is not evidence of takeover. Lifecycle integrations using generated passwords must enable strict validation. Supplied-password bootstrap is strict intrinsically. The flag does not make staged mandatory takeover possible; `enable_user` still only activates or unsuspends without rotating the password.
+
+Okta documents [`nextLogin=changePassword`](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/user/other/createuser.md) only with `activate=true`. The [activation endpoint](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/userlifecycle/other/activateuser.md) does not accept a next-login requirement. Activating and then expiring a password leaves an intervening sign-in window; this connector does not perform that sequence.
+
+Legacy non-enforcement is also caller-visible in `CreateAccountResponse.annotations` as standard `google.rpc.ErrorInfo`, with domain `baton-okta` and reason `LEGACY_PASSWORD_CHANGE_NOT_ENFORCED`. Metadata names only the requested options that were not applied: `password_change_on_login_required` and/or `force_change_at_next_login`, each with value `"true"`. No credential material is included. The legacy provider requests and outcome type remain unchanged; the qualifier is not evidence of takeover.
+
+The end-to-end provider sign-in-policy and employee-takeover requirement remains an **unsatisfied integration/certification gate** until deployment-specific controls and evidence establish mandatory password replacement and required enrollment before ordinary access. An enabled status, activation acknowledgement, password-change timestamp, or credential handoff is not proof of employee takeover.
+</Warning>
+
+<Note>
+**Protected bootstrap credentials.** Use the SDK encrypted-password input, not an ordinary profile attribute or action argument. The connector preserves the supplied password after SDK decryption and does not return it. Generated passwords honor the requested SDK length and constraints; generated material is returned only through the SDK protected-result path. Configure encrypted result recipients before generation. The SDK rejects combining supplied-password input with returned-credential encryption configurations; credential storage and delivery remain the caller's responsibility.
+
+Generated passwords use the SDK's supported 8–64 character range. The connector calls the existing SDK random-password validator before allocation or entropy work rather than introducing its own length limit. Invalid SDK options and the explicit invalid-password-length error return `InvalidArgument` before provider writes. A narrow pre-generation check also rejects positive-count constraints with an empty character set or minimum counts exceeding the requested length; zero-count constraints and valid/default modes are unchanged. Other SDK, entropy, cancellation, and provider failures propagate unchanged. No replacement generator, arbitrary new password limits, or universal input-error classification is introduced.
+
+**New random-password account-creation requests on upgrade:** length 8 still produces eight characters; requests for 9–64 characters now generate the requested length instead of silently producing eight. Requests outside the SDK's [8,64] range reject with `InvalidArgument` before provider writes; older requests above 64 could silently become eight-character passwords. Review affected random-password policies before upgrading. These checks apply independently of `--strict-account-creation`, which governs legacy mandatory-change composition. Upgrading does not itself rotate existing account credentials, and this random-length rule is not applied to supplied-password or no-password modes.
 </Note>
 
 <Note>
-**Okta Staged status (sign-in to Okta, not C1).** In Okta, **Staged** means the account was created but not activated yet, so the user cannot sign in to Okta. That is an Okta lifecycle state — it is not about signing in to ConductorOne. Staged users sync as **disabled** in C1 so sync matches the lifecycle actions: `disable_user` is a no-op on staged accounts, and `enable_user` activates them (`/lifecycle/activate` without sending another activation email). After activation the account becomes **Active** or **Provisioned** (Provisioned only means they have not completed first login yet).
+**Okta Staged status (sign-in to Okta, not C1).** In Okta, **Staged** means the account was created but not activated yet, so the user cannot sign in to Okta. Staged users sync as **disabled** in C1 so sync matches the lifecycle actions: `disable_user` is a no-op on staged accounts, and `enable_user` activates them (`/lifecycle/activate` without sending another activation email). Inspect the raw status and transition evidence after activation; aggregate enabled status does not establish usable access or mandatory first-login takeover.
 
 Default **Create Account** does not leave users staged: the connector activates them or sends Okta's activation email. Users stay staged only when **Create Inactive** is `True`, an Okta admin created them without activating, or an incomplete create left them there. The raw Okta status string stays on the resource details, so Staged remains distinguishable from Suspended or Deprovisioned. After you upgrade a connector that previously reported staged users as enabled, the next sync flips those resources to disabled — review any automations that key off user enabled/disabled status.
 </Note>
@@ -92,9 +110,27 @@ Default **Create Account** does not leave users staged: the connector activates 
 <Note>
 **Recovering an account left staged by an interrupted create.** With **Send Activation Email** set to `False`, account creation spans several calls, so a failure partway through can leave the Okta user created but not activated.
 
-Retrying the same create does not finish the job. Okta rejects the duplicate login, the connector returns the account it found, and the user stays **Staged** — a staged account left behind this way is indistinguishable from one created deliberately with **Create Inactive**.
+Retrying Create Account never activates, renames, or changes the password of a duplicate. A resolved duplicate is returned unchanged; an unresolved lookup returns **Action Required**, not an unqualified already-exists result. If activation or its readback could not be confirmed, the result retains the created identity and generated credential material through the protected SDK result channel. Its resource is explicitly a creation snapshot, not proof that the account is still staged. A correlated read that still reports staged after activation returns **In Progress**.
 
-Run the `enable_user` action against the account to finish activating it.
+**In Progress is a nonterminal create outcome, not a completed provision.** A fresh read that reports `transitioningToStatus` remains In Progress even when its target is active. Callers must retain the correlated provider ID and protected credential result, then use bounded fresh observations to establish settled state; they must not replay creation or activation merely because the result is nonterminal. This connector does not certify that every hosting consumer automatically schedules that follow-up. Hosting/orchestration compatibility must be verified before relying on the new outcome; no benign-success interpretation is assumed.
+
+If a fresh correlated read confirms the intended account is staged with no transition pending and activation is still required, use `enable_user` to request activation. Do not activate an unrelated duplicate account or treat this as evidence that the first-login takeover gate has been met.
+</Note>
+
+<Note>
+**Fresh state and correlation.** Targeted user `Get` bypasses the SDK GET cache and preserves `transitioningToStatus`. Read time belongs in the caller's observation receipt, not in a volatile persisted profile field. Resource profiles retain raw status and present provider-native `c1_okta_transitioning_to_status`, `c1_okta_status_changed_at`, `c1_okta_password_changed_at`, and `c1_okta_last_updated_at` facts. Missing fields remain unknown; custom profile attributes cannot forge these connector-owned facts.
+
+Each targeted user `Get`, including targeted sync and grant expansion, intentionally makes one provider read instead of using the SDK GET cache; otherwise an out-of-band lifecycle change could be hidden by a cached response. These reads count against Okta's org rate limits, so callers must bound targeted workloads accordingly. Full-sync user listing remains paginated and does not add a per-user `Get` fanout. This is a current-state observation contract, not a large-org capacity certification or a new freshness-selector protocol.
+
+A filtered user returns gRPC `NotFound` with standard `google.rpc.ErrorInfo` reason `RESOURCE_FILTERED` and domain `baton-okta`. The SDK can skip it during targeted sync, while point-read consumers must inspect the qualifier and must not treat filtering as authoritative absence. Malformed provider successes remain errors. Activation readback uses the explicitly created provider ID directly, not sync-population filtering, and retains partial/unknown outcomes. Provider timestamps do not establish employee takeover.
+
+This additive filter qualifier is scoped to user reads. At the SDK boundary, `NotFound` still takes the existing targeted-sync skip path; the qualifier lets lifecycle callers distinguish filtering from provider absence. Application and group filtering behavior is not changed by this user-lifecycle contract. No lifecycle-absence certification is claimed for other resource families when their existing result cannot distinguish filtering from absence.
+
+`baton-sdk v0.29.0` was the inspected and tested baseline when these contracts were introduced; `go.mod` identifies the currently pinned dependency. The SDK/local-gRPC fixture asserts `NotFound` plus `ErrorInfo` reason `RESOURCE_FILTERED` and domain `baton-okta`, proving transport preservation. The inspected SDK's `syncer.getResourceFromConnector` source establishes its separate `NotFound`-skip behavior. SDK upgrades must rerun the behavioral fixtures and recheck the targeted-sync consumer; transport assertions alone do not certify every future or differently hosted event-reconciliation path.
+</Note>
+
+<Note>
+Group membership remains on the existing grant interface. Provider-qualified not-found revocations are idempotent; permission and unknown failures remain errors. No independent membership-read action or whole-group scan is added to prove a single pair.
 </Note>
 
 <Note>

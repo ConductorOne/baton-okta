@@ -88,6 +88,11 @@ var (
 		field.WithDescription("Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not"),
 		field.WithDefaultValue(false),
 	)
+	strictAccountCreation = field.BoolField("strict-account-creation",
+		field.WithDisplayName("Strict account creation validation"),
+		field.WithDescription("Reject unsupported password-change options before creation. Required for strict generated-password bootstrap; supplied passwords always use strict validation."),
+		field.WithDefaultValue(false),
+	)
 )
 
 //go:generate go run ./gen
@@ -106,6 +111,7 @@ var Config = field.NewConfiguration([]field.SchemaField{
 	syncSecrets,
 	filterEmailDomains,
 	skipAppGroups,
+	strictAccountCreation,
 },
 	field.WithConnectorDisplayName("Okta"),
 	field.WithIconUrl("/static/app-icons/okta.svg"),
@@ -126,7 +132,9 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				skipSecondaryEmails,
 				syncSecrets,
 				filterEmailDomains,
-				skipAppGroups},
+				strictAccountCreation,
+				skipAppGroups,
+			},
 		},
 		{
 			Name:        PrivateKeyGroup,
@@ -145,7 +153,9 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				skipSecondaryEmails,
 				syncSecrets,
 				filterEmailDomains,
-				skipAppGroups},
+				strictAccountCreation,
+				skipAppGroups,
+			},
 		},
 	}),
 )

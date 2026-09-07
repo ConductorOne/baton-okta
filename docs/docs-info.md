@@ -103,7 +103,7 @@ Account creation is driven by `AccountCreationSchema` in `pkg/connector/connecto
 | `last_name` | yes | — | Okta `profile.lastName` |
 | `email` | yes | — | Okta `profile.email`; also login fallback |
 | `login` | no | email | Okta `profile.login` |
-| `password_change_on_login_required` | no | false | Schema `StringField` (True/False placeholder). Sets `nextLogin=changePassword` when using random password |
+| `password_change_on_login_required` | no | false | Schema `StringField` (True/False placeholder). Sets `nextLogin=changePassword` for a supplied/generated password on a supported activating create |
 | `create_inactive` | no | false | Schema `StringField` (True/False placeholder). `activate=false`; skips activation follow-up |
 | `send_activation_email` | no | true | Schema `StringField` (True/False placeholder; same shape as the two siblings above). Accepts a bool or its string form at runtime. When `false`: create staged, then `ActivateUser` with `sendEmail=false`, then re-fetch user |
 | `provider_type` | no | empty (Okta default local provider) | `OKTA` or `FEDERATION` (case-insensitive). `FEDERATION` sets `credentials.provider` + query `provider=true` |
@@ -117,13 +117,15 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 | :--- | :--- | :--- |
 | Create user | `POST /api/v1/users` | Query: `activate`, `provider`, optional `nextLogin` |
 | Activate user | `POST /api/v1/users/{id}/lifecycle/activate` | Query: `sendEmail=false` when suppressing activation email |
-| Get user | `GET /api/v1/users/{idOrLogin}` | Re-fetch after activate to pick up the post-activation status; best-effort, a failure keeps the created user. Also used to resolve an existing login on retry |
+| Get user | `GET /api/v1/users/{idOrLogin}` | Fresh read after activation or to resolve a duplicate. Failure/mismatched identity returns Action Required with available creation correlation, not current-state success |
 
 ### Conflict / validation rules
 
-- `provider_type=FEDERATION` + random password credential option → error (Okta rejects password on FEDERATION users).
-- `send_activation_email=false` + `password_change_on_login_required=true` + **random password** → error (staged+activate path cannot also set `nextLogin=changePassword`). On the no-password path, `password_change_on_login_required` is inert and does not conflict (pre-existing behavior).
-- `create_inactive=true` wins over `send_activation_email` / `password_change_on_login_required`: evaluated first, user stays staged, no activate call, and the conflict check above is skipped.
+- `provider_type=FEDERATION` rejects both supplied and generated password options before any provider call.
+- `strict-account-creation` defaults to `false` for legacy configurations. Supplied-password requests always select strict validation. Strict generated-password lifecycle integrations must enable the flag.
+- Strict supplied/generated requests reject inactive creation with mandatory change before any provider request. Strict no-password requests reject either the profile or SDK mandatory-change requirement. Legacy previously accepted random/no-password combinations retain their original provider request behavior with a non-secret warning when the requirement cannot be enforced; they are not certified takeover paths.
+- Legacy non-enforcement also returns standard `google.rpc.ErrorInfo` in `CreateAccountResponse.annotations`: domain `baton-okta`, reason `LEGACY_PASSWORD_CHANGE_NOT_ENFORCED`, with only the unenforced requested option names mapped to `"true"`. It contains no credential material and preserves legacy provider requests/outcome types. A creation success with this qualifier does not establish takeover.
+- The pre-existing random-password `send_activation_email=false` plus profile mandatory-change conflict remains invalid. Legacy inactive creation still takes precedence, as before; strict mode rejects the unenforceable combination.
 - Without query `provider=true`, Okta **ignores** a `credentials.provider` block and creates a normal OKTA user (verified live).
 - A profile field present with the wrong type is always an error, never a silent fallback: booleans
   (`create_inactive`, `send_activation_email`, `password_change_on_login_required`) must be a bool or
@@ -134,26 +136,13 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 
 ### Retry semantics
 
-The suppressed-email flow spans three calls, so a failure can leave the user created but not
-activated. On retry, Okta rejects the create with `E0000001` and an `errorCauses` entry naming
-`login`. A duplicate login returns `AlreadyExistsResult` for every status except `DEPROVISIONED`
-— with the existing Okta user when the follow-up fetch succeeds, or without a Resource when the
-lookup fails — so the caller converges on that account (or the next sync correlates it) instead
-of failing forever. A `DEPROVISIONED` collision is the exception: it fails with
-`FailedPrecondition`, because the connector has no reactivation path and reporting success would
-hand back a login that can never be provisioned.
+Creation and optional activation are separate provider effects. A resolved duplicate login returns `AlreadyExistsResult` with the existing resource unchanged; lookup must confirm the requested login. Missing, failed, or mismatched lookup produces `ActionRequiredResult`, not a success without identity or a promise to wait for full sync. A confirmed `DEPROVISIONED` collision remains `FailedPrecondition`.
 
-The existing user's lifecycle is never changed — activation runs only for a user this same call
-created. `STAGED` does not identify a stranded attempt: `create_inactive=true` and an admin-staged
-account look identical, so activating on a duplicate would override an explicit "keep this account
-inactive" decision. The trade-off is that a retry after a failed activation reports
-`AlreadyExistsResult` with the user still `STAGED`.
+An unconfirmed activation retains the created resource and generated credential material in `ActionRequiredResult`. The resource is a creation snapshot, not proof of current staged state. Acknowledged activation reads the explicitly created provider ID freshly without sync-population filtering; unavailable/mismatched data retains the original identity. Still-staged or transitioning observations return `InProgressResult`. No unknown create or activation is replayed.
 
-Finishing that activation is an explicit operation: run the `enable_user` action against the
-account, which activates a `STAGED` user with `sendEmail=false` (see
-[Lifecycle actions](#lifecycle-actions)). A repeated create will not do it, by design — only an
-operator asking to enable that specific account can, because a create cannot tell a stranded
-attempt from a deliberately inactive account.
+Existing accounts are never activated, renamed, or given new credentials by duplicate-create handling. Targeted Get actually bypasses cache; it does not write a wall-clock timestamp or freshness flag into persisted resource profiles. Stable provider-native status/transition/timestamp facts remain. Filter exclusions use standard gRPC `ErrorInfo` (`RESOURCE_FILTERED`, domain `baton-okta`) on `NotFound`, preserving SDK targeted-sync skipping without claiming provider absence. The caller's observation receipt owns read time; malformed provider success still fails.
+
+The staged mandatory-password-change recipe remains an **unsatisfied integration/certification gate**. Okta's [create API](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/user/other/createuser.md) requires `activate=true` for `nextLogin=changePassword`; [activation](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/userlifecycle/other/activateuser.md) has no equivalent parameter. Activate-then-expire leaves a sign-in window and is not implemented.
 
 ### Org2Org / hub-spoke
 
@@ -190,7 +179,7 @@ Okta's DELETE endpoint only permanently deletes a `DEPROVISIONED` user. Calling 
 
 Lifecycle races are reconciled using structured state, not vendor error text. After a successful deactivate, the connector performs up to four fresh status reads 500 ms apart so an ordinary asynchronous transition can reach `DEPROVISIONED` in the same invocation; a longer transition returns a retryable error. If deactivation itself is rejected while another actor is changing the same user, one fresh status read converts the error to success only when Okta now reports `DEPROVISIONED`. Absence is success only for a delete operation, and other outcomes preserve the original mutation error. A missing user is idempotent success for delete operations; the deactivate-only action keeps missing as `NotFound` because its requested result is a surviving `DEPROVISIONED` user.
 
-`enable_user` and `disable_user` also read the current status first because `unsuspend` only applies to `SUSPENDED` and `activate` only to `STAGED`. They plan from a single status GET, then trust a successful lifecycle call rather than adding a confirm GET. C1 runs each action in a fresh lambda, so a vendor-SDK cache bypass solely for confirmation is unnecessary.
+`enable_user` and `disable_user` retain their status-planning and lifecycle-dispatch behavior. A successful lifecycle call is acknowledgement, not an independent current-state observation. Targeted user `Get` explicitly bypasses the SDK cache when current-state evidence is needed; it does not trigger a full sync.
 
 **Sync status for `STAGED` (Okta sign-in, not C1).** Sync maps `STAGED` to `RESOURCE_STATUS_DISABLED` alongside `SUSPENDED` and `DEPROVISIONED`. In Okta, staged means the account was created but not activated — nobody can sign in to Okta until `activate`. This is an Okta lifecycle state, not a statement about signing in to ConductorOne.
 
