@@ -2,10 +2,12 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 )
@@ -91,6 +93,82 @@ func TestGroupMemberListingRespectsAppAssignments(t *testing.T) {
 			_, _, err := o.Grants(context.Background(), groupWithStats(t, tc.usersCount, tc.appsCount), sdkResource.SyncOpAttrs{})
 			if err != nil {
 				t.Fatalf("Grants: %v", err)
+			}
+		})
+	}
+}
+
+// SkipGrants suppresses the Grants call outright, so the member-listing guard
+// never runs on the targeted-sync path. The same rule has to apply here.
+func TestGroupGetSkipsGrantsOnlyWhenNoAppAccess(t *testing.T) {
+	cases := []struct {
+		name          string
+		stats         map[string]interface{}
+		wantSkipGrant bool
+	}{
+		{
+			name:          "empty and unassigned still skips grants",
+			stats:         map[string]interface{}{"usersCount": float64(0), "appsCount": float64(0)},
+			wantSkipGrant: true,
+		},
+		{
+			name:          "app assigned group is never skipped on a zero member count",
+			stats:         map[string]interface{}{"usersCount": float64(0), "appsCount": float64(2)},
+			wantSkipGrant: false,
+		},
+		{
+			// Cannot tell whether the group grants app access, so do not act on
+			// the zero.
+			name:          "absent apps_count is not enough to skip",
+			stats:         map[string]interface{}{"usersCount": float64(0)},
+			wantSkipGrant: false,
+		},
+		{
+			name:          "non-zero member count is never skipped",
+			stats:         map[string]interface{}{"usersCount": float64(4), "appsCount": float64(0)},
+			wantSkipGrant: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]interface{}{
+				"id":        testStatsGroupID,
+				"type":      "OKTA_GROUP",
+				"profile":   map[string]interface{}{"name": "example-group", "description": "example"},
+				"_embedded": map[string]interface{}{"stats": tc.stats},
+			})
+			if err != nil {
+				t.Fatalf("marshal group: %v", err)
+			}
+
+			client := newScriptedOktaClient(t, oktaRequestStep{
+				method:     http.MethodGet,
+				path:       "/api/v1/groups/" + testStatsGroupID,
+				query:      map[string]string{"expand": "stats,app"},
+				statusCode: http.StatusOK,
+				body:       string(body),
+			})
+
+			o := &groupResourceType{
+				resourceType: resourceTypeGroup,
+				connector:    &Okta{client: client, userFilters: &userFilterConfig{}},
+			}
+
+			resource, _, err := o.Get(context.Background(),
+				&v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testStatsGroupID}, nil)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+
+			annos := annotations.Annotations(resource.GetAnnotations())
+			skip := &v2.SkipGrants{}
+			got, err := annos.Pick(skip)
+			if err != nil {
+				t.Fatalf("Pick(SkipGrants): %v", err)
+			}
+			if got != tc.wantSkipGrant {
+				t.Errorf("SkipGrants = %t, want %t", got, tc.wantSkipGrant)
 			}
 		})
 	}

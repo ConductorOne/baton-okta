@@ -158,27 +158,22 @@ func (o *groupResourceType) Grants(
 		usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
 		appsCount, appsOk := sdkResource.GetProfileInt64Value(resource.GetProfile(), appsCountProfileKey)
 
-		// users_count comes from Okta's group stats embed, which is an aggregate
-		// rather than a live membership count; Okta documents no freshness
-		// guarantee for it. Skipping the member listing when it reads zero
-		// leaves the group with no member grants, and app access conferred by a
-		// group is expanded from exactly those grants -- so for an app-assigned
-		// group a count that lags real membership drops access outright instead
-		// of merely showing an empty group. Keep the call-saving skip only for
-		// groups that grant no app access, where an empty listing costs nothing.
-		// An absent apps_count is treated as "may confer access".
-		mayConferAppAccess := !appsOk || appsCount > 0
-
+		// Keep the call-saving skip only for groups that grant no app access,
+		// where an empty listing costs nothing. See groupMayGrantAppAccess.
 		var annos annotations.Annotations
 		nextPage := ""
-		if !ok || usersCount > 0 || mayConferAppAccess {
-			if !ok {
+		if !ok || usersCount > 0 || groupMayGrantAppAccess(resource) {
+			switch {
+			case !ok:
 				l.Debug("okta-connectorv2: making list group users call because users_count profile attribute was not present")
-			}
-			if ok && usersCount == 0 {
+			case usersCount == 0 && appsOk:
 				l.Debug("okta-connectorv2: listing group users despite users_count 0 because the group is assigned to apps",
 					zap.String("group_id", groupID),
 					zap.Int64("apps_count", appsCount),
+				)
+			case usersCount == 0:
+				l.Debug("okta-connectorv2: listing group users despite users_count 0 because apps_count was not present",
+					zap.String("group_id", groupID),
 				)
 			}
 
@@ -271,8 +266,11 @@ func (o *groupResourceType) Grants(
 				return nil, nil, err
 			}
 
+			// Must track the member-listing decision above: a group whose members
+			// are listed on a lagging users_count would otherwise show members
+			// while its role stayed unexpanded to them.
 			usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
-			shouldExpand := !ok || usersCount > 0
+			shouldExpand := !ok || usersCount > 0 || groupMayGrantAppAccess(resource)
 			if !shouldExpand {
 				l.Debug("okta-connectorv2: skipping expand for role group grant since users_count is 0")
 			}
@@ -406,6 +404,17 @@ func groupDescription(group *okta.Group) string {
 	}
 
 	return truncated
+}
+
+// groupMayGrantAppAccess reports whether a group's synced profile leaves open
+// that it grants app access. apps_count comes from Okta's stats embed, the same
+// aggregate as users_count, so an absent value means we cannot tell and counts
+// as "may". Callers use it to decide whether a users_count of 0 is safe to act
+// on: app access conferred by a group is expanded from its member grants, so
+// acting on a count that lags real membership drops that access outright.
+func groupMayGrantAppAccess(resource *v2.Resource) bool {
+	appsCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), appsCountProfileKey)
+	return !ok || appsCount > 0
 }
 
 // groupProfileMap builds the C1 profile for an Okta group. The profile is set
@@ -592,8 +601,12 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 		return nil, annos, err
 	}
 
+	// SkipGrants suppresses the Grants call entirely, so a lagging users_count
+	// here bypasses the guard in Grants and drops app access on the targeted
+	// sync path. GetGroupWithParams requests expand=stats,app, so apps_count is
+	// available to tell the two apart.
 	usersCount, ok := sdkResource.GetProfileInt64Value(resource.GetProfile(), usersCountProfileKey)
-	if ok && usersCount == 0 {
+	if ok && usersCount == 0 && !groupMayGrantAppAccess(resource) {
 		groupAnnos := annotations.Annotations(resource.GetAnnotations())
 		groupAnnos.Update(&v2.SkipGrants{})
 		resource.Annotations = groupAnnos
