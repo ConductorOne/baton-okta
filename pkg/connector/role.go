@@ -448,7 +448,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			if response == nil {
 				l.Warn("okta-connector: failed to assign role to user, nil response",
 					zap.String("user_id", userId), zap.String("role_id", roleId), zap.Error(err))
-				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %s", err.Error())
+				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, err))
 			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -468,17 +468,18 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				return annotations.New(&v2.GrantAlreadyExists{}), nil
 			}
 
-			return nil, fmt.Errorf("okta-connector: %v", errOkta)
+			return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, &errOkta))
 		}
 
-		l.Warn("Role Membership has been created.",
+		l.Debug("Role Membership has been created.",
 			zap.String("ID", createdRole.Id),
 			zap.String("Description", createdRole.Description),
-			zap.Time("CreatedAt", *createdRole.Created),
 			zap.String("Label", createdRole.Label),
 			zap.String("Status", createdRole.Status),
 			zap.String("Type", createdRole.Type),
 		)
+
+		return rateLimitAnnotations(response), nil
 	case resourceTypeGroup.Id:
 		groupId := principal.Id.Resource
 		role := okta.AssignRoleRequest{
@@ -489,7 +490,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			if response == nil {
 				l.Warn("okta-connector: failed to assign role to group, nil response",
 					zap.String("group_id", groupId), zap.String("role_id", roleId), zap.Error(err))
-				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %s", err.Error())
+				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, err))
 			}
 			defer response.Body.Close()
 			errOkta, err := getError(response)
@@ -498,7 +499,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			}
 
 			if errOkta.ErrorCode == alreadyAssignedRole {
-				l.Warn(
+				l.Debug(
 					"okta-connector: The role specified is already assigned to the group",
 					zap.String("principal_id", principal.Id.String()),
 					zap.String("principal_type", principal.Id.ResourceType),
@@ -507,22 +508,21 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				)
 			}
 
-			return nil, fmt.Errorf("okta-connector: %v", errOkta)
+			return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, &errOkta))
 		}
 
-		l.Warn("Role Membership has been created.",
+		l.Debug("Role Membership has been created.",
 			zap.String("ID", createdRole.Id),
 			zap.String("Description", createdRole.Description),
-			zap.Time("CreatedAt", *createdRole.Created),
 			zap.String("Label", createdRole.Label),
 			zap.String("Status", createdRole.Status),
 			zap.String("Type", createdRole.Type),
 		)
+
+		return rateLimitAnnotations(response), nil
 	default:
 		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
 	}
-
-	return nil, nil
 }
 
 func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
@@ -543,16 +543,16 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userId := principal.Id.Resource
-		roles, _, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
+		roles, resp, err := g.client.User.ListAssignedRolesForUser(ctx, userId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %s", err.Error())
+			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", handleOktaResponseError(resp, err))
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
 			return r.Type == roleType && r.Status == userStatusActive
 		})
 		if rolePos == NF {
-			l.Warn(
+			l.Debug(
 				"okta-connector: user does not have role membership",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
@@ -564,26 +564,30 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		roleId = roles[rolePos].Id
 		response, err := g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %s", err.Error())
+			return revokeNotFoundOrError(ctx, principal, response, err,
+				"okta-connector: revoke: user role assignment already removed",
+				"failed to remove role")
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
-			l.Warn("Membership has been revoked",
+			l.Debug("Membership has been revoked",
 				zap.String("Status", response.Status),
 			)
 		}
+
+		return rateLimitAnnotations(response), nil
 	case resourceTypeGroup.Id:
 		groupId := principal.Id.Resource
-		roles, _, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
+		roles, resp, err := g.client.Group.ListGroupAssignedRoles(ctx, groupId, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to get roles: %s", err.Error())
+			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", handleOktaResponseError(resp, err))
 		}
 
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
 			return r.Type == roleType && r.Status == userStatusActive
 		})
 		if rolePos == NF {
-			l.Warn(
+			l.Debug(
 				"okta-connector: group does not have role membership",
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
@@ -595,19 +599,19 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		roleId = roles[rolePos].Id
 		response, err := g.client.Group.RemoveRoleFromGroup(ctx, groupId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %s", err.Error())
+			return nil, fmt.Errorf("okta-connector: failed to remove role: %w", handleOktaResponseError(response, err))
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
-			l.Warn("Membership has been revoked",
+			l.Debug("Membership has been revoked",
 				zap.String("Status", response.Status),
 			)
 		}
+
+		return rateLimitAnnotations(response), nil
 	default:
 		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
 	}
-
-	return nil, nil
 }
 
 func (o *roleResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {

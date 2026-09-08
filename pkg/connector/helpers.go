@@ -6,14 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"unicode/utf8"
 
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -192,6 +198,17 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 		}
 	}
 
+	// Do drops the response once the SDK's own 429 retries are exhausted, so the fallback
+	// below never sees it. Unavailable, not ResourceExhausted, is what the SDK's retryer
+	// waits on, and the synthetic 429 gives it a ~60s reset to wait out.
+	if resp == nil && strings.Contains(err.Error(), oktaRateLimitExhausted) {
+		return uhttp.WrapErrorsWithRateLimitInfo(codes.Unavailable, &http.Response{
+			Status:     "429 Too Many Requests",
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{},
+		}, err)
+	}
+
 	// Fall back to http status code.
 	if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
 		grpcCode := uhttp.GrpcCodeFromHTTPStatus(resp.StatusCode)
@@ -199,6 +216,41 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 	}
 
 	return err
+}
+
+// oktaRateLimitExhausted is the error text left once the v2 SDK's own 429 retries are
+// exhausted. Get429BackoffTime's header-parse errors are excluded on purpose: upstream
+// already wraps those in backoff.Permanent to mark them non-retryable.
+const oktaRateLimitExhausted = "too many requests"
+
+// revokeNotFoundOrError classifies a failed revoke pre-check or delete call: a
+// not-found target yields GrantAlreadyRevoked, else the wrapped lookup/delete error.
+func revokeNotFoundOrError(ctx context.Context, principal *v2.Resource, resp *okta.Response, err error, notFoundMsg, wrapMsg string) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	classified := handleOktaResponseError(resp, err)
+
+	if status.Code(classified) == codes.NotFound {
+		l.Debug(notFoundMsg,
+			zap.String("principal_id", principal.Id.String()),
+			zap.String("principal_type", principal.Id.ResourceType),
+		)
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+	}
+
+	return nil, fmt.Errorf("okta-connector: %s: %w", wrapMsg, classified)
+}
+
+// rateLimitAnnotations reports the current rate-limit state from a successful response,
+// matching what the read paths already emit.
+func rateLimitAnnotations(resp *okta.Response) annotations.Annotations {
+	var annos annotations.Annotations
+	if resp == nil || resp.Response == nil {
+		return annos
+	}
+	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil && desc != nil {
+		annos.WithRateLimiting(desc)
+	}
+	return annos
 }
 
 // apiValidationFailedErrorCode covers every Create User validation failure, so a

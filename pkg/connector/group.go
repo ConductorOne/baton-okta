@@ -14,7 +14,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -567,15 +566,9 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 
 	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
-		if isRevokeNotFoundError(response, err) {
-			l.Debug(
-				"okta-connector: revoke: user does not have group membership",
-				zap.String("principal_id", principal.Id.String()),
-				zap.String("principal_type", principal.Id.ResourceType),
-			)
-			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
-		}
-		return nil, handleOktaResponseError(response, err)
+		return revokeNotFoundOrError(ctx, principal, response, err,
+			"okta-connector: revoke: user does not have group membership",
+			"failed to remove user from group")
 	}
 
 	if response != nil {
@@ -591,18 +584,12 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 	l := ctxzap.Extract(ctx)
 	l.Debug("getting group", zap.String("group_id", resourceId.Resource))
 
-	var annos annotations.Annotations
-
 	group, resp, err := o.GetGroupWithParams(ctx, resourceId.Resource)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group: %w", handleOktaResponseError(resp, err))
 	}
 
-	if resp != nil {
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
-	}
+	annos := rateLimitAnnotations(resp)
 
 	resource, err := o.groupResource(group)
 	if err != nil {

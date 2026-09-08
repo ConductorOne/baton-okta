@@ -16,7 +16,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/crypto"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -753,19 +752,13 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	l := ctxzap.Extract(ctx)
 	l.Debug("getting user", zap.String("user_id", resourceId.Resource))
 
-	var annos annotations.Annotations
-
 	user, respCtx, err := getUser(ctx, o.connector.client, resourceId.Resource)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to find user: %w", err)
 	}
 
 	resp := respCtx.OktaResponse
-	if resp != nil {
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
-	}
+	annos := rateLimitAnnotations(resp)
 
 	if user == nil {
 		return nil, annos, nil

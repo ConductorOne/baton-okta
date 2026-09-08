@@ -10,7 +10,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -564,15 +563,15 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			}
 
 			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
-				l.Warn(
-					"okta-connector: ",
+				l.Debug(
+					"okta-connector: failed to fetch application user",
 					zap.String("principal_id", principal.Id.String()),
 					zap.String("principal_type", principal.Id.ResourceType),
 					zap.String("ErrorCode", errOkta.ErrorCode),
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
 
-				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %w", handleOktaResponseError(response, &errOkta))
 			}
 		}
 
@@ -588,13 +587,14 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 
 		user, userResp, err := g.client.User.GetUser(ctx, userID)
 		if err != nil {
-			return nil, handleOktaResponseError(userResp, err)
+			return nil, fmt.Errorf("okta-connector: failed to get user: %w", handleOktaResponseError(userResp, err))
 		}
 
-		profile := *user.Profile
-		email, ok := profile[profileFieldEmail].(string)
-		if !ok {
-			email = unknownProfileValue
+		email := unknownProfileValue
+		if user.Profile != nil {
+			if v, ok := (*user.Profile)[profileFieldEmail].(string); ok {
+				email = v
+			}
 		}
 
 		payload := okta.AppUser{
@@ -617,7 +617,6 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		l.Debug("App Membership has been created.",
 			zap.String("userID", assignedUser.Id),
 			zap.String("Status", assignedUser.Status),
-			zap.Time("LastUpdated", *assignedUser.LastUpdated),
 			zap.String("Scope", assignedUser.Scope),
 		)
 
@@ -638,15 +637,15 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			}
 
 			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
-				l.Warn(
-					"okta-connector: ",
+				l.Debug(
+					"okta-connector: failed to fetch application group assignment",
 					zap.String("principal_id", principal.Id.String()),
 					zap.String("principal_type", principal.Id.ResourceType),
 					zap.String("ErrorCode", errOkta.ErrorCode),
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
 
-				return nil, fmt.Errorf("okta-connector: %v", errOkta)
+				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %w", handleOktaResponseError(response, &errOkta))
 			}
 		}
 
@@ -663,12 +662,11 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		payload := okta.ApplicationGroupAssignment{}
 		assignedGroup, createResp, err := g.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
 		if err != nil {
-			return nil, handleOktaResponseError(createResp, err)
+			return nil, fmt.Errorf("okta-connector: the app specified cannot be assigned to the group: %w", handleOktaResponseError(createResp, err))
 		}
 
 		l.Debug("App Membership has been created.",
 			zap.String("userID", assignedGroup.Id),
-			zap.Time("LastUpdated", *assignedGroup.LastUpdated),
 		)
 
 		return rateLimitAnnotations(createResp), nil
@@ -696,12 +694,16 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		userID := principal.Id.Resource
 		_, resp, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
-			return appRevokeNotFoundOrError(l, principal, resp, err, "user")
+			return revokeNotFoundOrError(ctx, principal, resp, err,
+				"okta-connector: revoke: user does not have app membership",
+				"failed to look up user app membership")
 		}
 
 		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove user from application: %w", handleOktaResponseError(response, err))
+			return revokeNotFoundOrError(ctx, principal, response, err,
+				"okta-connector: revoke: user app membership already removed",
+				"failed to remove user from application")
 		}
 		logAppMembershipRevoked(l, response)
 
@@ -710,12 +712,16 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		groupID := principal.Id.Resource
 		_, groupResp, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
 		if err != nil {
-			return appRevokeNotFoundOrError(l, principal, groupResp, err, "group")
+			return revokeNotFoundOrError(ctx, principal, groupResp, err,
+				"okta-connector: revoke: group does not have app membership",
+				"failed to look up group app membership")
 		}
 
 		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove group from application: %w", handleOktaResponseError(response, err))
+			return revokeNotFoundOrError(ctx, principal, response, err,
+				"okta-connector: revoke: group app membership already removed",
+				"failed to remove group from application")
 		}
 		logAppMembershipRevoked(l, response)
 
@@ -723,26 +729,6 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	default:
 		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
 	}
-}
-
-// appRevokeNotFoundOrError classifies a failed pre-delete existence check ("user" or
-// "group" kind): already-gone yields GrantAlreadyRevoked, else the wrapped lookup error.
-func appRevokeNotFoundOrError(l *zap.Logger, principal *v2.Resource, resp *okta.Response, err error, kind string) (annotations.Annotations, error) {
-	if isRevokeNotFoundError(resp, err) {
-		l.Debug(
-			fmt.Sprintf("okta-connector: revoke: %s does not have app membership", kind),
-			zap.String("principal_id", principal.Id.String()),
-			zap.String("principal_type", principal.Id.ResourceType),
-		)
-		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
-	}
-
-	l.Warn(
-		fmt.Sprintf("okta-connector: %s does not have app membership", kind),
-		zap.String("principal_id", principal.Id.String()),
-		zap.String("principal_type", principal.Id.ResourceType),
-	)
-	return nil, fmt.Errorf("okta-connector: %s does not have app membership: %w", kind, handleOktaResponseError(resp, err))
 }
 
 // logAppMembershipRevoked logs the NoContent delete confirmation shared by both
@@ -757,17 +743,13 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 	l := ctxzap.Extract(ctx)
 	l.Debug("getting app", zap.String("app_id", resourceId.Resource))
 
-	var annos annotations.Annotations
-
 	app, respCtx, err := getApp(ctx, o.client, resourceId.Resource)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get application: %w", err)
 	}
 
 	resp := respCtx.OktaResponse
-	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-		annos.WithRateLimiting(desc)
-	}
+	annos := rateLimitAnnotations(resp)
 
 	if app == nil {
 		return nil, annos, nil

@@ -18,13 +18,13 @@ import (
 )
 
 const (
-	testGroupID = "00g1abc2def3GHI4jk5"
-	testAppID   = "0oa1abc2def3GHI4jk5"
+	testGroupID  = "00g1abc2def3GHI4jk5"
+	testAppID    = "0oa1abc2def3GHI4jk5"
+	testRoleType = "SUPER_ADMIN"
 )
 
-// rateLimitedStep builds a 429 response with the headers the v2 SDK's own retry
-// logic requires (Get429BackoffTime); missing/invalid ones make it fail with a
-// header-parse error instead of reproducing the "too many requests" sentinel.
+// rateLimitedStep builds a 429 carrying the headers Get429BackoffTime needs; without
+// them the SDK fails on header parsing and never emits the rate-limit error text.
 func rateLimitedStep(method, path string) oktaRequestStep {
 	now := time.Now().UTC()
 	return oktaRequestStep{
@@ -58,6 +58,10 @@ func appAccessEntitlement() *v2.Entitlement {
 	return &v2.Entitlement{Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeApp.Id, Resource: testAppID}}}
 }
 
+func roleAssignedEntitlement() *v2.Entitlement {
+	return &v2.Entitlement{Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: testRoleType}}}
+}
+
 func oktaAppUserAssignedResponse() string {
 	return `{"id":"` + testOktaUserID + `","status":"ACTIVE","scope":"USER","lastUpdated":"2024-01-01T00:00:00.000Z"}`
 }
@@ -70,8 +74,8 @@ func newTestAppBuilder(client *okta.Client) *appResourceType {
 	return appBuilder("", "", false, nil, client)
 }
 
-// TestRateLimitClassification proves the wiring end to end: a 429 exhausting the
-// v2 SDK's own retries reaches the connector as codes.Unavailable, not codes.Unknown.
+// TestRateLimitClassification drives the real vendored SDK: a 429 that exhausts its own
+// retries must reach the connector as codes.Unavailable, not codes.Unknown.
 func TestRateLimitClassification(t *testing.T) {
 	t.Run("group grant", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
@@ -106,12 +110,91 @@ func TestRateLimitClassification(t *testing.T) {
 			t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
 		}
 	})
+
+	t.Run("role grant", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			rateLimitedStep(http.MethodPost, "/api/v1/users/"+testOktaUserID+"/roles"),
+		)
+
+		_, err := roleBuilder(client, nil).Grant(t.Context(), testUserPrincipal(), roleAssignedEntitlement())
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
+
+	t.Run("role revoke", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			rateLimitedStep(http.MethodGet, "/api/v1/users/"+testOktaUserID+"/roles"),
+		)
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: roleAssignedEntitlement()}
+
+		_, err := roleBuilder(client, nil).Revoke(t.Context(), grant)
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Revoke() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
+}
+
+// TestGrantPrecheckServerErrorClassification guards a Grant pre-check that reads a
+// parseable Okta error body off a 5xx: it must classify as codes.Unavailable, not the
+// codes.Unknown a bare %v-wrapped error would produce.
+func TestGrantPrecheckServerErrorClassification(t *testing.T) {
+	serverErrorBody := `{"errorCode":"E0000009","errorSummary":"Internal Server Error"}`
+
+	t.Run("app grant: 5xx on pre-check user lookup", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID, statusCode: http.StatusInternalServerError, body: serverErrorBody},
+		)
+
+		_, err := newTestAppBuilder(client).Grant(t.Context(), testUserPrincipal(), appAccessEntitlement())
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
+
+	t.Run("app grant: 5xx on pre-check group lookup", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/groups/" + testGroupID, statusCode: http.StatusInternalServerError, body: serverErrorBody},
+		)
+
+		_, err := newTestAppBuilder(client).Grant(t.Context(), appGroupPrincipal(), appAccessEntitlement())
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
+
+	t.Run("role grant: 5xx on assign role to user", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID + "/roles", statusCode: http.StatusInternalServerError, body: serverErrorBody},
+		)
+
+		_, err := roleBuilder(client, nil).Grant(t.Context(), testUserPrincipal(), roleAssignedEntitlement())
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+		}
+	})
 }
 
 func TestRevokeIdempotency(t *testing.T) {
 	t.Run("app revoke: missing user is already revoked", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+		)
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: appAccessEntitlement()}
+
+		annos, err := newTestAppBuilder(client).Revoke(t.Context(), grant)
+		if err != nil {
+			t.Fatalf("Revoke() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
+		}
+	})
+
+	t.Run("app revoke: user removed between pre-check and delete is already revoked", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaAppUserAssignedResponse()},
+			oktaRequestStep{method: http.MethodDelete, path: "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID, statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
 		)
 		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: appAccessEntitlement()}
 
@@ -146,6 +229,31 @@ func TestRevokeIdempotency(t *testing.T) {
 		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: groupMembershipEntitlement()}
 
 		annos, err := groupBuilder(&Okta{client: client}).Revoke(t.Context(), grant)
+		if err != nil {
+			t.Fatalf("Revoke() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
+		}
+	})
+
+	t.Run("resource-sets revoke: 404 delete is already revoked", func(t *testing.T) {
+		resourceSetId := "iamRSET2pqrstuvwxy"
+		customRoleId := "cr2pqrstuvwxyzabcd"
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{
+				method:     http.MethodDelete,
+				path:       "/api/v1/iam/resource-sets/" + resourceSetId + "/bindings/" + customRoleId,
+				statusCode: http.StatusNotFound,
+				body:       oktaNotFoundResponse(),
+			},
+		)
+		grant := &v2.Grant{
+			Principal:   &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeCustomRole.Id, Resource: customRoleId}},
+			Entitlement: &v2.Entitlement{Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: resourceSetId}}},
+		}
+
+		annos, err := resourceSetsBuilder("", client, nil).Revoke(t.Context(), grant)
 		if err != nil {
 			t.Fatalf("Revoke() error: %v", err)
 		}
@@ -194,9 +302,82 @@ func TestAppGrantIdempotency(t *testing.T) {
 	})
 }
 
-// TestHandleOktaResponseErrorClassification is a pure unit test (no server) that
-// pins the pre-existing classification behavior alongside the new 429 case, so a
-// future change to rate-limit handling can't silently regress the others.
+func TestRoleGrantIdempotency(t *testing.T) {
+	t.Run("role grant to user: already assigned is a no-op", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{
+				method:     http.MethodPost,
+				path:       "/api/v1/users/" + testOktaUserID + "/roles",
+				statusCode: http.StatusBadRequest,
+				body:       `{"errorCode":"E0000090","errorSummary":"You have specified a role that is already assigned to the user"}`,
+			},
+		)
+
+		annos, err := roleBuilder(client, nil).Grant(t.Context(), testUserPrincipal(), roleAssignedEntitlement())
+		if err != nil {
+			t.Fatalf("Grant() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyExists{}) {
+			t.Fatalf("Grant() annotations = %v, want GrantAlreadyExists", annos)
+		}
+	})
+}
+
+func TestResourceSetBindingGrantIdempotency(t *testing.T) {
+	resourceSetId := "iamRSET2pqrstuvwxy"
+	customRoleId := "cr2pqrstuvwxyzabcd"
+	entitlement := &v2.Entitlement{Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: resourceSetId + ":" + customRoleId}}}
+
+	t.Run("409 duplicate member is a no-op", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{
+				method:     http.MethodPost,
+				path:       "/api/v1/iam/resource-sets/" + resourceSetId + "/bindings",
+				statusCode: http.StatusConflict,
+				body:       `{"errorCode":"E0000038","errorSummary":"A member specified is already associated with this binding."}`,
+			},
+		)
+
+		annos, err := resourceSetsBindingsBuilder("", client, nil).Grant(t.Context(), testUserPrincipal(), entitlement)
+		if err != nil {
+			t.Fatalf("Grant() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyExists{}) {
+			t.Fatalf("Grant() annotations = %v, want GrantAlreadyExists", annos)
+		}
+	})
+}
+
+func TestResourceSetBindingRevokeIdempotency(t *testing.T) {
+	resourceSetId := "iamRSET2pqrstuvwxy"
+	customRoleId := "cr2pqrstuvwxyzabcd"
+	grant := &v2.Grant{
+		Principal:   testUserPrincipal(),
+		Entitlement: &v2.Entitlement{Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: resourceSetId + ":" + customRoleId}}},
+	}
+
+	t.Run("404 on member lookup is already revoked", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{
+				method:     http.MethodGet,
+				path:       "/api/v1/iam/resource-sets/" + resourceSetId + "/bindings/" + customRoleId + "/members",
+				statusCode: http.StatusNotFound,
+				body:       oktaNotFoundResponse(),
+			},
+		)
+
+		annos, err := resourceSetsBindingsBuilder("", client, nil).Revoke(t.Context(), grant)
+		if err != nil {
+			t.Fatalf("Revoke() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
+		}
+	})
+}
+
+// TestHandleOktaResponseErrorClassification pins the pre-existing classification
+// behavior alongside the new 429 case.
 func TestHandleOktaResponseErrorClassification(t *testing.T) {
 	tests := []struct {
 		name string
@@ -228,7 +409,9 @@ func TestHandleOktaResponseErrorClassification(t *testing.T) {
 			want: codes.Unavailable,
 		},
 		{
-			name: "too many requests sentinel without response maps to Unavailable",
+			// Self-referential: types the same literal the classifier matches, so this
+			// pins the mapping, not the SDK's wording.
+			name: "rate-limit text without response maps to Unavailable",
 			err:  errors.New("too many requests"),
 			want: codes.Unavailable,
 		},
@@ -241,6 +424,35 @@ func TestHandleOktaResponseErrorClassification(t *testing.T) {
 				t.Errorf("handleOktaResponseError() status = %s, want %s (error: %v)", got, tt.want, err)
 			}
 		})
+	}
+}
+
+// TestRateLimitExhaustedCarriesRetryDetail proves the exhausted-429 classification
+// attaches a RateLimitDescription detail with a future ResetAt, so the provisioning
+// retryer waits out Okta's reset window instead of its short fixed backoff.
+func TestRateLimitExhaustedCarriesRetryDetail(t *testing.T) {
+	err := handleOktaResponseError(nil, errors.New("too many requests"))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("handleOktaResponseError() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+	}
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("handleOktaResponseError() error is not a gRPC status: %v", err)
+	}
+
+	var found *v2.RateLimitDescription
+	for _, detail := range st.Details() {
+		if rl, ok := detail.(*v2.RateLimitDescription); ok {
+			found = rl
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("handleOktaResponseError() status details = %v, want a *v2.RateLimitDescription", st.Details())
+	}
+	if !found.GetResetAt().AsTime().After(time.Now()) {
+		t.Fatalf("RateLimitDescription.ResetAt = %v, want a time in the future", found.GetResetAt().AsTime())
 	}
 }
 
