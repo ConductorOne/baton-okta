@@ -397,7 +397,13 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 		return rateLimitAnnotations(response), nil
 	}
 
-	return nil, nil
+	l.Debug(
+		"okta-connector: revoke: principal is not a member of the binding",
+		zap.String("principal_id", principal.Id.String()),
+		zap.String("principal_type", principal.Id.ResourceType),
+	)
+
+	return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 }
 
 func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, parentResourceId *v2.ResourceId) (*v2.Resource, annotations.Annotations, error) {

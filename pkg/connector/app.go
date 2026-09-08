@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -557,9 +558,9 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %w", handleOktaResponseError(response, err))
 			}
 			defer response.Body.Close()
-			errOkta, err := getError(response)
-			if err != nil {
-				return nil, err
+			errOkta, parseErr := getError(response)
+			if parseErr != nil {
+				return nil, parseErr
 			}
 
 			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
@@ -571,7 +572,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
 
-				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %w", handleOktaResponseError(response, &errOkta))
+				return nil, fmt.Errorf("okta-connector: failed to fetch application user: %w", handleOktaResponseError(response, errors.Join(&errOkta, err)))
 			}
 		}
 
@@ -631,9 +632,9 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %w", handleOktaResponseError(response, err))
 			}
 			defer response.Body.Close()
-			errOkta, err := getError(response)
-			if err != nil {
-				return nil, err
+			errOkta, parseErr := getError(response)
+			if parseErr != nil {
+				return nil, parseErr
 			}
 
 			if errOkta.ErrorCode != ResourceNotFoundExceptionErrorCode {
@@ -645,7 +646,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
 
-				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %w", handleOktaResponseError(response, &errOkta))
+				return nil, fmt.Errorf("okta-connector: failed to fetch application group assignment: %w", handleOktaResponseError(response, errors.Join(&errOkta, err)))
 			}
 		}
 
@@ -705,7 +706,11 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 				"okta-connector: revoke: user app membership already removed",
 				"failed to remove user from application")
 		}
-		logAppMembershipRevoked(l, response)
+		if response != nil && response.StatusCode == http.StatusNoContent {
+			l.Debug("Membership has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
 
 		return rateLimitAnnotations(response), nil
 	case resourceTypeGroup.Id:
@@ -723,19 +728,15 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 				"okta-connector: revoke: group app membership already removed",
 				"failed to remove group from application")
 		}
-		logAppMembershipRevoked(l, response)
+		if response != nil && response.StatusCode == http.StatusNoContent {
+			l.Debug("Membership has been revoked",
+				zap.String("Status", response.Status),
+			)
+		}
 
 		return rateLimitAnnotations(response), nil
 	default:
 		return nil, fmt.Errorf("okta-connector: invalid grant resource type: %s", principal.Id.ResourceType)
-	}
-}
-
-// logAppMembershipRevoked logs the NoContent delete confirmation shared by both
-// app revoke branches.
-func logAppMembershipRevoked(l *zap.Logger, resp *okta.Response) {
-	if resp != nil && resp.StatusCode == http.StatusNoContent {
-		l.Debug("Membership has been revoked", zap.String("Status", resp.Status))
 	}
 }
 

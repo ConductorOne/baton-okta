@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -198,10 +199,11 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 		}
 	}
 
-	// Do drops the response once the SDK's own 429 retries are exhausted, so the fallback
-	// below never sees it. Unavailable, not ResourceExhausted, is what the SDK's retryer
-	// waits on, and the synthetic 429 gives it a ~60s reset to wait out.
-	if resp == nil && strings.Contains(err.Error(), oktaRateLimitExhausted) {
+	// Do drops the response on every 429 that leaves the SDK's retry loop, so the fallback
+	// below never sees it. The retryer waits on Unavailable, not ResourceExhausted.
+	if resp == nil && slices.ContainsFunc(oktaRateLimitTexts, func(text string) bool {
+		return strings.Contains(err.Error(), text)
+	}) {
 		return uhttp.WrapErrorsWithRateLimitInfo(codes.Unavailable, &http.Response{
 			Status:     "429 Too Many Requests",
 			StatusCode: http.StatusTooManyRequests,
@@ -218,10 +220,13 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 	return err
 }
 
-// oktaRateLimitExhausted is the error text left once the v2 SDK's own 429 retries are
-// exhausted. Get429BackoffTime's header-parse errors are excluded on purpose: upstream
-// already wraps those in backoff.Permanent to mark them non-retryable.
-const oktaRateLimitExhausted = "too many requests"
+// oktaRateLimitTexts are the messages a 429 leaves once it exits the v2 SDK's retry loop:
+// the exhausted-retries sentinel, plus Get429BackoffTime's two header-parse failures.
+var oktaRateLimitTexts = []string{
+	"too many requests",
+	"date header is missing or invalid",
+	"X-Rate-Limit-Reset header is missing or invalid",
+}
 
 // revokeNotFoundOrError classifies a failed revoke pre-check or delete call: a
 // not-found target yields GrantAlreadyRevoked, else the wrapped lookup/delete error.

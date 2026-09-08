@@ -534,3 +534,115 @@ func TestRevokeAcceptsEitherNotFoundSignal(t *testing.T) {
 		})
 	}
 }
+
+// TestRateLimitHeaderParseFailureClassification covers the two 429s that leave the SDK's
+// retry loop through Get429BackoffTime instead of the exhausted-retries sentinel. Okta's
+// concurrency limit produces the second one by omitting X-Rate-Limit-Reset, and both
+// arrive with the response already dropped, so only the error text identifies them.
+func TestRateLimitHeaderParseFailureClassification(t *testing.T) {
+	path := "/api/v1/groups/" + testGroupID + "/users/" + testOktaUserID
+	body := `{"errorCode":"E0000047","errorSummary":"API call exceeded rate limit"}`
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+	}{
+		{
+			name:    "missing X-Rate-Limit-Reset",
+			headers: map[string]string{"Date": time.Now().UTC().Format(http.TimeFormat)},
+		},
+		{
+			name:    "unparseable Date",
+			headers: map[string]string{"Date": "not-a-date", "X-Rate-Limit-Reset": "1700000000"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newScriptedOktaClient(t, oktaRequestStep{
+				method:     http.MethodPut,
+				path:       path,
+				statusCode: http.StatusTooManyRequests,
+				headers:    tt.headers,
+				body:       body,
+			})
+
+			_, err := groupBuilder(&Okta{client: client}).Grant(t.Context(), testUserPrincipal(), groupMembershipEntitlement())
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+			}
+		})
+	}
+}
+
+// TestSuccessPathReportsRateLimitAnnotations pins the rate-limit reporting the read paths
+// already do: a successful provisioning call must hand back what quota is left.
+func TestSuccessPathReportsRateLimitAnnotations(t *testing.T) {
+	headers := map[string]string{
+		"X-Rate-Limit-Limit":     "250",
+		"X-Rate-Limit-Remaining": "17",
+		"X-Rate-Limit-Reset":     strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10),
+	}
+	path := "/api/v1/groups/" + testGroupID + "/users/" + testOktaUserID
+
+	assertReportsLimit := func(t *testing.T, annos annotations.Annotations, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		desc := &v2.RateLimitDescription{}
+		ok, pickErr := annos.Pick(desc)
+		if pickErr != nil {
+			t.Fatalf("Pick() error: %v", pickErr)
+		}
+		if !ok {
+			t.Fatalf("annotations = %v, want a RateLimitDescription", annos)
+		}
+		if desc.GetLimit() != 250 || desc.GetRemaining() != 17 {
+			t.Fatalf("rate limit = %d/%d, want 17/250", desc.GetRemaining(), desc.GetLimit())
+		}
+	}
+
+	t.Run("grant", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodPut, path: path, statusCode: http.StatusNoContent, headers: headers,
+		})
+
+		annos, err := groupBuilder(&Okta{client: client}).Grant(t.Context(), testUserPrincipal(), groupMembershipEntitlement())
+		assertReportsLimit(t, annos, err)
+	})
+
+	t.Run("revoke", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodDelete, path: path, statusCode: http.StatusNoContent, headers: headers,
+		})
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: groupMembershipEntitlement()}
+
+		annos, err := groupBuilder(&Okta{client: client}).Revoke(t.Context(), grant)
+		assertReportsLimit(t, annos, err)
+	})
+}
+
+// TestGrantPrecheckKeepsOktaRequestID drives the pre-check end to end: the SDK appends
+// x-okta-request-id to its own error on a 500 only, so re-reading the body with getError
+// yields an error without it. Support triage needs that id, so the returned error has to
+// carry the SDK's error too, not just the re-parsed one.
+func TestGrantPrecheckKeepsOktaRequestID(t *testing.T) {
+	const requestID = "test-okta-request-id"
+
+	client := newScriptedOktaClient(t, oktaRequestStep{
+		method:     http.MethodGet,
+		path:       "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID,
+		statusCode: http.StatusInternalServerError,
+		headers:    map[string]string{"x-okta-request-id": requestID},
+		body:       `{"errorCode":"E0000009","errorSummary":"Internal Server Error"}`,
+	})
+
+	_, err := newTestAppBuilder(client).Grant(t.Context(), testUserPrincipal(), appAccessEntitlement())
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("Grant() status = %s, want %s (error: %v)", status.Code(err), codes.Unavailable, err)
+	}
+	if !strings.Contains(err.Error(), requestID) {
+		t.Fatalf("Grant() error dropped the Okta request id: %v", err)
+	}
+}

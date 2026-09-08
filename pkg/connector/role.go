@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -451,9 +452,9 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, err))
 			}
 			defer response.Body.Close()
-			errOkta, err := getError(response)
-			if err != nil {
-				return nil, err
+			errOkta, parseErr := getError(response)
+			if parseErr != nil {
+				return nil, parseErr
 			}
 
 			if errOkta.ErrorCode == alreadyAssignedRole {
@@ -468,7 +469,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				return annotations.New(&v2.GrantAlreadyExists{}), nil
 			}
 
-			return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, &errOkta))
+			return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, errors.Join(&errOkta, err)))
 		}
 
 		l.Debug("Role Membership has been created.",
@@ -493,9 +494,9 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, err))
 			}
 			defer response.Body.Close()
-			errOkta, err := getError(response)
-			if err != nil {
-				return nil, err
+			errOkta, parseErr := getError(response)
+			if parseErr != nil {
+				return nil, parseErr
 			}
 
 			if errOkta.ErrorCode == alreadyAssignedRole {
@@ -508,7 +509,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 				)
 			}
 
-			return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, &errOkta))
+			return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, errors.Join(&errOkta, err)))
 		}
 
 		l.Debug("Role Membership has been created.",
