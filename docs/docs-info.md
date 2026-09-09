@@ -117,32 +117,22 @@ Doc root: [Okta Users API](https://developer.okta.com/docs/reference/api/users/)
 | :--- | :--- | :--- |
 | Create user | `POST /api/v1/users` | Query: `activate`, `provider`, optional `nextLogin` |
 | Activate user | `POST /api/v1/users/{id}/lifecycle/activate` | Query: `sendEmail=false` when suppressing activation email |
-| Get user | `GET /api/v1/users/{idOrLogin}` | Fresh read after activation or to resolve a duplicate. Failure/mismatched identity returns Action Required with available creation correlation, not current-state success |
+| Get user | `GET /api/v1/users/{idOrLogin}` | Fresh read after activation or to resolve a duplicate. Post-create activation/read failures return Action Required with the known created resource; unresolved duplicate reads return errors. |
 
 ### Conflict / validation rules
 
 - `provider_type=FEDERATION` rejects both supplied and generated password options before any provider call.
-- `strict-account-creation` defaults to `false` for legacy configurations. Supplied-password requests always select strict validation. Strict generated-password lifecycle integrations must enable the flag.
-- Strict supplied/generated requests reject inactive creation with mandatory change before any provider request. Strict no-password requests reject either the profile or SDK mandatory-change requirement. Legacy previously accepted random/no-password combinations retain their original provider request behavior with a non-secret warning when the requirement cannot be enforced; they are not certified takeover paths.
-- Legacy non-enforcement also returns standard `google.rpc.ErrorInfo` in `CreateAccountResponse.annotations`: domain `baton-okta`, reason `LEGACY_PASSWORD_CHANGE_NOT_ENFORCED`, with only the unenforced requested option names mapped to `"true"`. It contains no credential material and preserves legacy provider requests/outcome types. A creation success with this qualifier does not establish takeover.
-- The pre-existing random-password `send_activation_email=false` plus profile mandatory-change conflict remains invalid. Legacy inactive creation still takes precedence, as before; strict mode rejects the unenforceable combination.
-- Without query `provider=true`, Okta **ignores** a `credentials.provider` block and creates a normal OKTA user (verified live).
-- A profile field present with the wrong type is always an error, never a silent fallback: booleans
-  (`create_inactive`, `send_activation_email`, `password_change_on_login_required`) must be a bool or
-  its string form, and `additionalAttributes` must be an object. Only an absent or null key falls back
-  to the default, because creating the account without what the caller asked for would report success
-  for a different outcome. The C1 mapping screen does not validate the mapped expression's type, so a
-  CEL expression returning the wrong type is caught here.
+- A profile or SDK mandatory-password-change request requires a supplied or generated password and cannot be combined with `create_inactive=true` or `send_activation_email=false`.
+- Without query `provider=true`, Okta ignores a `credentials.provider` block and creates a normal OKTA user.
+- A profile field present with the wrong type is always an error, never a silent fallback: booleans (`create_inactive`, `send_activation_email`, `password_change_on_login_required`) must be a bool or its string form, and `additionalAttributes` must be an object.
 
 ### Retry semantics
 
-Creation and optional activation are separate provider effects. A resolved duplicate login returns `AlreadyExistsResult` with the existing resource unchanged; lookup must confirm the requested login. Missing, failed, or mismatched lookup produces `ActionRequiredResult`, not a success without identity or a promise to wait for full sync. A confirmed `DEPROVISIONED` collision remains `FailedPrecondition`.
+Creation and optional activation are separate provider effects. A resolved duplicate login returns `AlreadyExistsResult` with the existing resource unchanged. Failed, empty, or mismatched duplicate lookups return an error. A confirmed `DEPROVISIONED` collision returns `ActionRequiredResult` with the existing resource.
 
-An unconfirmed activation retains the created resource and generated credential material in `ActionRequiredResult`. The resource is a creation snapshot, not proof of current staged state. Acknowledged activation reads the explicitly created provider ID freshly without sync-population filtering; unavailable/mismatched data retains the original identity. Still-staged or transitioning observations return `InProgressResult`. No unknown create or activation is replayed.
+An unconfirmed activation retains the created resource and generated credential material in `ActionRequiredResult`. Acknowledged activation reads the explicitly created provider ID freshly without sync-population filtering. A successful read returns the actual provider Resource status, including `STAGED`; it does not promise sign-in readiness. No unknown create or activation is replayed.
 
-Existing accounts are never activated, renamed, or given new credentials by duplicate-create handling. Targeted Get actually bypasses cache; it does not write a wall-clock timestamp or freshness flag into persisted resource profiles. Stable provider-native status/transition/timestamp facts remain. Filter exclusions use standard gRPC `ErrorInfo` (`RESOURCE_FILTERED`, domain `baton-okta`) on `NotFound`, preserving SDK targeted-sync skipping without claiming provider absence. The caller's observation receipt owns read time; malformed provider success still fails.
-
-The staged mandatory-password-change recipe remains an **unsatisfied integration/certification gate**. Okta's [create API](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/user/other/createuser.md) requires `activate=true` for `nextLogin=changePassword`; [activation](https://okta.redocly.app/docs/api/openapi/okta-management/management/tags/userlifecycle/other/activateuser.md) has no equivalent parameter. Activate-then-expire leaves a sign-in window and is not implemented.
+Targeted Get bypasses cache and resource profiles retain only the raw provider status. Filter exclusions use standard gRPC `ErrorInfo` (`RESOURCE_FILTERED`, domain `baton-okta`) on `NotFound`; malformed provider success still fails.
 
 ### Org2Org / hub-spoke
 

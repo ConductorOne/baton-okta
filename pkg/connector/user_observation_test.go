@@ -84,18 +84,9 @@ func TestUserResourceGetReflectsOutOfBandStatusChange(t *testing.T) {
 	if got := res1.GetProfile().GetFields()["c1_okta_raw_user_status"].GetStringValue(); got != "ACTIVE" {
 		t.Fatalf("first Get raw status = %q, want ACTIVE", got)
 	}
-	if _, ok := res1.GetProfile().GetFields()["c1_okta_transitioning_to_status"]; ok {
-		t.Fatalf("first Get must not fabricate transition metadata when provider omits it")
-	}
-	// Timestamps are exposed as nonsecret provider facts.
-	for _, key := range []string{"c1_okta_status_changed_at", "c1_okta_password_changed_at", "c1_okta_last_updated_at"} {
-		if _, ok := res1.GetProfile().GetFields()[key]; !ok {
-			t.Fatalf("first Get missing %s", key)
-		}
-	}
 
-	// Out-of-band provider change: status flips and a transition is reported.
-	current.Store(oktaUserFullJSON("SUSPENDED", "DEPROVISIONED"))
+	// Out-of-band provider change: status flips.
+	current.Store(oktaUserFullJSON("SUSPENDED", ""))
 
 	res2, _, err := o.Get(t.Context(), userResourceID(), nil)
 	if err != nil {
@@ -106,9 +97,6 @@ func TestUserResourceGetReflectsOutOfBandStatusChange(t *testing.T) {
 	}
 	if got := res2.GetProfile().GetFields()["c1_okta_raw_user_status"].GetStringValue(); got != "SUSPENDED" {
 		t.Fatalf("second Get raw status = %q, want SUSPENDED (stale cache would still report ACTIVE)", got)
-	}
-	if got := res2.GetProfile().GetFields()["c1_okta_transitioning_to_status"].GetStringValue(); got != "DEPROVISIONED" {
-		t.Fatalf("second Get transitioning = %q, want DEPROVISIONED", got)
 	}
 }
 
@@ -216,41 +204,17 @@ func TestGetUserFreshKeepsTransitionField(t *testing.T) {
 	}
 }
 
-// Native state metadata remains stable and does not self-certify read freshness.
-func TestUserResourceStableMetadata(t *testing.T) {
+func TestUserResourcePreservesRawStatus(t *testing.T) {
 	user := &okta.User{
-		Id:                    testOktaUserID,
-		Status:                "STAGED",
-		TransitioningToStatus: "ACTIVE",
-		Profile:               &okta.UserProfile{"email": "test@example.com", "login": "test@example.com"},
+		Id:      testOktaUserID,
+		Status:  userStatusStaged,
+		Profile: &okta.UserProfile{"email": "test@example.com", "login": "test@example.com"},
 	}
-
 	res, err := userResource(user, false)
 	if err != nil {
 		t.Fatalf("userResource: %v", err)
 	}
-	fields := res.GetProfile().GetFields()
-	if got := fields["c1_okta_transitioning_to_status"].GetStringValue(); got != "ACTIVE" {
-		t.Fatalf("transition = %q, want ACTIVE", got)
-	}
-	if got := fields["c1_okta_raw_user_status"].GetStringValue(); got != "STAGED" {
-		t.Fatalf("raw status = %q, want STAGED", got)
-	}
-	// Absent timestamps must be omitted entirely — no fabricated zero dates.
-	for _, key := range []string{"c1_okta_status_changed_at", "c1_okta_password_changed_at", "c1_okta_last_updated_at"} {
-		if _, ok := fields[key]; ok {
-			t.Fatalf("absent timestamp %s must not be fabricated", key)
-		}
-	}
-
-	// No transition reported → no metadata entry.
-	userNoTransition := *user
-	userNoTransition.TransitioningToStatus = ""
-	res2, err := userResource(&userNoTransition, false)
-	if err != nil {
-		t.Fatalf("userResource (no transition): %v", err)
-	}
-	if _, ok := res2.GetProfile().GetFields()["c1_okta_transitioning_to_status"]; ok {
-		t.Fatalf("empty transition must not produce metadata")
+	if got := res.GetProfile().GetFields()["c1_okta_raw_user_status"].GetStringValue(); got != userStatusStaged {
+		t.Fatalf("raw status = %q, want %s", got, userStatusStaged)
 	}
 }

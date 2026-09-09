@@ -119,22 +119,18 @@ Optional keys in the account creation profile (see [docs/connector.mdx](docs/con
 | `provider_type` | `OKTA` / `FEDERATION` | `FEDERATION` creates a federated user (no Okta password). Use with the **no-password** credential option. |
 | `send_activation_email` | `"true"` / `"false"` (string; bool also accepted at runtime) | Default `true`. Account-creation schema is `StringField` (same as the siblings below). When `false`, activates without sending Okta's activation email. |
 | `create_inactive` | `"true"` / `"false"` (string; bool also accepted at runtime) | Schema `StringField`. Create as staged; skips activation. |
-| `password_change_on_login_required` | `"true"` / `"false"` (string; bool also accepted at runtime) | Strict for supplied passwords; generated-password validation follows `--strict-account-creation`. Unsupported strict combinations fail before provider writes. |
+| `password_change_on_login_required` | `"true"` / `"false"` (string; bool also accepted at runtime) | Requires a password change on the next login. Unsupported combinations fail before provider writes. |
 | `additionalAttributes` | object | Extra Okta profile attributes. |
 
 Precedence notes:
 
 - `create_inactive=true` wins over `send_activation_email` — the user stays staged; no activation follow-up runs.
-- `password_change_on_login_required` remains inert on the no-password credential path only in legacy mode. Strict validation rejects a profile or SDK mandatory-change requirement when there is no password to change.
+- A profile or SDK mandatory-password-change request requires a supplied or generated password and cannot be combined with `create_inactive=true` or `send_activation_email=false`.
 - All three boolean-ish profile keys share the same `StringField` schema shape so C1 string mappings are consistent. A key present with the wrong type fails the request instead of being ignored. Only an absent or null key falls back to its default.
 
-Passwords use the SDK protected credential path. Supplied bytes are preserved and not returned; generated material honors requested length/constraints and is returned for SDK encryption. Enable `--strict-account-creation` for strict generated-password bootstrap. It defaults off for legacy configurations; supplied passwords are always strict. Legacy unenforceable options produce a warning and are never takeover evidence. **The staged mandatory-takeover recipe remains an unsatisfied provider-policy/certification gate**; no activate-then-expire workaround is added.
+Passwords use the SDK protected credential path. Supplied bytes are preserved and not returned; generated material honors requested length and constraints and is returned for SDK encryption. Invalid credential options fail before provider writes.
 
-**New random-password account-creation requests on upgrade:** length 8 still produces eight characters; requests for 9–64 characters now generate the requested length instead of silently producing eight. Requests outside the SDK's [8,64] range reject with `InvalidArgument` before provider writes; older requests above 64 could silently become eight-character passwords. Review affected random-password policies before upgrading. These checks apply independently of `--strict-account-creation`, which governs legacy mandatory-change composition. Upgrading does not itself rotate existing account credentials, and this random-length rule is not applied to supplied-password or no-password modes.
-
-Unresolved duplicates and unconfirmed creation/activation outcomes return **Action Required** with available correlation. Activation readback observes the created ID directly without applying sync-population filters. Targeted user `Get` bypasses cache and retains stable provider status/timestamps without a volatile profile clock. Filtered user reads carry `NotFound` plus standard `ErrorInfo` reason `RESOURCE_FILTERED`; callers must not mistake that for provider absence. Malformed successes remain errors.
-
-When legacy compatibility does not apply a requested password-change option, `CreateAccountResponse.annotations` carries a standard `google.rpc.ErrorInfo`: domain `baton-okta`, reason `LEGACY_PASSWORD_CHANGE_NOT_ENFORCED`. Its metadata includes only the unenforced requested options (`password_change_on_login_required` and/or `force_change_at_next_login`, each `"true"`). It contains no credential material. The legacy outcome type and provider requests remain unchanged; consumers must not treat that creation success as enforced takeover.
+Creation success means Okta created the account with the returned provider status; it does not promise the account is ready to sign in. When activation email is suppressed, the connector activates the created ID and returns a fresh read. Activation or read failures return **Action Required** with the known created resource and protected generated credential material. Duplicate lookup failures are errors; deprovisioned duplicate accounts require operator action.
 
 Example (no activation email; string form matching C1 string mappings):
 
@@ -238,7 +234,6 @@ Flags:
       --skip-full-sync                                   This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
       --skip-secondary-emails                            Whether to skip syncing secondary emails or not ($BATON_SKIP_SECONDARY_EMAILS)
       --storage-engine string                            The storage engine to use when opening the sync c1z file: sqlite or pebble. Leave unset to use the baton-sdk default. ($BATON_STORAGE_ENGINE)
-      --strict-account-creation                          Reject unsupported password-change options before creation. Required for strict generated-password bootstrap; supplied passwords always use strict validation. ($BATON_STRICT_ACCOUNT_CREATION)
       --sync-custom-roles                                Whether to enable syncing custom roles or not ($BATON_SYNC_CUSTOM_ROLES)
       --sync-inactive-apps                               Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
       --sync-resource-types strings                      The resource type IDs to sync ($BATON_SYNC_RESOURCE_TYPES)

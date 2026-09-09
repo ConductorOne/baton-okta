@@ -189,12 +189,6 @@
       "displayName": "Skip app groups",
       "description": "Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not",
       "boolField": {}
-    },
-    {
-      "name": "strict-account-creation",
-      "displayName": "Strict account creation validation",
-      "description": "Reject unsupported password-change options before creation. Required for strict generated-password bootstrap; supplied passwords always use strict validation.",
-      "boolField": {}
     }
   ],
   "displayName": "Okta",
@@ -216,7 +210,6 @@
         "skip-secondary-emails",
         "sync-secrets",
         "filter-email-domains",
-        "strict-account-creation",
         "skip-app-groups"
       ]
     },
@@ -237,7 +230,6 @@
         "skip-secondary-emails",
         "sync-secrets",
         "filter-email-domains",
-        "strict-account-creation",
         "skip-app-groups"
       ]
     }

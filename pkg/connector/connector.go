@@ -42,18 +42,17 @@ const (
 const oktaSDKAuthSentinel = "dpop-managed"
 
 type Okta struct {
-	client                *okta.Client
-	clientV5              *oktav5.APIClient
-	domain                string
-	apiToken              string
-	syncInactiveApps      bool
-	SyncCustomRoles       bool
-	skipSecondaryEmails   bool
-	skipAppGroups         bool
-	strictAccountCreation bool
-	SyncSecrets           bool
-	userFilters           *userFilterConfig
-	opts                  *cli.ConnectorOpts
+	client              *okta.Client
+	clientV5            *oktav5.APIClient
+	domain              string
+	apiToken            string
+	syncInactiveApps    bool
+	SyncCustomRoles     bool
+	skipSecondaryEmails bool
+	skipAppGroups       bool
+	SyncSecrets         bool
+	userFilters         *userFilterConfig
+	opts                *cli.ConnectorOpts
 }
 
 type userFilterConfig struct {
@@ -297,7 +296,7 @@ func (c *Okta) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 				profileFieldPasswordChangeOnLoginRequired: {
 					DisplayName: "Password Change Required on Login",
 					Required:    false,
-					Description: "Require password change on supported active creates. Supplied passwords always validate strictly; generated passwords follow strict-account-creation.",
+					Description: "Require a password change on the next login.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
@@ -518,17 +517,16 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 	}
 
 	return &Okta{
-		client:                oktaClient,
-		clientV5:              oktaClientV5,
-		domain:                domain,
-		apiToken:              cc.ApiToken,
-		syncInactiveApps:      cc.SyncInactiveApps,
-		SyncCustomRoles:       cc.SyncCustomRoles,
-		skipSecondaryEmails:   cc.SkipSecondaryEmails,
-		skipAppGroups:         cc.SkipAppGroups,
-		strictAccountCreation: cc.StrictAccountCreation,
-		SyncSecrets:           cc.SyncSecrets,
-		opts:                  opts,
+		client:              oktaClient,
+		clientV5:            oktaClientV5,
+		domain:              domain,
+		apiToken:            cc.ApiToken,
+		syncInactiveApps:    cc.SyncInactiveApps,
+		SyncCustomRoles:     cc.SyncCustomRoles,
+		skipSecondaryEmails: cc.SkipSecondaryEmails,
+		skipAppGroups:       cc.SkipAppGroups,
+		SyncSecrets:         cc.SyncSecrets,
+		opts:                opts,
 		userFilters: &userFilterConfig{
 			includedEmailDomains: lowerEmailDomains(cc.FilterEmailDomains),
 		},

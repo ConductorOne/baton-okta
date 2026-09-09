@@ -50,7 +50,6 @@ type createRequestSnapshot struct {
 	body      okta.CreateUserRequest
 	activate  string
 	provider  string
-	nextLogin string
 }
 
 // newTestServerClient wires an Okta SDK client to a local httptest server
@@ -94,108 +93,30 @@ func newTestServerClient(t *testing.T, mux *http.ServeMux) *oktaTestServer {
 }
 
 func TestAccountCreationQueryParams_Guard(t *testing.T) {
-	t.Parallel()
-
-	inactive := map[string]any{"create_inactive": true}
-	inactiveChange := map[string]any{"create_inactive": true, "password_change_on_login_required": true}
-	noEmailChange := map[string]any{"send_activation_email": false, "password_change_on_login_required": true}
-
-	t.Run("inactive + mandatory change rejected before write for supplied password", func(t *testing.T) {
-		t.Parallel()
-		params, followUp, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactiveChange), suppliedPasswordCreds("pw-32-chars-long-enough"), "", true)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "create_inactive")
-		require.Nil(t, params)
-		require.False(t, followUp)
-	})
-
-	t.Run("inactive + mandatory change rejected before write for generated password", func(t *testing.T) {
-		t.Parallel()
-		params, followUp, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactiveChange), randomPasswordCreds(32), "", true)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "create_inactive")
-		require.Nil(t, params)
-		require.False(t, followUp)
-	})
-
-	t.Run("inactive + SDK force_change_at_next_login rejected before write", func(t *testing.T) {
-		t.Parallel()
-		creds := v2.LocalCredentialOptions_builder{
-			PlaintextPassword:      &v2.LocalCredentialOptions_PlaintextPassword{PlaintextPassword: "pw"},
-			ForceChangeAtNextLogin: true,
-		}.Build()
-		_, _, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactive), creds, "", true)
-		require.Error(t, err)
-	})
-
-	t.Run("staged email suppression + mandatory change rejected before write", func(t *testing.T) {
-		t.Parallel()
-		_, _, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, noEmailChange), suppliedPasswordCreds("pw-32-chars-long-enough"), "", true)
-		require.Error(t, err)
-		_, _, _, err = getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, noEmailChange), randomPasswordCreds(32), "", true)
-		require.Error(t, err)
-	})
-
-	t.Run("SDK force-change on no-password path is rejected", func(t *testing.T) {
-		t.Parallel()
+	t.Run("mandatory change is rejected without a password", func(t *testing.T) {
 		creds := v2.LocalCredentialOptions_builder{
 			NoPassword:             &v2.LocalCredentialOptions_NoPassword{},
 			ForceChangeAtNextLogin: true,
 		}.Build()
-		_, _, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, nil), creds, "", true)
+		_, _, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, nil), creds, "")
 		require.Error(t, err)
 	})
-
-	t.Run("inactive create with supplied password and no change request is allowed and stays staged", func(t *testing.T) {
-		t.Parallel()
-		params, followUp, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactive), suppliedPasswordCreds("pw-32-chars-long-enough"), "", true)
-		require.NoError(t, err)
-		require.NotNil(t, params)
-		require.NotNil(t, params.Activate)
-		require.False(t, *params.Activate)
-		require.Empty(t, params.NextLogin)
-		require.False(t, followUp)
-	})
-
-	t.Run("legacy inert profile flag on no-password inactive create remains allowed", func(t *testing.T) {
-		t.Parallel()
-		creds := v2.LocalCredentialOptions_builder{
-			NoPassword: &v2.LocalCredentialOptions_NoPassword{},
-		}.Build()
-		params, followUp, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, inactiveChange), creds, "", false)
-		require.NoError(t, err)
-		require.NotNil(t, params.Activate)
-		require.False(t, *params.Activate)
-		require.False(t, followUp)
-	})
-
-	t.Run("activating create with mandatory change on supplied password sets nextLogin", func(t *testing.T) {
-		t.Parallel()
-		params, followUp, _, err := getAccountCreationQueryParams(
-			t.Context(),
-			bootstrapAccountInfo(t, map[string]any{"password_change_on_login_required": true}),
-			suppliedPasswordCreds("pw"),
-			"",
-			true,
-		)
-		require.NoError(t, err)
-		require.Equal(t, "changePassword", params.NextLogin)
-		require.NotNil(t, params.Activate)
-		require.True(t, *params.Activate)
-		require.False(t, followUp)
-	})
-
-	t.Run("SDK force-change on activating create sets nextLogin", func(t *testing.T) {
-		t.Parallel()
-		creds := v2.LocalCredentialOptions_builder{
-			PlaintextPassword:      &v2.LocalCredentialOptions_PlaintextPassword{PlaintextPassword: "pw"},
-			ForceChangeAtNextLogin: true,
-		}.Build()
-		params, _, _, err := getAccountCreationQueryParams(t.Context(), bootstrapAccountInfo(t, nil), creds, "", true)
-		require.NoError(t, err)
-		require.Equal(t, "changePassword", params.NextLogin)
-		require.True(t, *params.Activate)
-	})
+	for _, profile := range []map[string]any{
+		{"create_inactive": true, "password_change_on_login_required": true},
+		{"send_activation_email": false, "password_change_on_login_required": true},
+	} {
+		_, _, err := getAccountCreationQueryParams(bootstrapAccountInfo(t, profile), randomPasswordCreds(32), "")
+		require.Error(t, err)
+	}
+	params, followUp, err := getAccountCreationQueryParams(
+		bootstrapAccountInfo(t, map[string]any{"password_change_on_login_required": true}),
+		suppliedPasswordCreds("pw"),
+		"",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "changePassword", params.NextLogin)
+	require.True(t, *params.Activate)
+	require.False(t, followUp)
 }
 
 // The zero-write guarantee for the guarded combination, end to end: a client
@@ -222,7 +143,7 @@ func TestCreateAccount_GuardMakesZeroProviderWrites(t *testing.T) {
 				} else {
 					creds.SetForceChangeAtNextLogin(true)
 				}
-				resp, plaintexts, _, err := userBuilder(&Okta{client: server.client, strictAccountCreation: mode == "generated"}).CreateAccount(
+				resp, plaintexts, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(
 					t.Context(), bootstrapAccountInfo(t, flags), creds)
 				require.Error(t, err)
 				require.Nil(t, resp)
@@ -317,55 +238,20 @@ func TestCreateAccount_RandomLengthAndResultMaterial(t *testing.T) {
 	require.Equal(t, observed.body.Credentials.Password.Value, string(plaintexts[0].Bytes), "return the password actually assigned, not a fresh generation")
 }
 
-func TestCreateAccount_UnresolvedDuplicateIsActionRequired(t *testing.T) {
-	t.Parallel()
-
+func TestCreateAccount_UnresolvedDuplicateFails(t *testing.T) {
 	const dupLoginBody = `{"errorCode":"E0000001","errorSummary":"Api validation failed","errorCauses":[{"errorSummary":"login: already exists"}]}`
-
-	t.Run("login lookup fails", func(t *testing.T) {
-		t.Parallel()
-		mux := http.NewServeMux()
-		mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-			writeOktaTestResponse(w, http.StatusBadRequest, dupLoginBody)
-		})
-		mux.HandleFunc("/api/v1/users/jfern@example.com", func(w http.ResponseWriter, r *http.Request) {
-			writeOktaTestResponse(w, http.StatusInternalServerError, "")
-		})
-
-		server := newTestServerClient(t, mux)
-		resp, plaintexts, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(t.Context(), bootstrapAccountInfo(t, nil), suppliedPasswordCreds("pw"))
-		require.NoError(t, err)
-
-		ar, ok := resp.(*v2.CreateAccountResponse_ActionRequiredResult)
-		require.True(t, ok, "expected ActionRequiredResult, got %T", resp)
-		require.Nil(t, ar.Resource, "unresolved duplicate has no usable identity")
-		require.Contains(t, ar.Message, "jfern@example.com")
-		require.Nil(t, plaintexts)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, _ *http.Request) {
+		writeOktaTestResponse(w, http.StatusBadRequest, dupLoginBody)
 	})
-
-	t.Run("empty supplied login cannot be looked up", func(t *testing.T) {
-		t.Parallel()
-		mux := http.NewServeMux()
-		mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-			writeOktaTestResponse(w, http.StatusBadRequest, dupLoginBody)
-		})
-
-		server := newTestServerClient(t, mux)
-		profile := map[string]any{
-			"first_name": "Jamie",
-			"last_name":  "Fern",
-			"email":      "jfern@example.com",
-			"login":      "",
-		}
-		s, err := structpb.NewStruct(profile)
-		require.NoError(t, err)
-
-		resp, _, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(t.Context(), &v2.AccountInfo{Profile: s}, suppliedPasswordCreds("pw"))
-		require.NoError(t, err)
-		ar, ok := resp.(*v2.CreateAccountResponse_ActionRequiredResult)
-		require.True(t, ok, "expected ActionRequiredResult, got %T", resp)
-		require.Nil(t, ar.GetResource(), "unresolved login must not produce an adopted resource")
+	mux.HandleFunc("/api/v1/users/jfern@example.com", func(w http.ResponseWriter, _ *http.Request) {
+		writeOktaTestResponse(w, http.StatusInternalServerError, "")
 	})
+	server := newTestServerClient(t, mux)
+	resp, plaintexts, _, err := userBuilder(&Okta{client: server.client}).CreateAccount(t.Context(), bootstrapAccountInfo(t, nil), suppliedPasswordCreds("pw"))
+	require.Error(t, err)
+	require.Nil(t, resp)
+	require.Nil(t, plaintexts)
 }
 
 func TestCreateAccount_ActivationFailureRetainsIdentityAndMaterial(t *testing.T) {

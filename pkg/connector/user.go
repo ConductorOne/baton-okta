@@ -26,7 +26,6 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -395,29 +394,6 @@ func userResource(user *okta.User, skipSecondaryEmails bool) (*v2.Resource, erro
 	if err != nil {
 		return nil, err
 	}
-	fields := ret.GetProfile().GetFields()
-	// Observation metadata is connector-owned, never supplied by custom profile fields.
-	for _, key := range []string{
-		"c1_okta_fresh_observation", "c1_okta_observed_at", "c1_okta_transitioning_to_status",
-		"c1_okta_status_changed_at", "c1_okta_password_changed_at", "c1_okta_last_updated_at",
-	} {
-		delete(fields, key)
-	}
-	if user.TransitioningToStatus != "" {
-		fields["c1_okta_transitioning_to_status"] = structpb.NewStringValue(user.TransitioningToStatus)
-	}
-	for _, fact := range []struct {
-		key   string
-		value *time.Time
-	}{
-		{"c1_okta_status_changed_at", user.StatusChanged},
-		{"c1_okta_password_changed_at", user.PasswordChanged},
-		{"c1_okta_last_updated_at", user.LastUpdated},
-	} {
-		if fact.value != nil && !fact.value.IsZero() {
-			fields[fact.key] = structpb.NewStringValue(fact.value.UTC().Format(time.RFC3339Nano))
-		}
-	}
 	return ret, nil
 }
 
@@ -450,12 +426,11 @@ func (r *userResourceType) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	providerType, err := getProviderType(accountInfo)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	params, suppressActivationEmail, annos, err := getAccountCreationQueryParams(ctx, accountInfo, credentialOptions, providerType, r.connector.strictAccountCreation)
+	params, suppressActivationEmail, err := getAccountCreationQueryParams(accountInfo, credentialOptions, providerType)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -471,10 +446,6 @@ func (r *userResourceType) CreateAccount(
 		creds = providerCredentials
 	}
 
-	// Generated credential material is returned only on the random-password path,
-	// so the SDK can encrypt it to the caller-selected destination. Supplied,
-	// no-password and federation creates never return credential material: the
-	// caller already holds a supplied password, and the others have none to return.
 	var plaintextData []*v2.PlaintextData
 	if generatedPassword != "" {
 		plaintextData = []*v2.PlaintextData{{
@@ -492,137 +463,91 @@ func (r *userResourceType) CreateAccount(
 		},
 		Credentials: creds,
 	}, params)
-
-	// The login already belongs to an Okta user, so return that account rather than
-	// failing the duplicate forever. Its lifecycle is left untouched: a STAGED collision
-	// is indistinguishable from an account someone deliberately staged (create_inactive,
-	// or an Okta admin), so activating it here would override that decision.
-	// The conflict proved the account exists but the follow-up lookup may not resolve
-	// it (lookup by login is best-effort). An unresolved collision must not claim
-	// plain AlreadyExists success without a usable identity, and must not promise
-	// eventual correlation via full sync: ActionRequiredResult with a non-secret
-	// correlation message makes the manual follow-up explicit. No credential
-	// material is returned on any duplicate path (the duplicate's password is not
-	// the one this request carried).
-	switch {
-	case isDuplicateLoginError(err):
-		l := ctxzap.Extract(ctx)
+	if isDuplicateLoginError(err) {
 		login, ok := (*userProfile)[profileFieldLogin].(string)
 		if !ok || login == "" {
-			l.Debug("okta-connectorv2: login already exists but is unusable for lookup")
-			return &v2.CreateAccountResponse_ActionRequiredResult{
-				IsCreateAccountResult: true,
-				Message:               "okta-connectorv2: duplicate login cannot be resolved; verify the existing account before adoption",
-			}, nil, nil, nil
+			return nil, nil, nil, status.Error(codes.FailedPrecondition, "okta-connectorv2: duplicate login cannot be resolved")
 		}
 		existing, _, getErr := getUserFresh(ctx, r.connector.client, login)
 		if getErr != nil {
-			l.Debug("okta-connectorv2: login already exists but fetch failed",
-				zap.String("login", login),
-				zap.Error(getErr),
-			)
-			return &v2.CreateAccountResponse_ActionRequiredResult{
-				IsCreateAccountResult: true,
-				Message:               fmt.Sprintf("okta-connectorv2: duplicate login %q could not be read; verify the existing account before adoption", login),
-			}, nil, nil, nil
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to read duplicate login %q: %w", login, getErr)
 		}
 		if existing == nil || existing.Id == "" {
-			l.Debug("okta-connectorv2: login already exists but user was not found",
-				zap.String("login", login),
-			)
-			return &v2.CreateAccountResponse_ActionRequiredResult{
-				IsCreateAccountResult: true,
-				Message:               fmt.Sprintf("okta-connectorv2: duplicate login %q returned no usable identity; verify the existing account before adoption", login),
-			}, nil, nil, nil
+			return nil, nil, nil, status.Errorf(codes.DataLoss, "okta-connectorv2: duplicate login %q returned no usable identity", login)
 		}
 		existingLogin := ""
 		if existing.Profile != nil {
 			existingLogin, _ = (*existing.Profile)[profileFieldLogin].(string)
 		}
 		if !strings.EqualFold(existingLogin, login) {
-			return &v2.CreateAccountResponse_ActionRequiredResult{
-				IsCreateAccountResult: true,
-				Message:               fmt.Sprintf("okta-connectorv2: login %q already exists, but lookup did not confirm that login; verify the account before adoption", login),
-			}, nil, nil, nil
+			return nil, nil, nil, status.Errorf(codes.FailedPrecondition, "okta-connectorv2: duplicate login %q did not resolve to the requested account", login)
 		}
-		// A DEPROVISIONED collision has no connector-side recovery path (enable_user
-		// refuses it), so AlreadyExistsResult would report success on a login that can
-		// never be provisioned. FailedPrecondition mirrors enable_user's DEPROVISIONED path.
 		if existing.Status == userStatusDeprovisioned {
-			return nil, nil, nil, status.Error(
-				codes.FailedPrecondition,
-				"okta-connectorv2: login already exists on a deprovisioned account; reactivate the user in Okta, or delete and recreate the account, to reuse this login",
-			)
+			return nil, nil, nil, status.Error(codes.FailedPrecondition,
+				"okta-connectorv2: login already exists on a deprovisioned account; reactivate the user in Okta, or delete and recreate the account, to reuse this login")
 		}
-		l.Debug("okta-connectorv2: login already exists; returning the existing user unchanged",
-			zap.String("user_id", existing.Id),
-			zap.String("login", login),
-			zap.String("status", existing.Status),
-		)
-		existingResource, err := userResource(existing, r.connector.skipSecondaryEmails)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to resolve existing user %s: %w", existing.Id, err)
+		existingResource, resourceErr := userResource(existing, r.connector.skipSecondaryEmails)
+		if resourceErr != nil {
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to resolve existing user %s: %w", existing.Id, resourceErr)
 		}
 		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: existingResource}, nil, nil, nil
-	case err != nil:
-		return nil, nil, nil, err
-	case response != nil && response.StatusCode != http.StatusOK:
-		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
-	case user == nil || user.Id == "":
-		// A 200 with no usable identity is an unknown outcome, never a success.
-		return nil, nil, nil, status.Error(
-			codes.Internal,
-			"okta-connectorv2: create user returned no user id; the account may exist in Okta — do not retry with a new login before verifying",
-		)
 	}
-
-	// The SDK discards resources and credential material on a transport error.
-	// Convert partial creation failures to its typed ActionRequired outcome instead.
-	needsAction := func(snapshot *v2.Resource, reason string, cause error, annos annotations.Annotations) (
-		connectorbuilder.CreateAccountResponse, []*v2.PlaintextData, annotations.Annotations, error,
-	) {
-		return &v2.CreateAccountResponse_ActionRequiredResult{
-			Resource:              snapshot,
-			IsCreateAccountResult: true,
-			Message: fmt.Sprintf("okta-connectorv2: account %s was created; %s (%s). Any returned resource is the creation snapshot, not current state",
-				user.Id, reason, status.Code(cause)),
-		}, plaintextData, annos, nil
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if response != nil && response.StatusCode != http.StatusOK {
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
+	}
+	if user == nil || user.Id == "" {
+		return nil, nil, nil, status.Error(codes.Internal, "okta-connectorv2: create user returned no user id; the account may exist in Okta — do not retry with a new login before verifying")
 	}
 	createdResource, err := userResource(user, r.connector.skipSecondaryEmails)
 	if err != nil {
-		return needsAction(nil, "resource construction needs reconciliation", err, annos)
+		return &v2.CreateAccountResponse_ActionRequiredResult{
+			IsCreateAccountResult: true,
+			Message:               fmt.Sprintf("okta-connectorv2: account %s was created but its resource could not be read: %v", user.Id, err),
+		}, plaintextData, nil, nil
 	}
 	if !suppressActivationEmail {
-		return &v2.CreateAccountResponse_SuccessResult{Resource: createdResource}, plaintextData, annos, nil
+		return &v2.CreateAccountResponse_SuccessResult{Resource: createdResource}, plaintextData, nil, nil
 	}
+
 	_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
 	if err != nil || activateResp == nil || activateResp.StatusCode != http.StatusOK {
 		if err == nil {
 			err = status.Error(codes.Unknown, "activation returned an unexpected response")
 		}
-		return needsAction(createdResource, "activation could not be confirmed", err, annos)
+		return &v2.CreateAccountResponse_ActionRequiredResult{
+			Resource:              createdResource,
+			IsCreateAccountResult: true,
+			Message:               fmt.Sprintf("okta-connectorv2: account %s was created but activation could not be confirmed: %v", user.Id, err),
+		}, plaintextData, nil, nil
 	}
-	observed, respCtx, readErr := getUserFresh(ctx, r.connector.client, user.Id)
+	observed, respCtx, err := getUserFresh(ctx, r.connector.client, user.Id)
+	var annos annotations.Annotations
 	if respCtx != nil && respCtx.OktaResponse != nil {
 		response := respCtx.OktaResponse
-		if limit, err := ratelimit.ExtractRateLimitData(response.StatusCode, &response.Header); err == nil {
+		if limit, extractErr := ratelimit.ExtractRateLimitData(response.StatusCode, &response.Header); extractErr == nil {
 			annos.WithRateLimiting(limit)
 		}
 	}
-	if readErr != nil || observed == nil || observed.Id != user.Id {
-		if readErr == nil {
-			readErr = status.Error(codes.DataLoss, "activation readback did not identify the created user")
+	if err != nil || observed == nil || observed.Id != user.Id {
+		if err == nil {
+			err = status.Error(codes.DataLoss, "activation readback did not identify the created user")
 		}
-		return needsAction(createdResource, "activation was acknowledged but fresh state is unconfirmed", readErr, annos)
+		return &v2.CreateAccountResponse_ActionRequiredResult{
+			Resource:              createdResource,
+			IsCreateAccountResult: true,
+			Message:               fmt.Sprintf("okta-connectorv2: account %s was created but activation state could not be read: %v", user.Id, err),
+		}, plaintextData, annos, nil
 	}
 	current, err := userResource(observed, r.connector.skipSecondaryEmails)
 	if err != nil {
-		return needsAction(createdResource, "activation readback was incomplete", err, annos)
-	}
-	// A reported transition is still pending even if its target is ACTIVE.
-	// Retain the resource and protected credential; do not certify completion.
-	if observed.Status == userStatusStaged || observed.TransitioningToStatus != "" {
-		return &v2.CreateAccountResponse_InProgressResult{Resource: current, IsCreateAccountResult: true}, plaintextData, annos, nil
+		return &v2.CreateAccountResponse_ActionRequiredResult{
+			Resource:              createdResource,
+			IsCreateAccountResult: true,
+			Message:               fmt.Sprintf("okta-connectorv2: account %s was created but activation readback was incomplete: %v", user.Id, err),
+		}, plaintextData, annos, nil
 	}
 	return &v2.CreateAccountResponse_SuccessResult{Resource: current}, plaintextData, annos, nil
 }
@@ -767,77 +692,47 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 	return profile, nil
 }
 
-// getAccountCreationQueryParams preserves legacy caller behavior unless strict
-// validation is enabled. Supplied passwords are new functionality and always strict.
 func getAccountCreationQueryParams(
-	ctx context.Context,
 	accountInfo *v2.AccountInfo,
 	credentialOptions *v2.LocalCredentialOptions,
 	providerType string,
-	strictValidation bool,
-) (*query.Params, bool, annotations.Annotations, error) {
+) (*query.Params, bool, error) {
 	pMap := accountInfo.GetProfile().AsMap()
 	params := &query.Params{Provider: providerType == providerTypeFederation}
 	createInactive, err := parseBoolProfileField(pMap, profileFieldCreateInactive, false)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 	sendActivationEmail, err := parseBoolProfileField(pMap, profileFieldSendActivationEmail, true)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 	profileChange, err := parseBoolProfileField(pMap, profileFieldPasswordChangeOnLoginRequired, false)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
-	forceChange := credentialOptions.GetForceChangeAtNextLogin()
-	strict := strictValidation || credentialOptions.GetPlaintextPassword() != nil
+	mandatoryChange := profileChange || credentialOptions.GetForceChangeAtNextLogin()
 	hasPassword := credentialOptions.GetRandomPassword() != nil || credentialOptions.GetPlaintextPassword() != nil
-	mandatoryChange := profileChange
-	if strict {
-		mandatoryChange = mandatoryChange || forceChange
-		if !hasPassword && mandatoryChange {
-			return nil, false, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: strict mandatory password change requires a password")
-		}
-		if createInactive && hasPassword && mandatoryChange {
-			return nil, false, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: create_inactive cannot enforce mandatory password change")
-		}
+	if mandatoryChange && !hasPassword {
+		return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: mandatory password change requires a password")
 	}
-	suppressActivationEmail := false
+	if mandatoryChange && createInactive {
+		return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: create_inactive cannot enforce mandatory password change")
+	}
+	if mandatoryChange && !sendActivationEmail {
+		return nil, false, status.Error(codes.InvalidArgument, "okta-connectorv2: send_activation_email=false cannot enforce mandatory password change")
+	}
 	switch {
 	case createInactive:
 		params.Activate = ToPtr(false)
 	case !sendActivationEmail:
-		// This conflict was already rejected for legacy random-password callers.
-		if hasPassword && mandatoryChange {
-			return nil, false, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: send_activation_email=false cannot enforce mandatory password change")
-		}
 		params.Activate = ToPtr(false)
-		suppressActivationEmail = true
-	case hasPassword && mandatoryChange:
+		return params, true, nil
+	case mandatoryChange:
 		params.NextLogin = "changePassword"
 		params.Activate = ToPtr(true)
 	}
-	var annos annotations.Annotations
-	if (profileChange || forceChange) && params.NextLogin == "" {
-		ctxzap.Extract(ctx).Warn("okta-connectorv2: legacy account creation cannot enforce the requested password change; not takeover evidence",
-			zap.Bool("strict_validation", strict), zap.Bool("create_inactive", createInactive), zap.Bool("password_credential", hasPassword))
-		// CreateAccount returns at most one ErrorInfo annotation. Preserve this
-		// invariant: SDK Annotations.Pick returns only the first match by type.
-		unenforced := &errdetails.ErrorInfo{
-			Reason:   "LEGACY_PASSWORD_CHANGE_NOT_ENFORCED",
-			Domain:   "baton-okta",
-			Metadata: make(map[string]string),
-		}
-		if profileChange {
-			unenforced.Metadata[profileFieldPasswordChangeOnLoginRequired] = strconv.FormatBool(profileChange)
-		}
-		if forceChange {
-			unenforced.Metadata["force_change_at_next_login"] = strconv.FormatBool(forceChange)
-		}
-		annos.Append(unenforced)
-	}
-	return params, suppressActivationEmail, annos, nil
+	return params, false, nil
 }
 
 // parseObjectProfileField reads an account-creation field declared as a map in the

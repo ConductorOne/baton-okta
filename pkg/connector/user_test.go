@@ -441,13 +441,13 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantActivate: boolPtr(false),
 		},
 		{
-			name: "legacy inactive creation preserves staged behavior",
+			name: "inactive creation rejects mandatory password change",
 			profile: map[string]interface{}{
 				"create_inactive":                   true,
 				"password_change_on_login_required": true,
 			},
-			creds:        randomPassword,
-			wantActivate: boolPtr(false),
+			creds:   randomPassword,
+			wantErr: true,
 		},
 		{
 			name: "password_change_on_login_required with random-password",
@@ -459,11 +459,12 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantNextLogin: "changePassword",
 		},
 		{
-			name: "password_change_on_login_required ignored for no-password",
+			name: "mandatory password change requires a password",
 			profile: map[string]interface{}{
 				"password_change_on_login_required": true,
 			},
-			creds: noPassword,
+			creds:   noPassword,
+			wantErr: true,
 		},
 		{
 			name: "create_inactive invalid string",
@@ -538,14 +539,13 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "send_activation_email false ignores inert password_change for no-password",
+			name: "suppressed activation email rejects mandatory change without a password",
 			profile: map[string]interface{}{
 				"send_activation_email":             false,
 				"password_change_on_login_required": true,
 			},
-			creds:        noPassword,
-			wantActivate: boolPtr(false),
-			wantSuppress: true,
+			creds:   noPassword,
+			wantErr: true,
 		},
 		{
 			name: "password_change_on_login_required invalid string with random-password",
@@ -607,7 +607,7 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			}
 			accountInfo := &v2.AccountInfo{Profile: s}
 
-			got, suppress, _, err := getAccountCreationQueryParams(t.Context(), accountInfo, tt.creds, tt.providerType, false)
+			got, suppress, err := getAccountCreationQueryParams(accountInfo, tt.creds, tt.providerType)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
