@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -23,11 +24,13 @@ var alreadyAssignedRole = "E0000090"
 
 // Roles that can only be assigned at the org-wide scope.
 // For full list of roles see: https://developer.okta.com/docs/reference/api/roles/#role-types
+// Label is compared verbatim against the System Log displayName, so it must match
+// Okta's casing exactly.
 var standardRoleTypes = []*okta.Role{
 	{Type: "API_ACCESS_MANAGEMENT_ADMIN", Label: "API Access Management Administrator"},
 	{Type: "MOBILE_ADMIN", Label: "Mobile Administrator"},
-	{Type: "ORG_ADMIN", Label: "Organizational Administrator"},
-	{Type: "READ_ONLY_ADMIN", Label: "Read-Only Administrator"},
+	{Type: "ORG_ADMIN", Label: "Organization Administrator"},
+	{Type: "READ_ONLY_ADMIN", Label: "Read-only Administrator"},
 	{Type: "REPORT_ADMIN", Label: "Report Administrator"},
 	{Type: "SUPER_ADMIN", Label: "Super Administrator"},
 	// The type name is strange, but it is what Okta uses for the Group Administrator standard role
@@ -364,8 +367,9 @@ func standardRoleFromType(roleType string) *okta.Role {
 }
 
 func StandardRoleTypeFromLabel(label string) *okta.Role {
+	label = strings.TrimSpace(label)
 	for _, role := range standardRoleTypes {
-		if role.Label == label {
+		if strings.EqualFold(role.Label, label) {
 			return role
 		}
 	}

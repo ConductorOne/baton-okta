@@ -22,8 +22,43 @@ import (
 var (
 	batonApiToken = os.Getenv("BATON_API_TOKEN")
 	batonDomain   = os.Getenv("BATON_DOMAIN")
-	ctxTest       = context.Background()
+	// A user in the test org that holds no standard admin role before this
+	// test runs -- it assigns and revokes every role in turn.
+	roleDriftTestUserID = os.Getenv("BATON_ROLE_DRIFT_TEST_USER_ID")
+	ctxTest             = context.Background()
 )
+
+// Assigns each standard role to a live test user and checks Label against what
+// Okta actually returns, since a mismatch here silently drops that role's events.
+func TestStandardRoleTypesMatchOkta(t *testing.T) {
+	if batonApiToken == "" || batonDomain == "" || roleDriftTestUserID == "" {
+		t.Skip()
+	}
+
+	cliTest, err := getClientForTesting(ctxTest, &cfg.Okta{
+		Domain:   batonDomain,
+		ApiToken: batonApiToken,
+	})
+	require.Nil(t, err)
+
+	for _, want := range standardRoleTypes {
+		t.Run(want.Type, func(t *testing.T) {
+			assigned, _, err := cliTest.client.User.AssignRoleToUser(ctxTest, roleDriftTestUserID, okta.AssignRoleRequest{Type: want.Type}, nil)
+			require.Nil(t, err)
+			require.NotNil(t, assigned)
+
+			defer func() {
+				_, err := cliTest.client.User.RemoveRoleFromUser(ctxTest, roleDriftTestUserID, assigned.Id)
+				require.Nil(t, err)
+			}()
+
+			require.Equal(t, want.Label, assigned.Label,
+				"standardRoleTypes' Label for %s no longer matches what Okta reports -- "+
+					"update role.go, or the event feed will silently drop this role's grant/revoke events",
+				want.Type)
+		})
+	}
+}
 
 func TestSyncRoles(t *testing.T) {
 	var (
