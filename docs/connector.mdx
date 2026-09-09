@@ -63,6 +63,17 @@ Use this attribute in policies and access profiles to verify that bindings and g
 | Roles | Membership changes: role grant/revoke via privilege events |
 </Note>
 
+<Note>
+**Skip app groups changes how app access is attributed.** When a group is assigned to an app, C1 records that group as the source of each member's access. Skipping `APP_GROUP` groups means they are never synced, so access conferred by one has no group to point at. Rather than dropping that access, the connector reports it as a direct assignment on the app.
+
+Two things this does *not* do:
+
+- **It does not flatten all group-based access on the app.** An `OKTA_GROUP` assigned to the same app still expands to its members normally, and those grants still name the group as the source.
+- **It applies per app, not per group.** On an app assigned both an `APP_GROUP` and an `OKTA_GROUP`, members of the `OKTA_GROUP` keep their group-sourced access *and* gain an additional direct assignment they would not have otherwise.
+
+On such an app, the direct assignments produced this way are marked immutable, because removing that access means changing group membership rather than the app assignment. Members who came only from a skipped `APP_GROUP` have no source recorded at all.
+</Note>
+
 The Okta connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
 The Okta connector supports account deprovisioning through C1 resource deletion. It first deactivates the user to the `DEPROVISIONED` state and then permanently deletes the user. The same operations are available separately through the `deactivate_user` and `delete_user` connector actions. These operations require an API token or OAuth app with `okta.users.manage` scope.
@@ -465,6 +476,10 @@ Enter your credentials:
 </Step>
 <Step>
 **Optional.** If desired, click the checkbox to **Skip app groups** to exclude Okta push groups (APP\_GROUP type) from sync. This is useful when push groups created by SCIM-integrated apps are not needed for access management workflows.
+
+<Note>
+This setting also changes how app access from those groups is attributed. Access conferred by a skipped group is reported as a direct assignment on the app, since the group is no longer synced to point at. Groups of other types assigned to the same app still expand to their members normally. See **Capabilities** above for the full behavior.
+</Note>
 </Step>
 <Step>
 **Optional.** Inactive (disabled) Okta applications are synced by default. Clear the **Sync inactive apps** checkbox to exclude them.
