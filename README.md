@@ -85,6 +85,17 @@ By default, `baton-okta` will sync information for inactive applications. You ca
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 
+`--skip-app-groups` excludes `APP_GROUP` type groups — the ones Okta imports from an app or directory integration — from the group sync. This changes how app access is attributed, so it is worth understanding before enabling it.
+
+Normally a group assigned to an app gets a group-principal grant that ConductorOne expands to the group's members, recording the group as the source of their access. A skipped group is never synced, so access conferred by one has nothing to expand into. To avoid dropping that access, the connector falls back to emitting direct user grants for the affected app users.
+
+Two things that fallback does *not* do:
+
+- **It does not flatten all group-derived access on the app.** An ordinary `OKTA_GROUP` assigned to the same app still expands normally, and its members' grants still name the group as the source.
+- **It is decided per app, not per group.** On an app assigned both an `APP_GROUP` and an ordinary group, the ordinary group's members keep their group-sourced grant *and* pick up an extra direct source they would not have with the flag off.
+
+On such an app, every group-scoped user's direct grant is marked immutable, because removing that access means changing group membership rather than the app assignment. Members of the ordinary group still carry their group as a source alongside it; members who came only from the skipped `APP_GROUP` carry no source at all, since the group conferring their access is not in ConductorOne to point at.
+
 Devices are an opt-in resource type: enable the **Device** resource type in the connector's sync configuration to include it. Device sync is read-only; the connector does not manage device-to-user assignments.
 
 Secrets (Okta API tokens) are an opt-in resource type: enable the **API Token** resource type in the connector's sync configuration to include them. `--sync-secrets` is deprecated but still honored. They are read-only, and C1 displays them on the Inventory page.

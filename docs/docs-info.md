@@ -33,6 +33,12 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
 
 3. Does the connector support grant expansion?
    - Yes for group-as-principal paths where `GrantExpandable` points at the group's `member` entitlement (app/role grants through groups).
+   - **App grants depend on it.** `listAppUsersGrants` skips app users Okta reports with `scope=GROUP`, so their access is attributed to the conferring group by expansion instead of being reported as a direct assignment. Okta returns every assigned user from `GET /api/v1/apps/{appId}/users` regardless of origin, and `scope` is body-only — it cannot be filtered server-side.
+   - **`--skip-app-groups` interacts with this.** A skipped `APP_GROUP` is never synced, so there is nothing to expand into. `listAppGroupGrants` reads each assignment's type from `_embedded.group` (via `expand=group`, requested only when the flag is on), omits the grant for a dropped `APP_GROUP` so it does not point at a resource that never synced, and marks the app in the pagination page token. The user pass reads that mark and keeps direct grants, tagged `GrantImmutable`, for that app's group-scoped users.
+     - The mark is **per app, not per group**: an ordinary group on the same app keeps its expansion, and its members gain an extra `app:<id>:access` direct source alongside their group source. `GrantImmutable` is applied to every `scope=GROUP` user kept on a marked app, not only the ones traceable to the dropped group.
+     - An **unreadable group type** is treated as dropped *and* gets no `GrantExpandable`, degrading to no attribution rather than an edge into an entitlement that may not exist.
+     - The mark rides in the page token rather than the session store, so it survives a sync resuming in a new process. The group pass therefore queues the user pass itself, rather than both being queued up front.
+   - **Group member grants are load-bearing for app access**, which is why `groupMayGrantAppAccess` guards the `users_count == 0` short-circuits (member listing, `Get`'s `SkipGrants`, and role-grant expansion). `users_count` is an aggregate from Okta's stats embed with no documented freshness guarantee; a count lagging real membership would otherwise leave a group with no member grants and silently drop the app access expanded from them.
 
 ---
 
