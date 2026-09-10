@@ -592,7 +592,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		}
 
 		email := unknownProfileValue
-		if user.Profile != nil {
+		if user != nil && user.Profile != nil {
 			if v, ok := (*user.Profile)[profileFieldEmail].(string); ok {
 				email = v
 			}

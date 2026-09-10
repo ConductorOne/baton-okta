@@ -239,7 +239,9 @@ func revokeNotFoundOrError(ctx context.Context, principal *v2.Resource, resp *ok
 			zap.String("principal_id", principal.Id.String()),
 			zap.String("principal_type", principal.Id.ResourceType),
 		)
-		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		annos := rateLimitAnnotations(resp)
+		annos.Append(&v2.GrantAlreadyRevoked{})
+		return annos, nil
 	}
 
 	return nil, fmt.Errorf("okta-connector: %s: %w", wrapMsg, classified)

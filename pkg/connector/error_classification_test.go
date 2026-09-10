@@ -428,8 +428,8 @@ func TestHandleOktaResponseErrorClassification(t *testing.T) {
 }
 
 // TestRateLimitExhaustedCarriesRetryDetail proves the exhausted-429 classification
-// attaches a RateLimitDescription detail with a future ResetAt, so the provisioning
-// retryer waits out Okta's reset window instead of its short fixed backoff.
+// attaches a RateLimitDescription the retryer waits on. The SDK already discarded Okta's
+// headers, so ResetAt is ExtractRateLimitData's 60s no-headers default, not Okta's window.
 func TestRateLimitExhaustedCarriesRetryDetail(t *testing.T) {
 	err := handleOktaResponseError(nil, errors.New("too many requests"))
 	if status.Code(err) != codes.Unavailable {
