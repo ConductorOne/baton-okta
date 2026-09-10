@@ -42,7 +42,7 @@ func waitForPrivilegeGrantRoleLabel(ctx context.Context, client *okta.Client, us
 	for {
 		logs, _, err := client.LogEvent.GetLogs(ctx, &query.Params{
 			Filter: `eventType eq "user.account.privilege.grant" and target.type eq "User" and target.type eq "ROLE"`,
-			Since:  since.Format(time.RFC3339),
+			Since:  since.UTC().Format(time.RFC3339),
 			Limit:  50,
 		})
 		if err != nil {

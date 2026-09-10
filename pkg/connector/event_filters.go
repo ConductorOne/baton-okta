@@ -309,7 +309,7 @@ var (
 			roleType := StandardRoleTypeFromLabel(role.DisplayName)
 			if roleType == nil {
 				// Only standard admin roles reach this branch, so a miss means the label
-				// is missing from standardRoleTypes and this access change is dropped.
+				// is missing from oktaSystemLogLabels and this access change is dropped.
 				l.Warn("okta-event-feed: RoleMembershipFilter: no standard role for label, skipping",
 					zap.String("role_display_name", role.DisplayName),
 					zap.String("role_id", role.Id),
@@ -318,7 +318,10 @@ var (
 				return nil
 			}
 
-			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
+			// roleType.Label, not role.DisplayName: the resource must show the same text
+			// a full sync would give it, or this resource's display text flaps between
+			// Okta's live wording and the synced one depending on what touched it last.
+			roleResource, err := sdkResource.NewResource(roleType.Label, resourceTypeRole, roleType.Type)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
@@ -389,7 +392,10 @@ var (
 				return nil
 			}
 
-			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
+			// roleType.Label, not role.DisplayName: the resource must show the same text
+			// a full sync would give it, or this resource's display text flaps between
+			// Okta's live wording and the synced one depending on what touched it last.
+			roleResource, err := sdkResource.NewResource(roleType.Label, resourceTypeRole, roleType.Type)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}

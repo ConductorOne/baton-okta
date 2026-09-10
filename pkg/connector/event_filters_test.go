@@ -402,9 +402,10 @@ func TestRoleMembershipFilterSkipsGroupDerivedChanges(t *testing.T) {
 	}
 }
 
-// standardRoleTypes' Label must match the System Log's displayName exactly. Two
-// entries drifted from Okta's actual casing/wording, which silently dropped every
-// grant event for those roles.
+// StandardRoleTypeFromLabel must resolve these against oktaSystemLogLabels regardless
+// of standardRoleTypes' Label, which is allowed to differ (it's the text synced to C1,
+// not what's matched against the System Log). Two of these previously drifted from
+// Okta's actual casing/wording, which silently dropped every grant event for those roles.
 func TestRoleMembershipFilterResolvesStandardLabels(t *testing.T) {
 	for _, tt := range []struct {
 		label    string
