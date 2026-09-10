@@ -71,7 +71,7 @@ func oktaAppGroupAssignmentResponse() string {
 }
 
 func newTestAppBuilder(client *okta.Client) *appResourceType {
-	return appBuilder("", "", false, nil, client)
+	return appBuilder("", "", false, false, nil, client)
 }
 
 // TestRateLimitClassification drives the real vendored SDK: a 429 that exhausts its own
