@@ -432,3 +432,19 @@ func TestRoleMembershipFilterResolvesStandardLabels(t *testing.T) {
 		})
 	}
 }
+
+// oktaSystemLogLabels must have a non-empty entry for every standardRoleTypes entry --
+// StandardRoleTypeFromLabel resolves only against that map now (role.go), so a role
+// added to one table without the other has its grant/revoke events silently dropped.
+// No network, no credentials: this is an internal-consistency check between the two
+// tables, not a check against Okta's real behavior -- see TestStandardRoleTypesMatchOkta
+// (integration_debug_test.go) for that.
+func TestOktaSystemLogLabelsCoversAllStandardRoles(t *testing.T) {
+	for _, role := range standardRoleTypes {
+		t.Run(role.Type, func(t *testing.T) {
+			require.NotEmpty(t, oktaSystemLogLabels[role.Type],
+				"role %s has no oktaSystemLogLabels entry -- its grant/revoke events will be silently dropped",
+				role.Type)
+		})
+	}
+}

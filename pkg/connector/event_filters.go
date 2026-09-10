@@ -282,7 +282,8 @@ var (
 			case assigned && unassigned:
 				return fmt.Errorf("okta-connectorv2: event has both %s and %s targets", oktaLogTargetRoleAssigned, oktaLogTargetRoleUnassigned)
 			case !assigned && !unassigned:
-				// The per-member _GROUP_ROLE_CHANGE variants land here, as would any
+				// The per-member _GROUP_ROLE_CHANGE variants land here, as would a
+				// custom role binding if one ever reached this handler, or any
 				// discriminator Okta adds later. Defaulting to a grant would reaffirm
 				// access that may have just been removed, so skip rather than guess.
 				l.Debug("okta-event-feed: RoleMembershipFilter: no role assignment discriminator, skipping",
