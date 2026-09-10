@@ -583,7 +583,9 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.Any("Profile", appUser.Profile),
 			)
-			return annotations.New(&v2.GrantAlreadyExists{}), nil
+			annos := rateLimitAnnotations(response)
+			annos.Append(&v2.GrantAlreadyExists{})
+			return annos, nil
 		}
 
 		user, userResp, err := g.client.User.GetUser(ctx, userID)
@@ -657,7 +659,9 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 				zap.String("principal_type", principal.Id.ResourceType),
 				zap.Any("Profile", appGroup.Profile),
 			)
-			return annotations.New(&v2.GrantAlreadyExists{}), nil
+			annos := rateLimitAnnotations(response)
+			annos.Append(&v2.GrantAlreadyExists{})
+			return annos, nil
 		}
 
 		payload := okta.ApplicationGroupAssignment{}

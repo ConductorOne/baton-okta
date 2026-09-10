@@ -324,7 +324,9 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 				zap.String("principal_id", principal.Id.String()),
 				zap.String("principal_type", principal.Id.ResourceType),
 			)
-			return annotations.New(&v2.GrantAlreadyExists{}), nil
+			annos := rateLimitAnnotations(response)
+			annos.Append(&v2.GrantAlreadyExists{})
+			return annos, nil
 		}
 		return nil, fmt.Errorf("okta-connector: failed to assign roles: %w", classified)
 	}

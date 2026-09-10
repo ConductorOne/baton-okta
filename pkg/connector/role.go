@@ -466,7 +466,9 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
 
-				return annotations.New(&v2.GrantAlreadyExists{}), nil
+				annos := rateLimitAnnotations(response)
+				annos.Append(&v2.GrantAlreadyExists{})
+				return annos, nil
 			}
 
 			return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, errors.Join(&errOkta, err)))
