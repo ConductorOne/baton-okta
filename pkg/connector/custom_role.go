@@ -10,7 +10,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -264,19 +263,13 @@ func (o *customRoleResourceType) Get(ctx context.Context, resourceId *v2.Resourc
 	l := ctxzap.Extract(ctx)
 	l.Debug("getting custom role", zap.String("role_id", resourceId.Resource))
 
-	var annos annotations.Annotations
-
 	role, respCtx, err := getOktaIamCustomRole(ctx, o.connector.client, resourceId.Resource)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	resp := respCtx.OktaResponse
-	if resp != nil {
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
-	}
+	annos := rateLimitAnnotations(resp)
 
 	resource, err := roleResource(role, resourceTypeCustomRole)
 	if err != nil {

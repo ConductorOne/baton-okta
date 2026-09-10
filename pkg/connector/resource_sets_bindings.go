@@ -16,6 +16,8 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -315,16 +317,27 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 		memberUrl,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("okta-connector: failed to assign roles: %s", err.Error())
+		classified := handleOktaResponseError(response, err)
+		if status.Code(classified) == codes.AlreadyExists {
+			l.Debug(
+				"okta-connector: resource-set binding member already exists",
+				zap.String("principal_id", principal.Id.String()),
+				zap.String("principal_type", principal.Id.ResourceType),
+			)
+			annos := rateLimitAnnotations(response)
+			annos.Append(&v2.GrantAlreadyExists{})
+			return annos, nil
+		}
+		return nil, fmt.Errorf("okta-connector: failed to assign roles: %w", classified)
 	}
 
 	if response != nil && response.StatusCode == http.StatusOK {
-		l.Warn("Resource Set Binding has been granted",
+		l.Debug("Resource Set Binding has been granted",
 			zap.String("Status", response.Status),
 		)
 	}
 
-	return nil, nil
+	return rateLimitAnnotations(response), nil
 }
 
 func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
@@ -349,13 +362,15 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
-	members, _, err := rsb.listMembersOfBinding(ctx,
+	members, resp, err := rsb.listMembersOfBinding(ctx,
 		rsb.client,
 		resourceSetId,
 		customRoleId,
 	)
 	if err != nil {
-		return nil, err
+		return revokeNotFoundOrError(ctx, principal, resp, err,
+			"okta-connector: revoke: resource-set binding does not exist",
+			"failed to list members of resource set binding")
 	}
 
 	for _, member := range members {
@@ -370,14 +385,18 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 	if memberId != "" {
 		response, err := rsb.unassignMemberFromBinding(ctx, resourceSetId, customRoleId, memberId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove roles: %s", err.Error())
+			return revokeNotFoundOrError(ctx, principal, response, err,
+				"okta-connector: revoke: member was already unassigned from the binding",
+				"failed to remove roles")
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
-			l.Warn("Resource Set Binding has been revoked",
+			l.Debug("Resource Set Binding has been revoked",
 				zap.String("Status", response.Status),
 			)
 		}
+
+		return rateLimitAnnotations(response), nil
 	}
 
 	return nil, nil
