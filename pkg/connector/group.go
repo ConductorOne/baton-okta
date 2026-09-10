@@ -536,7 +536,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 
 	response, err := g.connector.client.Group.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
-		return nil, handleOktaResponseError(response, err)
+		return nil, fmt.Errorf("okta-connector: failed to add user to group: %w", handleOktaResponseError(response, err))
 	}
 
 	if response != nil {
