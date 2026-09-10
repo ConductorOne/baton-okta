@@ -37,6 +37,12 @@ var (
 // role-assignment API reports for the same role. Returns "" without error if
 // nothing showed up within the wait budget -- System Log indexing lag varies
 // widely (seconds to over a minute), so a miss here isn't necessarily a bug.
+//
+// Known limitation: correlation is "most recent grant for this user", not a
+// specific assignment -- the role-assignment API's Id is not the same value as
+// the ROLE target's AlternateId in the log (confirmed against a live tenant), so
+// there's no precise per-call correlator available here. If a subtest somehow
+// finished in under ~1s, this could read the previous subtest's event instead.
 func waitForPrivilegeGrantRoleLabel(ctx context.Context, client *okta.Client, userID string, since time.Time) (string, error) {
 	deadline := time.Now().Add(60 * time.Second)
 	for {

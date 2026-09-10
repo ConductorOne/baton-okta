@@ -430,6 +430,10 @@ func TestRoleMembershipFilterResolvesStandardLabels(t *testing.T) {
 			require.NotNil(t, grant)
 			require.Equal(t, tt.wantType, grant.GetEntitlement().GetResource().GetId().GetResource())
 			require.Equal(t, "assigned", grant.GetEntitlement().GetSlug())
+			// Pins the resource's DisplayName to the synced Label, not the raw log
+			// text -- catches a regression back to role.DisplayName, which would
+			// only misfire for the two roles whose wordings differ.
+			require.Equal(t, standardRoleFromType(tt.wantType).Label, grant.GetEntitlement().GetResource().GetDisplayName())
 		})
 	}
 }
