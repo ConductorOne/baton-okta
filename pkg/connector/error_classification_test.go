@@ -646,3 +646,87 @@ func TestGrantPrecheckKeepsOktaRequestID(t *testing.T) {
 		t.Fatalf("Grant() error dropped the Okta request id: %v", err)
 	}
 }
+
+// TestAlreadyExistsRoutesReportRateLimit covers the branches that return early because
+// the target is already in the requested state. Those carry two annotations, and the
+// suite already checks them one at a time but never together: the idempotency tests
+// assert the GrantAlreadyExists / GrantAlreadyRevoked name, and
+// TestSuccessPathReportsRateLimitAnnotations picks a RateLimitDescription off the plain
+// 204 paths. Dropping rateLimitAnnotations from an early return would therefore keep
+// every one of them green while the rate-limit half stops being reported — on the route
+// a mass-provisioning replay hits for every principal that already has the access.
+func TestAlreadyExistsRoutesReportRateLimit(t *testing.T) {
+	headers := map[string]string{
+		"X-Rate-Limit-Limit":     "250",
+		"X-Rate-Limit-Remaining": "17",
+		"X-Rate-Limit-Reset":     strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10),
+	}
+
+	assertReportsLimitWith := func(t *testing.T, annos annotations.Annotations, err error, wantAlreadyRevoked bool) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if wantAlreadyRevoked {
+			if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+				t.Fatalf("annotations = %v, want GrantAlreadyRevoked", annos)
+			}
+		} else if !annos.Contains(&v2.GrantAlreadyExists{}) {
+			t.Fatalf("annotations = %v, want GrantAlreadyExists", annos)
+		}
+
+		desc := &v2.RateLimitDescription{}
+		ok, pickErr := annos.Pick(desc)
+		if pickErr != nil {
+			t.Fatalf("Pick() error: %v", pickErr)
+		}
+		if !ok {
+			t.Fatalf("annotations = %v, want a RateLimitDescription alongside it", annos)
+		}
+		if desc.GetLimit() != 250 || desc.GetRemaining() != 17 {
+			t.Fatalf("rate limit = %d/%d, want 17/250", desc.GetRemaining(), desc.GetLimit())
+		}
+	}
+
+	t.Run("app grant: already assigned user", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID,
+			statusCode: http.StatusOK, headers: headers, body: oktaAppUserAssignedResponse(),
+		})
+
+		annos, err := newTestAppBuilder(client).Grant(t.Context(), testUserPrincipal(), appAccessEntitlement())
+		assertReportsLimitWith(t, annos, err, false)
+	})
+
+	t.Run("app grant: already assigned group", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/groups/" + testGroupID,
+			statusCode: http.StatusOK, headers: headers, body: oktaAppGroupAssignmentResponse(),
+		})
+
+		annos, err := newTestAppBuilder(client).Grant(t.Context(), appGroupPrincipal(), appAccessEntitlement())
+		assertReportsLimitWith(t, annos, err, false)
+	})
+
+	t.Run("group revoke: missing membership is already revoked", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodDelete, path: "/api/v1/groups/" + testGroupID + "/users/" + testOktaUserID,
+			statusCode: http.StatusNotFound, headers: headers, body: oktaNotFoundResponse(),
+		})
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: groupMembershipEntitlement()}
+
+		annos, err := groupBuilder(&Okta{client: client}).Revoke(t.Context(), grant)
+		assertReportsLimitWith(t, annos, err, true)
+	})
+
+	t.Run("app user revoke: missing assignment is already revoked", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/apps/" + testAppID + "/users/" + testOktaUserID,
+			statusCode: http.StatusNotFound, headers: headers, body: oktaNotFoundResponse(),
+		})
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: appAccessEntitlement()}
+
+		annos, err := newTestAppBuilder(client).Revoke(t.Context(), grant)
+		assertReportsLimitWith(t, annos, err, true)
+	})
+}
