@@ -267,9 +267,8 @@ var (
 		// Okta reports both assignment and unassignment of standard admin roles under
 		// this one event type, distinguishing them with an extra ROLE_ASSIGNED or
 		// ROLE_UNASSIGNED target, so an unassignment has to emit a revoke. Custom role
-		// bindings (CUSTOM_ROLE_BINDING_ADDED / _REMOVED) reuse the event type as well
-		// but carry no ROLE target and belong to the custom-role resource type, so they
-		// are skipped here.
+		// bindings reuse the event type but carry a CUSTOM_ROLE target instead of ROLE,
+		// so the log query never returns them.
 		//
 		// user.account.privilege.revoke covers only the removal of a user's last role;
 		// RoleMembershipRevokeFilter handles that case.
@@ -283,9 +282,10 @@ var (
 			case assigned && unassigned:
 				return fmt.Errorf("okta-connectorv2: event has both %s and %s targets", oktaLogTargetRoleAssigned, oktaLogTargetRoleUnassigned)
 			case !assigned && !unassigned:
-				// Custom role bindings land here, as would any discriminator Okta adds
-				// later. Defaulting to a grant would reaffirm access that may have just
-				// been removed, so skip rather than guess.
+				// The per-member _GROUP_ROLE_CHANGE variants land here, as would a
+				// custom role binding if one ever reached this handler, or any
+				// discriminator Okta adds later. Defaulting to a grant would reaffirm
+				// access that may have just been removed, so skip rather than guess.
 				l.Debug("okta-event-feed: RoleMembershipFilter: no role assignment discriminator, skipping",
 					zap.String("event_type", event.EventType),
 					zap.String("event_id", event.Uuid),
@@ -308,16 +308,20 @@ var (
 			// resource ID. Look it up by label instead.
 			roleType := StandardRoleTypeFromLabel(role.DisplayName)
 			if roleType == nil {
-				// Expected for custom roles and for any label missing from
-				// standardRoleTypes; there is no resource to point an event at.
-				l.Debug("okta-event-feed: RoleMembershipFilter: no standard role for label, skipping",
+				// Only standard admin roles reach this branch, so a miss means the label
+				// is missing from oktaSystemLogLabels and this access change is dropped.
+				l.Warn("okta-event-feed: RoleMembershipFilter: no standard role for label, skipping",
 					zap.String("role_display_name", role.DisplayName),
+					zap.String("role_id", role.Id),
 					zap.String("event_id", event.Uuid),
 				)
 				return nil
 			}
 
-			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
+			// roleType.Label, not role.DisplayName: the resource must show the same text
+			// a full sync would give it, or this resource's display text flaps between
+			// Okta's live wording and the synced one depending on what touched it last.
+			roleResource, err := sdkResource.NewResource(roleType.Label, resourceTypeRole, roleType.Type)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}
@@ -379,14 +383,19 @@ var (
 			// role ID or type, so resolve the standard role by its label.
 			roleType := StandardRoleTypeFromLabel(role.DisplayName)
 			if roleType == nil {
-				l.Debug("okta-event-feed: RoleMembershipRevokeFilter: no standard role for label, skipping",
+				// See RoleMembershipFilter: a miss here is a dropped access change.
+				l.Warn("okta-event-feed: RoleMembershipRevokeFilter: no standard role for label, skipping",
 					zap.String("role_display_name", role.DisplayName),
+					zap.String("role_id", role.Id),
 					zap.String("event_id", event.Uuid),
 				)
 				return nil
 			}
 
-			roleResource, err := sdkResource.NewResource(role.DisplayName, resourceTypeRole, roleType.Type)
+			// roleType.Label, not role.DisplayName: the resource must show the same text
+			// a full sync would give it, or this resource's display text flaps between
+			// Okta's live wording and the synced one depending on what touched it last.
+			roleResource, err := sdkResource.NewResource(roleType.Label, resourceTypeRole, roleType.Type)
 			if err != nil {
 				return fmt.Errorf("okta-connectorv2: error creating resource: %w", err)
 			}

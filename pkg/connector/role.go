@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -24,6 +25,8 @@ var alreadyAssignedRole = "E0000090"
 
 // Roles that can only be assigned at the org-wide scope.
 // For full list of roles see: https://developer.okta.com/docs/reference/api/roles/#role-types
+// Label is what's already synced to C1 as this role's resource/entitlement text --
+// don't correct it here even if it drifts from Okta's wording. See oktaSystemLogLabels.
 var standardRoleTypes = []*okta.Role{
 	{Type: "API_ACCESS_MANAGEMENT_ADMIN", Label: "API Access Management Administrator"},
 	{Type: "MOBILE_ADMIN", Label: "Mobile Administrator"},
@@ -364,10 +367,33 @@ func standardRoleFromType(roleType string) *okta.Role {
 	return nil
 }
 
+// oktaSystemLogLabels lists every displayName Okta's System Log reports for a
+// standard role -- verified live, one role at a time, against a real org. This
+// is the only thing StandardRoleTypeFromLabel matches against. Label (above) is
+// what's already synced to C1 as the role's resource/entitlement text; the two
+// are intentionally decoupled so correcting one never changes the other.
+var oktaSystemLogLabels = map[string][]string{
+	"API_ACCESS_MANAGEMENT_ADMIN": {"API Access Management Administrator"},
+	"MOBILE_ADMIN":                {"Mobile Administrator"},
+	"ORG_ADMIN":                   {"Organization Administrator"},
+	"READ_ONLY_ADMIN":             {"Read-only Administrator"},
+	"REPORT_ADMIN":                {"Report Administrator"},
+	// The role-assignment API reports "Super Administrator", but the System Log's
+	// ROLE target has been observed as "Super Organization Administrator" instead.
+	"SUPER_ADMIN":            {"Super Administrator", "Super Organization Administrator"},
+	"USER_ADMIN":             {"Group Administrator"},
+	"HELP_DESK_ADMIN":        {"Help Desk Administrator"},
+	"APP_ADMIN":              {"Application Administrator"},
+	"GROUP_MEMBERSHIP_ADMIN": {"Group Membership Administrator"},
+}
+
 func StandardRoleTypeFromLabel(label string) *okta.Role {
+	label = strings.TrimSpace(label)
 	for _, role := range standardRoleTypes {
-		if role.Label == label {
-			return role
+		for _, want := range oktaSystemLogLabels[role.Type] {
+			if strings.EqualFold(want, label) {
+				return role
+			}
 		}
 	}
 	return nil
