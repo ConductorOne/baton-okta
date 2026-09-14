@@ -59,6 +59,19 @@ func TestRevokeFilters(t *testing.T) {
 			wantResource: "MOBILE_ADMIN",
 			wantType:     resourceTypeRole.Id,
 		},
+		{
+			// This label was previously mistyped in standardRoleTypes, which
+			// dropped every revoke for this role.
+			name:   "role privilege revoke, read-only admin",
+			filter: RoleMembershipRevokeFilter,
+			event: logEvent("user.account.privilege.revoke",
+				&oktaSDK.LogTarget{Type: "ROLE", DisplayName: "Read-only Administrator"},
+				&oktaSDK.LogTarget{Type: oktaLogTargetTypeUser, Id: "user1", AlternateId: "user@example.com"},
+			),
+			wantSlug:     "assigned",
+			wantResource: "READ_ONLY_ADMIN",
+			wantType:     resourceTypeRole.Id,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			require.True(t, tt.filter.Matches(tt.event))
@@ -386,5 +399,57 @@ func TestRoleMembershipFilterSkipsGroupDerivedChanges(t *testing.T) {
 		rv, err := RoleMembershipFilter.Handle(zap.NewNop(), event)
 		require.NoError(t, err)
 		require.Nil(t, rv, "an inherited role change must not reach the feed")
+	}
+}
+
+// StandardRoleTypeFromLabel must resolve these against oktaSystemLogLabels regardless
+// of standardRoleTypes' Label, which is allowed to differ (it's the text synced to C1,
+// not what's matched against the System Log). Two of these previously drifted from
+// Okta's actual casing/wording, which silently dropped every grant event for those roles.
+func TestRoleMembershipFilterResolvesStandardLabels(t *testing.T) {
+	for _, tt := range []struct {
+		label    string
+		wantType string
+	}{
+		{"Read-only Administrator", "READ_ONLY_ADMIN"},
+		{"Organization Administrator", "ORG_ADMIN"},
+		{"Help Desk Administrator", "HELP_DESK_ADMIN"},
+	} {
+		t.Run(tt.wantType, func(t *testing.T) {
+			event := logEvent("user.account.privilege.grant",
+				&oktaSDK.LogTarget{Type: "ROLE", Id: "RoleId", DisplayName: tt.label},
+				&oktaSDK.LogTarget{Type: oktaLogTargetTypeUser, Id: "user1", AlternateId: "user@example.com"},
+				&oktaSDK.LogTarget{Type: oktaLogTargetRoleAssigned},
+			)
+
+			rv, err := RoleMembershipFilter.Handle(zap.NewNop(), event)
+			require.NoError(t, err)
+			require.NotNil(t, rv, "a standard role label must resolve to a type")
+
+			grant := rv.GetCreateGrantEvent()
+			require.NotNil(t, grant)
+			require.Equal(t, tt.wantType, grant.GetEntitlement().GetResource().GetId().GetResource())
+			require.Equal(t, "assigned", grant.GetEntitlement().GetSlug())
+			// Pins the resource's DisplayName to the synced Label, not the raw log
+			// text -- catches a regression back to role.DisplayName, which would
+			// only misfire for the two roles whose wordings differ.
+			require.Equal(t, standardRoleFromType(tt.wantType).Label, grant.GetEntitlement().GetResource().GetDisplayName())
+		})
+	}
+}
+
+// oktaSystemLogLabels must have a non-empty entry for every standardRoleTypes entry --
+// StandardRoleTypeFromLabel resolves only against that map now (role.go), so a role
+// added to one table without the other has its grant/revoke events silently dropped.
+// No network, no credentials: this is an internal-consistency check between the two
+// tables, not a check against Okta's real behavior -- see TestStandardRoleTypesMatchOkta
+// (integration_debug_test.go) for that.
+func TestOktaSystemLogLabelsCoversAllStandardRoles(t *testing.T) {
+	for _, role := range standardRoleTypes {
+		t.Run(role.Type, func(t *testing.T) {
+			require.NotEmpty(t, oktaSystemLogLabels[role.Type],
+				"role %s has no oktaSystemLogLabels entry -- its grant/revoke events will be silently dropped",
+				role.Type)
+		})
 	}
 }
