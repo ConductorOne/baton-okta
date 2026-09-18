@@ -394,9 +394,9 @@ If a sync finishes cleanly with no accounts, check the app's **Admin Roles** tab
 You'll need the **Client ID**, **Private Key**, and **Private Key ID** when configuring the connector.
 
 <Note>
-**Private key format.** The **Okta Private Key** field in the C1 connector form holds a single line. Pasting a multi-line PEM into it replaces the line breaks with spaces, and the connector rejects the result with `oktaauth: parse private key: no PEM block found`.
+**Private key format.** The connector declares **Okta Private Key** as a multiline field, so where the C1 connector form renders it as a text area you can paste the PEM in directly, line breaks and all.
 
-Enter the key on one line, writing each line break as a literal `\n`:
+On a C1 release that predates that support the field is still a single-line input. Pasting a multi-line PEM into it replaces the line breaks with spaces, and the connector rejects the result with `oktaauth: parse private key: no PEM block found`. Enter the key on one line instead, writing each line break as a literal `\n`:
 
 ```
 -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC...\n-----END PRIVATE KEY-----
@@ -408,7 +408,9 @@ Convert a PEM file to that form with:
 awk 'BEGIN{ORS="\\n"} {print}' key.pem | sed 's/\\n$//'
 ```
 
-Running the connector self-hosted, pass the key unchanged: `BATON_OKTA_PRIVATE_KEY` and `--okta-private-key` accept the multi-line PEM as it is. The single-line form is a property of the connector form, not of the connector.
+That escaped form keeps working either way — the connector expands a literal `\n` back into a line break before parsing — so a key entered this way needs no migration.
+
+Running the connector self-hosted, pass the key unchanged: `BATON_OKTA_PRIVATE_KEY` and `--okta-private-key` accept the multi-line PEM as it is.
 
 Either PEM encoding works, and converting between them is not necessary:
 

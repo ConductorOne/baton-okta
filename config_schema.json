@@ -137,7 +137,8 @@
       "stringField": {
         "rules": {
           "isRequired": true
-        }
+        },
+        "type": "STRING_FIELD_TYPE_MULTILINE"
       }
     },
     {
