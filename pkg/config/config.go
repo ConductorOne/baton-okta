@@ -34,7 +34,7 @@ var (
 		field.WithRequired(true),
 		field.WithDescription("The Okta Private Key ID"),
 	)
-	oktaPrivateKey = field.StringField("okta-private-key",
+	oktaPrivateKey = field.MultilineField("okta-private-key",
 		field.WithDisplayName("Okta Private Key"),
 		field.WithRequired(true),
 		field.WithDescription("The Okta Private Key (PEM-encoded)"),
