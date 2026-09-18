@@ -394,9 +394,9 @@ If a sync finishes cleanly with no accounts, check the app's **Admin Roles** tab
 You'll need the **Client ID**, **Private Key**, and **Private Key ID** when configuring the connector.
 
 <Note>
-**Private key format.** The connector declares **Okta Private Key** as a multiline field, so where the C1 connector form renders it as a text area you can paste the PEM in directly, line breaks and all.
+**Private key format.** Paste the PEM-encoded key into **Okta Private Key**, line breaks and all.
 
-On a C1 release that predates that support the field is still a single-line input. Pasting a multi-line PEM into it replaces the line breaks with spaces, and the connector rejects the result with `oktaauth: parse private key: no PEM block found`. Enter the key on one line instead, writing each line break as a literal `\n`:
+If that field only accepts a single line, enter the key on one line instead, writing each line break as a literal `\n` — a multi-line PEM pasted into a single-line field loses its line breaks and is rejected with `oktaauth: parse private key: no PEM block found`:
 
 ```
 -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC...\n-----END PRIVATE KEY-----
@@ -408,7 +408,7 @@ Convert a PEM file to that form with:
 awk 'BEGIN{ORS="\\n"} {print}' key.pem | sed 's/\\n$//'
 ```
 
-That escaped form keeps working either way — the connector expands a literal `\n` back into a line break before parsing — so a key entered this way needs no migration.
+The escaped form is always accepted — the connector expands a literal `\n` into a line break before parsing — so a key entered that way never needs changing.
 
 Running the connector self-hosted, pass the key unchanged: `BATON_OKTA_PRIVATE_KEY` and `--okta-private-key` accept the multi-line PEM as it is.
 
@@ -467,7 +467,7 @@ Enter your Okta domain hostname, e.g. `<YOUR DOMAIN>.okta.com`, into the **Okta 
 Enter your credentials:
 
    - For **API Token**: paste your API token into the **API token** field.
-   - For **OAuth 2.0 Private Key**: enter your **Okta Client ID** and **Okta Private Key ID**, then paste your RSA private key into **Okta Private Key**. Where that field renders as a text area you can paste the PEM as-is; on a C1 release that predates multiline support, enter it on a single line with each line break written as `\n`. See **Private key format** above.
+   - For **OAuth 2.0 Private Key**: enter your **Okta Client ID** and **Okta Private Key ID**, then paste your RSA private key into **Okta Private Key**. If that field only accepts a single line, write each line break as `\n` — see **Private key format** above.
 </Step>
 <Step>
 **Optional.** If desired, click the checkbox to **Sync custom roles**.
