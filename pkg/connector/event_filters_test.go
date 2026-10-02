@@ -2,6 +2,7 @@ package connector
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -104,11 +105,11 @@ func TestRoleMembershipRevokeFilterUnknownLabel(t *testing.T) {
 	require.Nil(t, rv, "a skipped event must not reach the feed")
 }
 
-// A filter that is not in activeFilters is never queried, so registration is the
+// A filter that is in neither feed's filter list is never queried, so registration is the
 // invariant worth asserting -- not that a filter can build a query string.
 func TestRevokeFiltersAreRegistered(t *testing.T) {
 	queried := mapset.NewSet[string]()
-	for _, filter := range activeFilters {
+	for _, filter := range slices.Concat(usageFilters, changeFilters) {
 		queried = queried.Union(filter.EventTypes)
 	}
 
