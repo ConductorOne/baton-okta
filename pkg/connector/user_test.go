@@ -1057,3 +1057,49 @@ func TestCreateAccountDuplicateLogin(t *testing.T) {
 		}
 	})
 }
+
+func TestUserRotate(t *testing.T) {
+	randomPassword := v2.LocalCredentialOptions_builder{
+		RandomPassword: &v2.LocalCredentialOptions_RandomPassword{Length: 20},
+	}.Build()
+	noPassword := v2.LocalCredentialOptions_builder{
+		NoPassword: &v2.LocalCredentialOptions_NoPassword{},
+	}.Build()
+	updateStep := func(statusCode int, body string) []oktaRequestStep {
+		return []oktaRequestStep{{method: http.MethodPost, path: "/api/v1/users/" + testOktaUserID, statusCode: statusCode, body: body}}
+	}
+
+	tests := []struct {
+		name     string
+		id       *v2.ResourceId
+		opts     *v2.LocalCredentialOptions
+		steps    []oktaRequestStep
+		wantCode codes.Code
+	}{
+		{name: "non-random option", id: userResourceID(), opts: noPassword, wantCode: codes.InvalidArgument},
+		{name: "empty user id", id: &v2.ResourceId{}, opts: randomPassword, wantCode: codes.InvalidArgument},
+		{name: "policy rejection", id: userResourceID(), opts: randomPassword, steps: updateStep(http.StatusBadRequest, oktaLifecycleErrorResponse()), wantCode: codes.Unknown},
+		{name: "success", id: userResourceID(), opts: randomPassword, steps: updateStep(http.StatusOK, oktaUserResponse("ACTIVE"))},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newScriptedOktaClient(t, tc.steps...)
+			got, _, err := userBuilder(&Okta{client: client}).Rotate(t.Context(), tc.id, tc.opts)
+			if tc.wantCode != codes.OK {
+				if err == nil {
+					t.Fatal("Rotate error = nil, want error")
+				}
+				if tc.wantCode == codes.InvalidArgument && status.Code(err) != codes.InvalidArgument {
+					t.Fatalf("Rotate code = %s, want InvalidArgument", status.Code(err))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Rotate: %v", err)
+			}
+			if len(got) != 1 || got[0].GetName() != "password" || len(got[0].GetBytes()) != 20 {
+				t.Errorf("Rotate result = %v, want one 20-byte password", got)
+			}
+		})
+	}
+}

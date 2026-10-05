@@ -76,6 +76,8 @@ On such an app, the direct assignments produced this way are marked immutable, b
 
 The Okta connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
+The Okta connector supports credential rotation for accounts. It sets a new random password on the Okta user. Rotation requires an API token or OAuth app with `okta.users.manage` scope, and fails for federated or social users, who have no Okta password.
+
 The Okta connector supports account deprovisioning through C1 resource deletion. It first deactivates the user to the `DEPROVISIONED` state and then permanently deletes the user. The same operations are available separately through the `deactivate_user` and `delete_user` connector actions. These operations require an API token or OAuth app with `okta.users.manage` scope.
 
 #### Account creation profile fields

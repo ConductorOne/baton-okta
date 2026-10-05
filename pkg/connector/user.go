@@ -425,6 +425,9 @@ func (o *userResourceType) Rotate(
 	}
 
 	userID := resourceId.GetResource()
+	if userID == "" {
+		return nil, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: missing user id")
+	}
 	body := okta.User{Credentials: &okta.UserCredentials{Password: &okta.PasswordCredential{Value: password}}}
 	_, resp, err := o.connector.client.User.PartialUpdateUser(ctx, userID, body, nil)
 	if err != nil {
