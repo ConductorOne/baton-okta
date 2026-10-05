@@ -73,6 +73,7 @@ type userResourceType struct {
 }
 
 var _ connectorbuilder.ResourceDeleterV2Limited = (*userResourceType)(nil)
+var _ connectorbuilder.CredentialManagerLimited = (*userResourceType)(nil)
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
@@ -397,6 +398,40 @@ func (o *userResourceType) CreateAccountCapabilityDetails(ctx context.Context) (
 		},
 		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
 	}, nil, nil
+}
+
+func (o *userResourceType) RotateCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsCredentialRotation, annotations.Annotations, error) {
+	return &v2.CredentialDetailsCredentialRotation{
+		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD,
+		},
+		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD,
+	}, nil, nil
+}
+
+// Rotate sets a new random password on the Okta user. The SDK encrypts the returned plaintext.
+func (o *userResourceType) Rotate(
+	ctx context.Context,
+	resourceId *v2.ResourceId,
+	credentialOptions *v2.LocalCredentialOptions,
+) ([]*v2.PlaintextData, annotations.Annotations, error) {
+	if credentialOptions.GetRandomPassword() == nil {
+		return nil, nil, status.Error(codes.InvalidArgument, "okta-connectorv2: unsupported credential option for rotation")
+	}
+
+	password, err := crypto.GeneratePassword(ctx, credentialOptions)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to generate password: %w", err)
+	}
+
+	userID := resourceId.GetResource()
+	body := okta.User{Credentials: &okta.UserCredentials{Password: &okta.PasswordCredential{Value: password}}}
+	_, resp, err := o.connector.client.User.PartialUpdateUser(ctx, userID, body, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to set password for user %s: %w", userID, handleOktaResponseError(resp, err))
+	}
+
+	return []*v2.PlaintextData{{Name: "password", Bytes: []byte(password)}}, nil, nil
 }
 
 func ToPtr[T any](v T) *T {
