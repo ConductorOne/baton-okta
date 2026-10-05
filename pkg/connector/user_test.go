@@ -1,6 +1,8 @@
 package connector
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1078,27 +1080,32 @@ func TestUserRotate(t *testing.T) {
 	}{
 		{name: "non-random option", id: userResourceID(), opts: noPassword, wantCode: codes.InvalidArgument},
 		{name: "empty user id", id: &v2.ResourceId{}, opts: randomPassword, wantCode: codes.InvalidArgument},
-		{name: "policy rejection", id: userResourceID(), opts: randomPassword, steps: updateStep(http.StatusBadRequest, oktaLifecycleErrorResponse()), wantCode: codes.Unknown},
+		{name: "policy rejection", id: userResourceID(), opts: randomPassword, steps: updateStep(http.StatusBadRequest, oktaLifecycleErrorResponse()), wantCode: codes.InvalidArgument},
 		{name: "success", id: userResourceID(), opts: randomPassword, steps: updateStep(http.StatusOK, oktaUserResponse("ACTIVE"))},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			var sent []byte
+			if len(tc.steps) > 0 {
+				tc.steps[0].onBody = func(body []byte) { sent = body }
+			}
 			client := newScriptedOktaClient(t, tc.steps...)
 			got, _, err := userBuilder(&Okta{client: client}).Rotate(t.Context(), tc.id, tc.opts)
+			if status.Code(err) != tc.wantCode {
+				t.Fatalf("Rotate code = %s (err %v), want %s", status.Code(err), err, tc.wantCode)
+			}
 			if tc.wantCode != codes.OK {
-				if err == nil {
-					t.Fatal("Rotate error = nil, want error")
-				}
-				if tc.wantCode == codes.InvalidArgument && status.Code(err) != codes.InvalidArgument {
-					t.Fatalf("Rotate code = %s, want InvalidArgument", status.Code(err))
-				}
 				return
 			}
-			if err != nil {
-				t.Fatalf("Rotate: %v", err)
-			}
 			if len(got) != 1 || got[0].GetName() != "password" || len(got[0].GetBytes()) != 20 {
-				t.Errorf("Rotate result = %v, want one 20-byte password", got)
+				t.Fatalf("Rotate result = %v, want one 20-byte password", got)
+			}
+			wantBody, err := json.Marshal(map[string]any{"credentials": map[string]any{"password": map[string]any{"value": string(got[0].GetBytes())}}})
+			if err != nil {
+				t.Fatalf("marshal want body: %v", err)
+			}
+			if !bytes.Equal(bytes.TrimSpace(sent), wantBody) {
+				t.Errorf("request body = %s, want %s", sent, wantBody)
 			}
 		})
 	}

@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -29,6 +30,8 @@ type oktaRequestStep struct {
 	// headers are written before the body; use Link with rel="next" to make the
 	// Okta SDK report a next page.
 	headers map[string]string
+	// onBody, when set, receives the request body.
+	onBody func(body []byte)
 }
 
 func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client {
@@ -58,6 +61,10 @@ func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client 
 			if got := r.URL.Query().Get(key); got != want {
 				t.Errorf("request %d query %s = %q, want %q", next, key, got, want)
 			}
+		}
+		if step.onBody != nil {
+			body, _ := io.ReadAll(r.Body)
+			step.onBody(body)
 		}
 		for k, v := range step.headers {
 			w.Header().Set(k, v)
