@@ -1,11 +1,11 @@
 package connector
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -1100,12 +1100,13 @@ func TestUserRotate(t *testing.T) {
 			if len(got) != 1 || got[0].GetName() != "password" || len(got[0].GetBytes()) != 20 {
 				t.Fatalf("Rotate result = %v, want one 20-byte password", got)
 			}
-			wantBody, err := json.Marshal(map[string]any{"credentials": map[string]any{"password": map[string]any{"value": string(got[0].GetBytes())}}})
-			if err != nil {
-				t.Fatalf("marshal want body: %v", err)
+			var sentBody map[string]map[string]map[string]string
+			if err := json.Unmarshal(sent, &sentBody); err != nil {
+				t.Fatalf("unmarshal request body %s: %v", sent, err)
 			}
-			if !bytes.Equal(bytes.TrimSpace(sent), wantBody) {
-				t.Errorf("request body = %s, want %s", sent, wantBody)
+			wantBody := map[string]map[string]map[string]string{"credentials": {"password": {"value": string(got[0].GetBytes())}}}
+			if !reflect.DeepEqual(sentBody, wantBody) {
+				t.Errorf("request body = %s, want only credentials.password.value", sent)
 			}
 		})
 	}
