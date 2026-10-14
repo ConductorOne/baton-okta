@@ -11,6 +11,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	"github.com/conductorone/baton-sdk/pkg/session"
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -19,6 +20,8 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var alreadyAssignedRole = "E0000090"
@@ -124,7 +127,7 @@ func (o *roleResourceType) Entitlements(
 		}
 	}
 
-	en := sdkEntitlement.NewAssignmentEntitlement(resource, "assigned",
+	en := sdkEntitlement.NewAssignmentEntitlement(resource, roleEntitlementAssigned,
 		sdkEntitlement.WithDisplayName(fmt.Sprintf("%s Role Member", role.Label)),
 		sdkEntitlement.WithDescription(fmt.Sprintf("Has the %s role in Okta", role.Label)),
 		sdkEntitlement.WithAnnotation(&v2.V1Identifier{
@@ -133,6 +136,10 @@ func (o *roleResourceType) Entitlements(
 		sdkEntitlement.WithGrantableTo(resourceTypeUser, resourceTypeGroup),
 	)
 	rv = append(rv, en)
+
+	if _, ok := scopedRoleFromType(resource.Id.GetResource()); ok && o.connector.syncAdminRoleScopes {
+		rv = append(rv, entireOrgRoleEntitlement(resource, role))
+	}
 
 	return rv, nil, nil
 }
@@ -200,6 +207,7 @@ func (o *roleResourceType) Grants(
 	// Now, get any remaining user roles (those that aren't in cache)
 	// and keep track of them so that we can try to cache them later.
 	toCache := make(map[string]mapset.Set[string])
+	assignmentIDsToCache := make(map[string]map[string]string)
 	for _, userId := range filteredUserIDs {
 		// If this user's roles are already cached, keep moving.
 		if _, found := userRoles[userId]; found {
@@ -233,6 +241,9 @@ func (o *roleResourceType) Grants(
 
 		userRoles[userId] = newUserRoles
 		toCache[userId] = newUserRoles
+		if o.connector.syncAdminRoleScopes {
+			assignmentIDsToCache[userId] = standardRoleAssignmentIDs(roles, "USER")
+		}
 	}
 
 	// Attempt to add any non-cached roles to the cache now.
@@ -242,12 +253,40 @@ func (o *roleResourceType) Grants(
 			// Continue, either way, the cache is best-effort.
 		}
 	}
+	if len(assignmentIDsToCache) > 0 {
+		if err := session.SetManyJSON(ctx, attrs.Session, assignmentIDsToCache, userRoleAssignmentPrefix); err != nil {
+			l.Debug("failed to batch set user role assignments in cache", zap.Error(err))
+		}
+	}
 
 	// Now, evaluate all role grants.
+	roleType := resource.Id.GetResource()
+	sr, scoped := scopedRoleFromType(roleType)
+	scoped = scoped && o.connector.syncAdminRoleScopes
 	for user, roles := range userRoles {
-		if roles.ContainsOne(resource.Id.GetResource()) {
-			rv = append(rv, roleGrant(user, resource))
+		if !roles.ContainsOne(roleType) {
+			continue
 		}
+		rv = append(rv, roleGrant(user, resource))
+
+		if !scoped {
+			continue
+		}
+		assignmentIDs, err := o.connector.userRoleAssignmentIDs(ctx, attrs.Session, user)
+		if err != nil {
+			return nil, nil, err
+		}
+		assignmentID, ok := assignmentIDs[roleType]
+		if !ok {
+			// Unassigned since the role set was cached.
+			continue
+		}
+		scopeGrants, err := o.connector.roleScopeGrants(ctx, attrs.Session,
+			rolePrincipal{resourceType: resourceTypeUser.Id, id: user}, assignmentID, sr)
+		if err != nil {
+			return nil, nil, err
+		}
+		rv = append(rv, scopeGrants...)
 	}
 
 	pageToken, err := bag.Marshal()
@@ -452,6 +491,20 @@ func roleGroupGrant(groupID string, resource *v2.Resource, shouldExpand bool) *v
 	return sdkGrant.NewGrant(resource, "assigned", gr, grantOpts...)
 }
 
+// roleGroupScopeGrantOpts expands a group's role scope grants to its members,
+// matching roleGroupGrant.
+func roleGroupScopeGrantOpts(groupID string, shouldExpand bool) []sdkGrant.GrantOption {
+	if !shouldExpand {
+		return nil
+	}
+	return []sdkGrant.GrantOption{
+		sdkGrant.WithAnnotation(&v2.GrantExpandable{
+			EntitlementIds: []string{fmt.Sprintf("group:%s:member", groupID)},
+			Shallow:        true,
+		}),
+	}
+}
+
 func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	if principal.Id.ResourceType != resourceTypeUser.Id {
@@ -491,6 +544,12 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 					zap.String("ErrorCode", errOkta.ErrorCode),
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
+
+				if entitlementSlug(entitlement) == roleEntitlementEntireOrg {
+					if err := g.checkExistingAssignmentIsEntireOrg(ctx, userId, roleId); err != nil {
+						return nil, err
+					}
+				}
 
 				annos := rateLimitAnnotations(response)
 				annos.Append(&v2.GrantAlreadyExists{})
@@ -554,6 +613,33 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 	}
 }
 
+// checkExistingAssignmentIsEntireOrg fails when the user's existing assignment
+// of roleType is constrained to specific resources, so an entire-organization
+// grant is not reported as already satisfied.
+func (g *roleResourceType) checkExistingAssignmentIsEntireOrg(ctx context.Context, userID, roleType string) error {
+	sr, ok := scopedRoleFromType(roleType)
+	if !ok {
+		return nil
+	}
+	roles, resp, err := listAssignedRolesForUser(ctx, g.client, userID)
+	if err != nil {
+		return fmt.Errorf("okta-connector: failed to list roles for user: %w", handleOktaResponseError(resp, err))
+	}
+	assignmentID, ok := standardRoleAssignmentIDs(roles, "USER")[roleType]
+	if !ok {
+		return nil
+	}
+	targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userID}, assignmentID, sr)
+	if err != nil {
+		return err
+	}
+	if !targets.isEntireOrg() {
+		return status.Errorf(codes.FailedPrecondition,
+			"okta-connector: user already has the %s role constrained to specific resources; remove the constraints in Okta to widen it to the entire organization", roleType)
+	}
+	return nil
+}
+
 func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
@@ -591,6 +677,23 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		}
 
 		roleId = roles[rolePos].Id
+
+		// Revoking the entire-organization grant must not remove an assignment
+		// that has since been narrowed to specific resources.
+		if sr, ok := scopedRoleFromType(roleType); ok && entitlementSlug(entitlement) == roleEntitlementEntireOrg {
+			targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userId}, roleId, sr)
+			if err != nil {
+				return nil, err
+			}
+			if !targets.isEntireOrg() {
+				l.Debug("okta-connector: role assignment is no longer constrained to the entire organization",
+					zap.String("principal_id", principal.Id.String()),
+					zap.String("role_type", roleType),
+				)
+				return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+			}
+		}
+
 		response, err := g.client.User.RemoveRoleFromUser(ctx, userId, roleId)
 		if err != nil {
 			return revokeNotFoundOrError(ctx, principal, response, err,

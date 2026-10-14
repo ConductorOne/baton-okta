@@ -26,8 +26,10 @@ type appResourceType struct {
 	apiToken         string
 	syncInactiveApps bool
 	skipAppGroups    bool
-	userEmailFilters []string
-	client           *okta.Client
+	// Adds the APP_ADMIN scope entitlement to each app. See role_scope.go.
+	syncAdminRoleScopes bool
+	userEmailFilters    []string
+	client              *okta.Client
 }
 
 const (
@@ -70,15 +72,16 @@ func (o *appResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func appBuilder(domain string, apiToken string, syncInactiveApps bool, skipAppGroups bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
+func appBuilder(domain string, apiToken string, syncInactiveApps bool, skipAppGroups bool, syncAdminRoleScopes bool, filterEmailDomains []string, client *okta.Client) *appResourceType {
 	return &appResourceType{
-		resourceType:     resourceTypeApp,
-		domain:           domain,
-		apiToken:         apiToken,
-		client:           client,
-		syncInactiveApps: syncInactiveApps,
-		skipAppGroups:    skipAppGroups,
-		userEmailFilters: filterEmailDomains,
+		resourceType:        resourceTypeApp,
+		domain:              domain,
+		apiToken:            apiToken,
+		client:              client,
+		syncInactiveApps:    syncInactiveApps,
+		skipAppGroups:       skipAppGroups,
+		syncAdminRoleScopes: syncAdminRoleScopes,
+		userEmailFilters:    filterEmailDomains,
 	}
 }
 
@@ -140,6 +143,9 @@ func (o *appResourceType) Entitlements(
 			Id: V1MembershipEntitlementID(resource.Id.GetResource()),
 		}),
 	))
+	if o.syncAdminRoleScopes {
+		rv = append(rv, roleScopeTargetEntitlements(resource, roleTargetKindApp)...)
+	}
 
 	return rv, nil, nil
 }
@@ -545,6 +551,9 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		)
 		return nil, fmt.Errorf("okta-connector: only users or groups can be granted app membership")
 	}
+	if slug := entitlementSlug(entitlement); isRoleScopeTargetSlug(slug) {
+		return nil, roleScopeTargetNotProvisionable(slug)
+	}
 
 	appID := entitlement.Resource.Id.Resource
 	switch principal.Id.ResourceType {
@@ -691,6 +700,9 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 			zap.String("principal_id", principal.Id.Resource),
 		)
 		return nil, fmt.Errorf("okta-connector:only users or groups can have app membership revoked")
+	}
+	if slug := entitlementSlug(entitlement); isRoleScopeTargetSlug(slug) {
+		return nil, roleScopeTargetNotProvisionable(slug)
 	}
 
 	appID := entitlement.Resource.Id.Resource

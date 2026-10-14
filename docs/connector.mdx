@@ -37,6 +37,15 @@ This page covers the Okta **connector**, which syncs and provisions access data 
 </Note>
 
 <Note>
+**Admin role scopes are opt-in.** Okta lets you constrain the Group Administrator, Help Desk Administrator, Group Membership Administrator, and Application Administrator roles to specific groups or apps. An assignment without any groups or apps applies to the entire organization. Enable **Sync admin role scopes** to sync these constraints:
+
+- Each of those roles gets an **(Entire organization)** entitlement, such as **Application Administrator (Entire organization)**, granted when the assignment is not constrained.
+- Each group gets **Group Administrator**, **Help Desk Administrator**, and **Group Membership Administrator** entitlements, granted when an assignment is constrained to that group. Each app gets an **Application Administrator** entitlement, granted when an assignment is constrained to that app. An assignment constrained to an Okta Integration Network app, rather than to one instance of it, is granted on every synced instance of that app.
+
+The existing **Role Member** entitlement still covers every assignment of the role. You can revoke an **(Entire organization)** grant, which removes the role assignment. You can also grant it, which assigns the role without constraints. The group and app scope entitlements are read-only, so change them in Okta. Syncing scopes adds one Okta API call for each assignment of these roles.
+</Note>
+
+<Note>
 The standard roles **Workflows Administrator**, **Access Certifications Administrator**, and **Access Requests Administrator** appear as Custom Roles in C1. Enable **Sync Custom Roles** to see them. The Okta API returns these roles through the same endpoint as custom roles.
 </Note>
 
@@ -471,6 +480,9 @@ Enter your credentials:
 </Step>
 <Step>
 **Optional.** If desired, click the checkbox to **Sync custom roles**.
+</Step>
+<Step>
+**Optional.** If desired, click the checkbox to **Sync admin role scopes** to sync whether admin roles are constrained to the entire organization or to specific groups and apps.
 </Step>
 <Step>
 **Optional.** If desired, click the checkbox to **Skip secondary emails** when syncing user information.

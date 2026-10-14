@@ -120,6 +120,9 @@ func (o *groupResourceType) Entitlements(
 ) ([]*v2.Entitlement, *sdkResource.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	rv = append(rv, o.groupEntitlement(resource))
+	if o.connector.syncAdminRoleScopes {
+		rv = append(rv, roleScopeTargetEntitlements(resource, roleTargetKindGroup)...)
+	}
 
 	return rv, nil, nil
 }
@@ -274,6 +277,16 @@ func (o *groupResourceType) Grants(
 				l.Debug("okta-connectorv2: skipping expand for role group grant since users_count is 0")
 			}
 			rv = append(rv, roleGroupGrant(groupID, roleResourceVal, shouldExpand))
+
+			if sr, ok := scopedRoleFromType(role.Type); ok && o.connector.syncAdminRoleScopes {
+				scopeGrants, err := o.connector.roleScopeGrants(ctx, attrs.Session,
+					rolePrincipal{resourceType: resourceTypeGroup.Id, id: groupID}, role.Id, sr,
+					roleGroupScopeGrantOpts(groupID, shouldExpand)...)
+				if err != nil {
+					return nil, nil, err
+				}
+				rv = append(rv, scopeGrants...)
+			}
 		}
 
 		// TODO(lauren) Move this to list method like other methods do
@@ -530,6 +543,9 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 		)
 		return nil, fmt.Errorf("okta-connector: only users can be granted group membership")
 	}
+	if slug := entitlementSlug(entitlement); isRoleScopeTargetSlug(slug) {
+		return nil, roleScopeTargetNotProvisionable(slug)
+	}
 
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
@@ -559,6 +575,9 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 			zap.String("principal_id", principal.Id.Resource),
 		)
 		return nil, fmt.Errorf("okta-connector:only users can have group membership revoked")
+	}
+	if slug := entitlementSlug(entitlement); isRoleScopeTargetSlug(slug) {
+		return nil, roleScopeTargetNotProvisionable(slug)
 	}
 
 	groupId := entitlement.Resource.Id.Resource

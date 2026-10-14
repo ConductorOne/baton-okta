@@ -83,6 +83,11 @@ var (
 		field.WithDescription("Press Enter to add multiple items."),
 		field.WithPlaceholder("A list of user email domains to include for syncs, e.g. acmeco.com"),
 	)
+	syncAdminRoleScopes = field.BoolField("sync-admin-role-scopes",
+		field.WithDisplayName("Sync admin role scopes"),
+		field.WithDescription("Whether to sync which resources standard admin roles are constrained to: the entire organization, or specific groups or apps. Adds an entitlement per admin role to each group and app."),
+		field.WithDefaultValue(false),
+	)
 	skipAppGroups = field.BoolField("skip-app-groups",
 		field.WithDisplayName("Skip app groups"),
 		field.WithDescription("Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not"),
@@ -106,6 +111,7 @@ var Config = field.NewConfiguration([]field.SchemaField{
 	syncSecrets,
 	filterEmailDomains,
 	skipAppGroups,
+	syncAdminRoleScopes,
 },
 	field.WithConnectorDisplayName("Okta"),
 	field.WithIconUrl("/static/app-icons/okta.svg"),
@@ -126,7 +132,8 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				skipSecondaryEmails,
 				syncSecrets,
 				filterEmailDomains,
-				skipAppGroups},
+				skipAppGroups,
+				syncAdminRoleScopes},
 		},
 		{
 			Name:        PrivateKeyGroup,
@@ -145,7 +152,8 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				skipSecondaryEmails,
 				syncSecrets,
 				filterEmailDomains,
-				skipAppGroups},
+				skipAppGroups,
+				syncAdminRoleScopes},
 		},
 	}),
 )
