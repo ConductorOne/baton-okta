@@ -543,6 +543,9 @@ func appResource(app *okta.Application) (*v2.Resource, error) {
 
 func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	if isRoleScopeTargetEntitlement(entitlement) {
+		return nil, roleScopeTargetNotProvisionable(entitlement)
+	}
 	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
 			"okta-connector: only users or groups can be granted app membership",
@@ -550,9 +553,6 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			zap.String("principal_id", principal.Id.Resource),
 		)
 		return nil, fmt.Errorf("okta-connector: only users or groups can be granted app membership")
-	}
-	if slug := entitlementSlug(entitlement); isRoleScopeTargetSlug(slug) {
-		return nil, roleScopeTargetNotProvisionable(slug)
 	}
 
 	appID := entitlement.Resource.Id.Resource
@@ -693,6 +693,9 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	l := ctxzap.Extract(ctx)
 	entitlement := grant.Entitlement
 	principal := grant.Principal
+	if isRoleScopeTargetEntitlement(entitlement) {
+		return nil, roleScopeTargetNotProvisionable(entitlement)
+	}
 	if principal.Id.ResourceType != resourceTypeUser.Id && principal.Id.ResourceType != resourceTypeGroup.Id {
 		l.Warn(
 			"okta-connector: only users or groups can have app membership revoked",
@@ -700,9 +703,6 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 			zap.String("principal_id", principal.Id.Resource),
 		)
 		return nil, fmt.Errorf("okta-connector:only users or groups can have app membership revoked")
-	}
-	if slug := entitlementSlug(entitlement); isRoleScopeTargetSlug(slug) {
-		return nil, roleScopeTargetNotProvisionable(slug)
 	}
 
 	appID := entitlement.Resource.Id.Resource

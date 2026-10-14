@@ -272,9 +272,12 @@ func (o *roleResourceType) Grants(
 		if !scoped {
 			continue
 		}
-		assignmentIDs, err := o.connector.userRoleAssignmentIDs(ctx, attrs.Session, user)
-		if err != nil {
-			return nil, nil, err
+		assignmentIDs, ok := assignmentIDsToCache[user]
+		if !ok {
+			assignmentIDs, err = o.connector.userRoleAssignmentIDs(ctx, attrs.Session, user)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		assignmentID, ok := assignmentIDs[roleType]
 		if !ok {
@@ -465,7 +468,7 @@ func roleResource(role *okta.Role, ctype *v2.ResourceType) (*v2.Resource, error)
 func roleGrant(userID string, resource *v2.Resource) *v2.Grant {
 	ur := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}}
 
-	return sdkGrant.NewGrant(resource, "assigned", ur,
+	return sdkGrant.NewGrant(resource, roleEntitlementAssigned, ur,
 		sdkGrant.WithAnnotation(&v2.V1Identifier{
 			Id: fmtGrantIdV1(V1RoleEntitlementID(resource.Id.Resource), userID),
 		}),
@@ -488,7 +491,7 @@ func roleGroupGrant(groupID string, resource *v2.Resource, shouldExpand bool) *v
 		}))
 	}
 
-	return sdkGrant.NewGrant(resource, "assigned", gr, grantOpts...)
+	return sdkGrant.NewGrant(resource, roleEntitlementAssigned, gr, grantOpts...)
 }
 
 // roleGroupScopeGrantOpts expands a group's role scope grants to its members,
@@ -507,6 +510,10 @@ func roleGroupScopeGrantOpts(groupID string, shouldExpand bool) []sdkGrant.Grant
 
 func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	if principal.Id.ResourceType != resourceTypeUser.Id && isEntireOrgEntitlement(entitlement) {
+		return nil, status.Errorf(codes.Unimplemented,
+			"okta-connector: %s can only be granted to users", entitlement.GetId())
+	}
 	if principal.Id.ResourceType != resourceTypeUser.Id {
 		l.Warn(
 			"okta-connector: only users or groups can be granted role membership",
@@ -545,7 +552,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 					zap.String("ErrorSummary", errOkta.ErrorSummary),
 				)
 
-				if entitlementSlug(entitlement) == roleEntitlementEntireOrg {
+				if isEntireOrgEntitlement(entitlement) {
 					if err := g.checkExistingAssignmentIsEntireOrg(ctx, userId, roleId); err != nil {
 						return nil, err
 					}
@@ -629,7 +636,7 @@ func (g *roleResourceType) checkExistingAssignmentIsEntireOrg(ctx context.Contex
 	if !ok {
 		return nil
 	}
-	targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userID}, assignmentID, sr)
+	targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userID}, assignmentID, sr, true)
 	if err != nil {
 		return err
 	}
@@ -645,6 +652,10 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 	entitlement := grant.Entitlement
 	principal := grant.Principal
 	roleId := ""
+	if principal.Id.ResourceType != resourceTypeUser.Id && isEntireOrgEntitlement(entitlement) {
+		return nil, status.Errorf(codes.Unimplemented,
+			"okta-connector: %s can only be revoked from users; remove the group's role assignment in Okta", entitlement.GetId())
+	}
 	if principal.Id.ResourceType != resourceTypeUser.Id {
 		l.Warn(
 			"okta-connector: only users or groups can have role membership revoked",
@@ -663,8 +674,10 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 			return nil, fmt.Errorf("okta-connector: failed to get roles: %w", handleOktaResponseError(resp, err))
 		}
 
+		// The list also includes roles inherited through group membership; only
+		// the user's direct assignment can be removed through this user.
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
-			return r.Type == roleType && r.Status == userStatusActive
+			return r.Type == roleType && r.Status == userStatusActive && r.AssignmentType == "USER"
 		})
 		if rolePos == NF {
 			l.Debug(
@@ -680,9 +693,12 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 
 		// Revoking the entire-organization grant must not remove an assignment
 		// that has since been narrowed to specific resources.
-		if sr, ok := scopedRoleFromType(roleType); ok && entitlementSlug(entitlement) == roleEntitlementEntireOrg {
-			targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userId}, roleId, sr)
+		if sr, ok := scopedRoleFromType(roleType); ok && isEntireOrgEntitlement(entitlement) {
+			targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userId}, roleId, sr, true)
 			if err != nil {
+				if status.Code(err) == codes.NotFound {
+					return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+				}
 				return nil, err
 			}
 			if !targets.isEntireOrg() {

@@ -3,6 +3,8 @@ package connector
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -10,17 +12,13 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Standard admin roles that Okta lets an admin constrain to specific groups or
-// apps. An assignment with no targets applies to the entire organization; the
-// Okta admin console labels that "Entire organization". Custom roles are scoped
-// through resource sets instead (see resource_sets_bindings.go), and Okta does
-// not allow binding a standard role to a resource set.
 
 const (
 	roleEntitlementAssigned = "assigned"
@@ -40,6 +38,11 @@ type scopedRoleType struct {
 	targetSlug string
 }
 
+// scopedRoleTypes are the standard admin roles that Okta lets an admin constrain
+// to specific groups or apps. An assignment with no targets applies to the entire
+// organization; the Okta admin console labels that "Entire organization". Custom
+// roles are scoped through resource sets instead (see resource_sets_bindings.go),
+// and Okta does not allow binding a standard role to a resource set.
 var scopedRoleTypes = []scopedRoleType{
 	{roleType: "USER_ADMIN", targetKind: roleTargetKindGroup, targetSlug: "group-admin"},
 	{roleType: "HELP_DESK_ADMIN", targetKind: roleTargetKindGroup, targetSlug: "help-desk-admin"},
@@ -75,12 +78,26 @@ func isRoleScopeTargetSlug(slug string) bool {
 	return false
 }
 
-// entitlementSlug returns the entitlement's slug, falling back to the suffix of
-// its ID when the caller did not populate Slug.
-func entitlementSlug(e *v2.Entitlement) string {
-	if slug := e.GetSlug(); slug != "" {
-		return slug
+// isRoleScopeTargetEntitlement reports whether e is one of the review-only group
+// or app scope entitlements. It fails closed: C1 lets admins edit an
+// entitlement's slug, so a match on either the immutable connector ID suffix or
+// the slug counts.
+func isRoleScopeTargetEntitlement(e *v2.Entitlement) bool {
+	return isRoleScopeTargetSlug(entitlementIDSlug(e)) || isRoleScopeTargetSlug(e.GetSlug())
+}
+
+// isEntireOrgEntitlement matches on the connector ID suffix, which C1 does not
+// let admins edit, and falls back to the slug only when the ID is absent.
+func isEntireOrgEntitlement(e *v2.Entitlement) bool {
+	if e.GetId() != "" {
+		return entitlementIDSlug(e) == roleEntitlementEntireOrg
 	}
+	return e.GetSlug() == roleEntitlementEntireOrg
+}
+
+// entitlementIDSlug returns the slug segment of a connector entitlement ID
+// (<resource type>:<resource id>:<slug>), or "" when the ID does not have that shape.
+func entitlementIDSlug(e *v2.Entitlement) string {
 	rid := e.GetResource().GetId()
 	prefix := rid.GetResourceType() + ":" + rid.GetResource() + ":"
 	if rest, ok := strings.CutPrefix(e.GetId(), prefix); ok {
@@ -118,20 +135,20 @@ func roleScopeTargetEntitlements(resource *v2.Resource, kind string) []*v2.Entit
 	return rv
 }
 
-func roleScopeTargetNotProvisionable(slug string) error {
+func roleScopeTargetNotProvisionable(e *v2.Entitlement) error {
 	return status.Errorf(codes.Unimplemented,
-		"okta-connector: %s is synced for review only; change admin role resources in Okta", slug)
+		"okta-connector: %s is synced for review only; change admin role resources in Okta", e.GetId())
 }
 
 // roleTargets is what an admin role assignment is constrained to. Both empty means
 // the entire organization.
 type roleTargets struct {
-	groupIDs []string
-	apps     []*okta.CatalogApplication
+	groups []*okta.Group
+	apps   []*okta.CatalogApplication
 }
 
 func (t roleTargets) isEntireOrg() bool {
-	return len(t.groupIDs) == 0 && len(t.apps) == 0
+	return len(t.groups) == 0 && len(t.apps) == 0
 }
 
 type rolePrincipal struct {
@@ -139,54 +156,63 @@ type rolePrincipal struct {
 	id           string
 }
 
-func (o *Okta) listRoleTargets(ctx context.Context, principal rolePrincipal, assignmentID string, sr scopedRoleType) (roleTargets, error) {
-	qp := query.NewQueryParams(query.WithLimit(roleTargetsPageLimit))
-	var (
-		rv   roleTargets
-		resp *okta.Response
-		err  error
-	)
+func (p rolePrincipal) apiPath() string {
+	if p.resourceType == resourceTypeGroup.Id {
+		return groupsUrl
+	}
+	return usersUrl
+}
+
+// listRoleTargets lists what a role assignment is constrained to. fresh bypasses
+// the client's response cache on every page; Grant and Revoke need it because a
+// cached "no targets" answer would let them act on an assignment that has since
+// been narrowed.
+func (o *Okta) listRoleTargets(ctx context.Context, principal rolePrincipal, assignmentID string, sr scopedRoleType, fresh bool) (roleTargets, error) {
+	var suffix string
 	switch sr.targetKind {
 	case roleTargetKindGroup:
-		var groups []*okta.Group
-		if principal.resourceType == resourceTypeGroup.Id {
-			groups, resp, err = o.client.Group.ListGroupTargetsForGroupRole(ctx, principal.id, assignmentID, qp)
-		} else {
-			groups, resp, err = o.client.User.ListGroupTargetsForRole(ctx, principal.id, assignmentID, qp)
-		}
-		for {
-			if err != nil {
-				return roleTargets{}, fmt.Errorf("okta-connector: failed to list group targets for %s role: %w", sr.roleType, handleOktaResponseError(resp, err))
-			}
-			for _, g := range groups {
-				rv.groupIDs = append(rv.groupIDs, g.Id)
-			}
-			if resp == nil || !resp.HasNextPage() {
-				break
-			}
-			groups = nil
-			resp, err = resp.Next(ctx, &groups)
-		}
+		suffix = "groups"
 	case roleTargetKindApp:
-		var apps []*okta.CatalogApplication
-		if principal.resourceType == resourceTypeGroup.Id {
-			apps, resp, err = o.client.Group.ListApplicationTargetsForApplicationAdministratorRoleForGroup(ctx, principal.id, assignmentID, qp)
-		} else {
-			apps, resp, err = o.client.User.ListApplicationTargetsForApplicationAdministratorRoleForUser(ctx, principal.id, assignmentID, qp)
-		}
-		for {
-			if err != nil {
-				return roleTargets{}, fmt.Errorf("okta-connector: failed to list app targets for %s role: %w", sr.roleType, handleOktaResponseError(resp, err))
-			}
-			rv.apps = append(rv.apps, apps...)
-			if resp == nil || !resp.HasNextPage() {
-				break
-			}
-			apps = nil
-			resp, err = resp.Next(ctx, &apps)
-		}
+		suffix = "catalog/apps"
 	default:
 		return roleTargets{}, fmt.Errorf("okta-connector: unknown role target kind %q", sr.targetKind)
+	}
+	apiPath, err := url.JoinPath(principal.apiPath(), principal.id, "roles", assignmentID, "targets", suffix)
+	if err != nil {
+		return roleTargets{}, err
+	}
+	reqURL := apiPath + query.NewQueryParams(query.WithLimit(roleTargetsPageLimit)).String()
+
+	var rv roleTargets
+	for reqURL != "" {
+		rq := o.client.CloneRequestExecutor()
+		if fresh {
+			rq.RefreshNext()
+		}
+		req, err := rq.WithAccept(ContentType).WithContentType(ContentType).NewRequest(http.MethodGet, reqURL, nil)
+		if err != nil {
+			return roleTargets{}, err
+		}
+
+		var resp *okta.Response
+		switch sr.targetKind {
+		case roleTargetKindGroup:
+			var page []*okta.Group
+			resp, err = rq.Do(ctx, req, &page)
+			rv.groups = append(rv.groups, page...)
+		case roleTargetKindApp:
+			var page []*okta.CatalogApplication
+			resp, err = rq.Do(ctx, req, &page)
+			rv.apps = append(rv.apps, page...)
+		}
+		if err != nil {
+			return roleTargets{}, fmt.Errorf("okta-connector: failed to list %s targets of %s role assignment %s for %s %s: %w",
+				sr.targetKind, sr.roleType, assignmentID, principal.resourceType, principal.id, handleOktaResponseError(resp, err))
+		}
+		reqURL = ""
+		if resp != nil {
+			reqURL = resp.NextPage
+		}
 	}
 	return rv, nil
 }
@@ -219,7 +245,7 @@ func (o *Okta) catalogAppInstanceIDs(ctx context.Context, ss sessions.SessionSto
 		}
 		converted, err := oktaAppsToOktaApplications(apps)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("okta-connector: failed to decode instances of catalog app %q: %w", appName, err)
 		}
 		for _, app := range converted {
 			// Matches the app syncer: grants on an app resource that was never
@@ -231,7 +257,7 @@ func (o *Okta) catalogAppInstanceIDs(ctx context.Context, ss sessions.SessionSto
 		}
 		after, _, err = parseResp(resp)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("okta-connector: failed to parse instances page of catalog app %q: %w", appName, err)
 		}
 		if after == "" {
 			break
@@ -239,7 +265,9 @@ func (o *Okta) catalogAppInstanceIDs(ctx context.Context, ss sessions.SessionSto
 	}
 
 	if ss != nil {
-		_ = session.SetJSON(ctx, ss, appName, ids, catalogAppInstancesPrefix)
+		if err := session.SetJSON(ctx, ss, appName, ids, catalogAppInstancesPrefix); err != nil {
+			ctxzap.Extract(ctx).Debug("failed to cache catalog app instances", zap.Error(err))
+		}
 	}
 	return ids, nil
 }
@@ -255,8 +283,18 @@ func (o *Okta) roleScopeGrants(
 	sr scopedRoleType,
 	grantOpts ...sdkGrant.GrantOption,
 ) ([]*v2.Grant, error) {
-	targets, err := o.listRoleTargets(ctx, principal, assignmentID, sr)
+	targets, err := o.listRoleTargets(ctx, principal, assignmentID, sr, false)
 	if err != nil {
+		// The assignment was removed after it was listed. Failing here would
+		// drop every other grant on this page, so emit no scope for it.
+		if status.Code(err) == codes.NotFound {
+			ctxzap.Extract(ctx).Debug("okta-connector: role assignment disappeared while listing its targets",
+				zap.String("role_type", sr.roleType),
+				zap.String("principal_type", principal.resourceType),
+				zap.String("principal_id", principal.id),
+			)
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -278,8 +316,12 @@ func (o *Okta) roleScopeGrants(
 		rv = append(rv, sdkGrant.NewGrant(target, sr.targetSlug, pr, grantOpts...))
 	}
 
-	for _, gid := range targets.groupIDs {
-		add(resourceTypeGroup.Id, gid)
+	for _, g := range targets.groups {
+		// Matches the group syncer, which never emits these groups.
+		if o.skipAppGroups && g.Type == appGroupType {
+			continue
+		}
+		add(resourceTypeGroup.Id, g.Id)
 	}
 	for _, app := range targets.apps {
 		// App instance targets carry the instance ID; catalog targets only name
@@ -320,7 +362,9 @@ func (o *Okta) userRoleAssignmentIDs(ctx context.Context, ss sessions.SessionSto
 	}
 	ids := standardRoleAssignmentIDs(roles, "USER")
 	if ss != nil {
-		_ = session.SetJSON(ctx, ss, userID, ids, userRoleAssignmentPrefix)
+		if err := session.SetJSON(ctx, ss, userID, ids, userRoleAssignmentPrefix); err != nil {
+			ctxzap.Extract(ctx).Debug("failed to cache user role assignments", zap.Error(err))
+		}
 	}
 	return ids, nil
 }

@@ -243,7 +243,7 @@ Flags:
       --skip-full-sync                                   This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
       --skip-secondary-emails                            Whether to skip syncing secondary emails or not ($BATON_SKIP_SECONDARY_EMAILS)
       --storage-engine string                            The storage engine to use when opening the sync c1z file: sqlite or pebble. Leave unset to use the baton-sdk default. ($BATON_STORAGE_ENGINE)
-      --sync-admin-role-scopes                           Whether to sync which resources standard admin roles are constrained to: the entire organization, or specific groups or apps. Adds an entitlement per admin role to each group and app. ($BATON_SYNC_ADMIN_ROLE_SCOPES)
+      --sync-admin-role-scopes                           Whether to sync what standard admin roles are constrained to: the entire organization, or specific groups and apps ($BATON_SYNC_ADMIN_ROLE_SCOPES)
       --sync-custom-roles                                Whether to enable syncing custom roles or not ($BATON_SYNC_CUSTOM_ROLES)
       --sync-inactive-apps                               Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
       --sync-resource-types strings                      The resource type IDs to sync ($BATON_SYNC_RESOURCE_TYPES)

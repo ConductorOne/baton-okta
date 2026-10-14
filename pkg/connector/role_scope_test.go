@@ -1,12 +1,14 @@
 package connector
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -169,7 +171,7 @@ func TestRoleScopeGrants_GroupPrincipalExpandsToMembers(t *testing.T) {
 }
 
 func TestRoleScopeEntitlements(t *testing.T) {
-	groupRes := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testTargetGroupA}, DisplayName: "Atlanta"}
+	groupRes := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testTargetGroupA}, DisplayName: "Engineering"}
 
 	t.Run("groups get one entitlement per group-scoped role only when enabled", func(t *testing.T) {
 		for _, enabled := range []bool{false, true} {
@@ -190,7 +192,7 @@ func TestRoleScopeEntitlements(t *testing.T) {
 
 	t.Run("group entitlement names the role and group", func(t *testing.T) {
 		ents := roleScopeTargetEntitlements(groupRes, roleTargetKindGroup)
-		if got, want := ents[0].GetDisplayName(), "Atlanta Group Administrator"; got != want {
+		if got, want := ents[0].GetDisplayName(), "Engineering Group Administrator"; got != want {
 			t.Fatalf("display name = %q, want %q", got, want)
 		}
 		if got, want := ents[0].GetId(), "group:"+testTargetGroupA+":group-admin"; got != want {
@@ -217,29 +219,50 @@ func TestRoleScopeEntitlements(t *testing.T) {
 	})
 }
 
-func TestEntitlementSlug(t *testing.T) {
-	res := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testGroupID}}
-	if got := entitlementSlug(&v2.Entitlement{Resource: res, Slug: "member"}); got != "member" {
-		t.Fatalf("slug = %q, want member", got)
+func TestRoleScopeEntitlementMatching(t *testing.T) {
+	groupRes := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testGroupID}}
+	roleRes := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeRole.Id, Resource: "APP_ADMIN"}}
+
+	tests := []struct {
+		name       string
+		e          *v2.Entitlement
+		wantTarget bool
+		wantOrg    bool
+	}{
+		{name: "membership by id", e: &v2.Entitlement{Resource: groupRes, Id: "group:" + testGroupID + ":member", Slug: "member"}},
+		{name: "membership with no id or slug", e: groupMembershipEntitlement()},
+		{name: "scope target by id", e: &v2.Entitlement{Resource: groupRes, Id: "group:" + testGroupID + ":group-admin"}, wantTarget: true},
+		{name: "scope target by slug only", e: &v2.Entitlement{Resource: groupRes, Slug: "group-admin"}, wantTarget: true},
+		// C1 lets admins edit slugs; the connector ID must still win.
+		{name: "scope target with edited slug", e: &v2.Entitlement{Resource: groupRes, Id: "group:" + testGroupID + ":group-admin", Slug: "Group Admin"}, wantTarget: true},
+		{name: "entire org by id", e: &v2.Entitlement{Resource: roleRes, Id: "role:APP_ADMIN:entire-organization"}, wantOrg: true},
+		{name: "entire org with edited slug", e: &v2.Entitlement{Resource: roleRes, Id: "role:APP_ADMIN:entire-organization", Slug: "Org-wide"}, wantOrg: true},
+		{name: "assigned with slug edited to look like entire org", e: &v2.Entitlement{Resource: roleRes, Id: "role:APP_ADMIN:assigned", Slug: "entire-organization"}},
+		{name: "entire org by slug only", e: &v2.Entitlement{Resource: roleRes, Slug: "entire-organization"}, wantOrg: true},
 	}
-	if got := entitlementSlug(&v2.Entitlement{Resource: res, Id: "group:" + testGroupID + ":group-admin"}); got != "group-admin" {
-		t.Fatalf("slug from id = %q, want group-admin", got)
-	}
-	if got := entitlementSlug(groupMembershipEntitlement()); got != "" {
-		t.Fatalf("slug of bare entitlement = %q, want empty", got)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isRoleScopeTargetEntitlement(tc.e); got != tc.wantTarget {
+				t.Errorf("isRoleScopeTargetEntitlement = %v, want %v", got, tc.wantTarget)
+			}
+			if got := isEntireOrgEntitlement(tc.e); got != tc.wantOrg {
+				t.Errorf("isEntireOrgEntitlement = %v, want %v", got, tc.wantOrg)
+			}
+		})
 	}
 }
 
 func TestRoleScopeTargetEntitlementsAreNotProvisionable(t *testing.T) {
 	// No scripted requests: rejecting must happen before any Okta call, or a
-	// revoke of "Atlanta Group Administrator" would remove group membership.
+	// revoke of "Engineering Group Administrator" would remove group membership.
 	groupEnt := &v2.Entitlement{
 		Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testGroupID}},
 		Id:       "group:" + testGroupID + ":group-admin",
 	}
 	appEnt := &v2.Entitlement{
 		Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeApp.Id, Resource: testAppID}},
-		Slug:     "app-admin",
+		Id:       "app:" + testAppID + ":app-admin",
+		Slug:     "Edited by an admin",
 	}
 	client := newScriptedOktaClient(t)
 	gb := groupBuilder(&Okta{client: client})
@@ -250,6 +273,10 @@ func TestRoleScopeTargetEntitlementsAreNotProvisionable(t *testing.T) {
 	_, checks["group revoke"] = gb.Revoke(t.Context(), &v2.Grant{Entitlement: groupEnt, Principal: testUserPrincipal()})
 	_, checks["app grant"] = ab.Grant(t.Context(), testUserPrincipal(), appEnt)
 	_, checks["app revoke"] = ab.Revoke(t.Context(), &v2.Grant{Entitlement: appEnt, Principal: testUserPrincipal()})
+	_, checks["group revoke for group principal"] = gb.Revoke(t.Context(), &v2.Grant{Entitlement: groupEnt, Principal: appGroupPrincipal()})
+	rb := roleBuilder(client, testScopeConnector(client))
+	_, checks["entire org revoke for group principal"] = rb.Revoke(t.Context(), &v2.Grant{Entitlement: entireOrgEntitlement("APP_ADMIN"), Principal: appGroupPrincipal()})
+	_, checks["entire org grant for group principal"] = rb.Grant(t.Context(), appGroupPrincipal(), entireOrgEntitlement("APP_ADMIN"))
 	for name, err := range checks {
 		if status.Code(err) != codes.Unimplemented {
 			t.Errorf("%s: code = %v (%v), want Unimplemented", name, status.Code(err), err)
@@ -316,4 +343,174 @@ func TestRoleGrantEntireOrganization_ExistingScopedAssignment(t *testing.T) {
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("Grant() code = %v (%v), want FailedPrecondition", status.Code(err), err)
 	}
+}
+
+func TestRoleRevokeEntireOrganization_AssignmentGone(t *testing.T) {
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK, body: userAppAdminRolesBody()},
+		oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindApp), statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+	)
+	annos, err := roleBuilder(client, testScopeConnector(client)).Revoke(t.Context(),
+		&v2.Grant{Entitlement: entireOrgEntitlement("APP_ADMIN"), Principal: testUserPrincipal()})
+	if err != nil {
+		t.Fatalf("Revoke() error: %v", err)
+	}
+	if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+		t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
+	}
+}
+
+func TestRoleRevokeEntireOrganization_IgnoresGroupInheritedAssignment(t *testing.T) {
+	// Only a group-inherited assignment exists, so there is no direct
+	// assignment to remove and no targets call to make.
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK,
+			body: `[{"id":"raInherited","type":"APP_ADMIN","status":"ACTIVE","assignmentType":"GROUP"}]`},
+	)
+	annos, err := roleBuilder(client, testScopeConnector(client)).Revoke(t.Context(),
+		&v2.Grant{Entitlement: entireOrgEntitlement("APP_ADMIN"), Principal: testUserPrincipal()})
+	if err != nil {
+		t.Fatalf("Revoke() error: %v", err)
+	}
+	if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+		t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
+	}
+}
+
+func TestRoleScopeGrants_AssignmentGoneEmitsNothing(t *testing.T) {
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindGroup), statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+	)
+	grants, err := testScopeConnector(client).roleScopeGrants(t.Context(), nil,
+		rolePrincipal{resourceType: resourceTypeUser.Id, id: testOktaUserID}, testRoleAssignmentID, mustScopedRole(t, "USER_ADMIN"))
+	if err != nil {
+		t.Fatalf("roleScopeGrants() error: %v", err)
+	}
+	if len(grants) != 0 {
+		t.Fatalf("got %d grants, want none", len(grants))
+	}
+}
+
+func TestRoleScopeGrants_SkipsUnsyncedAppGroups(t *testing.T) {
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindGroup), statusCode: http.StatusOK,
+			body: `[{"id":"` + testTargetGroupA + `","type":"APP_GROUP"},{"id":"` + testTargetGroupB + `","type":"OKTA_GROUP"}]`},
+	)
+	o := testScopeConnector(client)
+	o.skipAppGroups = true
+	grants, err := o.roleScopeGrants(t.Context(), nil,
+		rolePrincipal{resourceType: resourceTypeUser.Id, id: testOktaUserID}, testRoleAssignmentID, mustScopedRole(t, "USER_ADMIN"))
+	if err != nil {
+		t.Fatalf("roleScopeGrants() error: %v", err)
+	}
+	assertEntitlementIDs(t, grants, "group:"+testTargetGroupB+":group-admin")
+}
+
+// memorySessionStore is a minimal sessions.SessionStore for exercising the
+// connector's per-sync caches.
+type memorySessionStore struct {
+	data map[string][]byte
+}
+
+func newMemorySessionStore() *memorySessionStore {
+	return &memorySessionStore{data: make(map[string][]byte)}
+}
+
+func sessionKey(ctx context.Context, key string, opts []sessions.SessionStoreOption) string {
+	bag := &sessions.SessionStoreBag{}
+	for _, opt := range opts {
+		_ = opt(ctx, bag)
+	}
+	return bag.Prefix + "/" + key
+}
+
+func (m *memorySessionStore) Get(ctx context.Context, key string, opt ...sessions.SessionStoreOption) ([]byte, bool, error) {
+	v, ok := m.data[sessionKey(ctx, key, opt)]
+	return v, ok, nil
+}
+
+func (m *memorySessionStore) GetMany(ctx context.Context, keys []string, opt ...sessions.SessionStoreOption) (map[string][]byte, []string, error) {
+	found := make(map[string][]byte)
+	var missing []string
+	for _, k := range keys {
+		if v, ok := m.data[sessionKey(ctx, k, opt)]; ok {
+			found[k] = v
+		} else {
+			missing = append(missing, k)
+		}
+	}
+	return found, missing, nil
+}
+
+func (m *memorySessionStore) Set(ctx context.Context, key string, value []byte, opt ...sessions.SessionStoreOption) error {
+	m.data[sessionKey(ctx, key, opt)] = value
+	return nil
+}
+
+func (m *memorySessionStore) SetMany(ctx context.Context, values map[string][]byte, opt ...sessions.SessionStoreOption) error {
+	for k, v := range values {
+		m.data[sessionKey(ctx, k, opt)] = v
+	}
+	return nil
+}
+
+func (m *memorySessionStore) Delete(ctx context.Context, key string, opt ...sessions.SessionStoreOption) error {
+	delete(m.data, sessionKey(ctx, key, opt))
+	return nil
+}
+
+func (m *memorySessionStore) Clear(context.Context, ...sessions.SessionStoreOption) error {
+	m.data = make(map[string][]byte)
+	return nil
+}
+
+func (m *memorySessionStore) GetAll(context.Context, string, ...sessions.SessionStoreOption) (map[string][]byte, string, error) {
+	return m.data, "", nil
+}
+
+func roleGrantsFor(t *testing.T, rb *roleResourceType, ss sessions.SessionStore, roleType string) []*v2.Grant {
+	t.Helper()
+	res, err := roleResource(standardRoleFromType(roleType), resourceTypeRole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants, _, err := rb.Grants(t.Context(), res, sdkResource.SyncOpAttrs{Session: ss})
+	if err != nil {
+		t.Fatalf("Grants(%s) error: %v", roleType, err)
+	}
+	return grants
+}
+
+func TestRoleGrants_AdminRoleScopes(t *testing.T) {
+	assignees := oktaRequestStep{method: http.MethodGet, path: apiPathListAllUsersWithRoleAssignments, statusCode: http.StatusOK,
+		body: `{"value":[{"id":"` + testOktaUserID + `"}]}`}
+	userRoles := oktaRequestStep{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK,
+		body: `[{"id":"` + testRoleAssignmentID + `","type":"USER_ADMIN","status":"ACTIVE","assignmentType":"USER"},
+			{"id":"raOther","type":"APP_ADMIN","status":"ACTIVE","assignmentType":"USER"}]`}
+
+	t.Run("flag off makes no targets calls", func(t *testing.T) {
+		client := newScriptedOktaClient(t, assignees, userRoles)
+		o := &Okta{client: client, userFilters: &userFilterConfig{}}
+		grants := roleGrantsFor(t, roleBuilder(client, o), newMemorySessionStore(), "USER_ADMIN")
+		assertEntitlementIDs(t, grants, "role:USER_ADMIN:assigned")
+	})
+
+	t.Run("flag on emits scope grants and reuses cached assignments", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			assignees, userRoles,
+			oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindGroup), statusCode: http.StatusOK,
+				body: `[{"id":"` + testTargetGroupA + `"}]`},
+			// Second role resource: the assignee list comes from the Okta client's
+			// response cache, and roles and assignment IDs from the session cache.
+			oktaRequestStep{method: http.MethodGet, path: userRolesPath() + "/raOther/targets/catalog/apps", statusCode: http.StatusOK, body: `[]`},
+		)
+		o := &Okta{client: client, userFilters: &userFilterConfig{}, syncAdminRoleScopes: true}
+		rb := roleBuilder(client, o)
+		ss := newMemorySessionStore()
+
+		assertEntitlementIDs(t, roleGrantsFor(t, rb, ss, "USER_ADMIN"),
+			"role:USER_ADMIN:assigned", "group:"+testTargetGroupA+":group-admin")
+		assertEntitlementIDs(t, roleGrantsFor(t, rb, ss, "APP_ADMIN"),
+			"role:APP_ADMIN:assigned", "role:APP_ADMIN:entire-organization")
+	})
 }

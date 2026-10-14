@@ -194,7 +194,7 @@
     {
       "name": "sync-admin-role-scopes",
       "displayName": "Sync admin role scopes",
-      "description": "Whether to sync which resources standard admin roles are constrained to: the entire organization, or specific groups or apps. Adds an entitlement per admin role to each group and app.",
+      "description": "Whether to sync what standard admin roles are constrained to: the entire organization, or specific groups and apps",
       "boolField": {}
     }
   ],
