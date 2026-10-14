@@ -29,6 +29,10 @@ const (
 	roleTargetKindApp   = "app"
 
 	roleTargetsPageLimit = 100
+
+	// Okta's assignmentType for a role assigned directly to a user, as opposed
+	// to one inherited through group membership.
+	roleAssignmentTypeUser = "USER"
 )
 
 type scopedRoleType struct {
@@ -360,7 +364,7 @@ func (o *Okta) userRoleAssignmentIDs(ctx context.Context, ss sessions.SessionSto
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to list roles for user: %w", handleOktaResponseError(resp, err))
 	}
-	ids := standardRoleAssignmentIDs(roles, "USER")
+	ids := standardRoleAssignmentIDs(roles, roleAssignmentTypeUser)
 	if ss != nil {
 		if err := session.SetJSON(ctx, ss, userID, ids, userRoleAssignmentPrefix); err != nil {
 			ctxzap.Extract(ctx).Debug("failed to cache user role assignments", zap.Error(err))

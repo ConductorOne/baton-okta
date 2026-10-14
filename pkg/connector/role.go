@@ -224,7 +224,7 @@ func (o *roleResourceType) Grants(
 				continue
 			}
 
-			if role.AssignmentType != "USER" {
+			if role.AssignmentType != roleAssignmentTypeUser {
 				continue
 			}
 
@@ -242,7 +242,7 @@ func (o *roleResourceType) Grants(
 		userRoles[userId] = newUserRoles
 		toCache[userId] = newUserRoles
 		if o.connector.syncAdminRoleScopes {
-			assignmentIDsToCache[userId] = standardRoleAssignmentIDs(roles, "USER")
+			assignmentIDsToCache[userId] = standardRoleAssignmentIDs(roles, roleAssignmentTypeUser)
 		}
 	}
 
@@ -632,7 +632,7 @@ func (g *roleResourceType) checkExistingAssignmentIsEntireOrg(ctx context.Contex
 	if err != nil {
 		return fmt.Errorf("okta-connector: failed to list roles for user: %w", handleOktaResponseError(resp, err))
 	}
-	assignmentID, ok := standardRoleAssignmentIDs(roles, "USER")[roleType]
+	assignmentID, ok := standardRoleAssignmentIDs(roles, roleAssignmentTypeUser)[roleType]
 	if !ok {
 		return nil
 	}
@@ -677,7 +677,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		// The list also includes roles inherited through group membership; only
 		// the user's direct assignment can be removed through this user.
 		rolePos := slices.IndexFunc(roles, func(r *okta.Role) bool {
-			return r.Type == roleType && r.Status == userStatusActive && r.AssignmentType == "USER"
+			return r.Type == roleType && r.Status == userStatusActive && r.AssignmentType == roleAssignmentTypeUser
 		})
 		if rolePos == NF {
 			l.Debug(
