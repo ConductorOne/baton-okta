@@ -696,10 +696,19 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		if sr, ok := scopedRoleFromType(roleType); ok && isEntireOrgEntitlement(entitlement) {
 			targets, err := g.connector.listRoleTargets(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userId}, roleId, sr, true)
 			if err != nil {
-				if status.Code(err) == codes.NotFound {
-					return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+				if status.Code(err) != codes.NotFound {
+					return nil, err
 				}
-				return nil, err
+				// Report revoked only if the assignment is really gone; a 404 from
+				// the targets path alone does not prove that.
+				exists, existsErr := g.connector.roleAssignmentExists(ctx, rolePrincipal{resourceType: resourceTypeUser.Id, id: userId}, roleId)
+				if existsErr != nil {
+					return nil, existsErr
+				}
+				if exists {
+					return nil, err
+				}
+				return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 			}
 			if !targets.isEntireOrg() {
 				l.Debug("okta-connector: role assignment is no longer constrained to the entire organization",

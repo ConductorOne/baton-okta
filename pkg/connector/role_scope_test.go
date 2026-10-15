@@ -346,19 +346,34 @@ func TestRoleGrantEntireOrganization_ExistingScopedAssignment(t *testing.T) {
 	}
 }
 
-func TestRoleRevokeEntireOrganization_AssignmentGone(t *testing.T) {
-	client := newScriptedOktaClient(t,
-		oktaRequestStep{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK, body: userAppAdminRolesBody()},
-		oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindApp), statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
-	)
-	annos, err := roleBuilder(client, testScopeConnector(client)).Revoke(t.Context(),
-		&v2.Grant{Entitlement: entireOrgEntitlement("APP_ADMIN"), Principal: testUserPrincipal()})
-	if err != nil {
-		t.Fatalf("Revoke() error: %v", err)
+func TestRoleRevokeEntireOrganization_TargetsNotFound(t *testing.T) {
+	steps := func(rolesAfter string) []oktaRequestStep {
+		return []oktaRequestStep{
+			{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK, body: userAppAdminRolesBody()},
+			{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindApp), statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+			{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK, body: rolesAfter},
+		}
 	}
-	if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
-		t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
-	}
+	grant := &v2.Grant{Entitlement: entireOrgEntitlement("APP_ADMIN"), Principal: testUserPrincipal()}
+
+	t.Run("assignment gone is already revoked", func(t *testing.T) {
+		client := newScriptedOktaClient(t, steps(`[]`)...)
+		annos, err := roleBuilder(client, testScopeConnector(client)).Revoke(t.Context(), grant)
+		if err != nil {
+			t.Fatalf("Revoke() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("Revoke() annotations = %v, want GrantAlreadyRevoked", annos)
+		}
+	})
+
+	t.Run("assignment still present is an error", func(t *testing.T) {
+		client := newScriptedOktaClient(t, steps(userAppAdminRolesBody())...)
+		_, err := roleBuilder(client, testScopeConnector(client)).Revoke(t.Context(), grant)
+		if status.Code(err) != codes.NotFound {
+			t.Fatalf("Revoke() code = %v (%v), want NotFound", status.Code(err), err)
+		}
+	})
 }
 
 func TestRoleRevokeEntireOrganization_IgnoresGroupInheritedAssignment(t *testing.T) {
