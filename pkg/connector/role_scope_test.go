@@ -7,6 +7,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/okta/okta-sdk-golang/v2/okta"
@@ -377,17 +378,71 @@ func TestRoleRevokeEntireOrganization_IgnoresGroupInheritedAssignment(t *testing
 	}
 }
 
-func TestRoleScopeGrants_AssignmentGoneEmitsNothing(t *testing.T) {
+func TestRoleScopeGrants_TargetsNotFound(t *testing.T) {
+	targets404 := oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindGroup), statusCode: http.StatusNotFound, body: oktaNotFoundResponse()}
+
+	t.Run("assignment removed mid-sync emits nothing", func(t *testing.T) {
+		client := newScriptedOktaClient(t, targets404,
+			oktaRequestStep{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK, body: `[]`},
+		)
+		grants, err := testScopeConnector(client).roleScopeGrants(t.Context(), nil,
+			rolePrincipal{resourceType: resourceTypeUser.Id, id: testOktaUserID}, testRoleAssignmentID, mustScopedRole(t, "USER_ADMIN"))
+		if err != nil {
+			t.Fatalf("roleScopeGrants() error: %v", err)
+		}
+		if len(grants) != 0 {
+			t.Fatalf("got %d grants, want none", len(grants))
+		}
+	})
+
+	// A 404 while the assignment still exists means the path itself is
+	// unavailable; skipping it would silently drop every assignment's scope.
+	t.Run("assignment still present fails loudly", func(t *testing.T) {
+		client := newScriptedOktaClient(t, targets404,
+			oktaRequestStep{method: http.MethodGet, path: userRolesPath(), statusCode: http.StatusOK,
+				body: `[{"id":"` + testRoleAssignmentID + `","type":"USER_ADMIN","status":"ACTIVE","assignmentType":"USER"}]`},
+		)
+		_, err := testScopeConnector(client).roleScopeGrants(t.Context(), nil,
+			rolePrincipal{resourceType: resourceTypeUser.Id, id: testOktaUserID}, testRoleAssignmentID, mustScopedRole(t, "USER_ADMIN"))
+		if status.Code(err) != codes.NotFound {
+			t.Fatalf("roleScopeGrants() code = %v (%v), want NotFound", status.Code(err), err)
+		}
+	})
+}
+
+func TestGroupGrants_AdminRoleScopes(t *testing.T) {
+	groupRolesPath := "/api/v1/groups/" + testGroupID + "/roles"
 	client := newScriptedOktaClient(t,
-		oktaRequestStep{method: http.MethodGet, path: userRoleTargetsPath(roleTargetKindGroup), statusCode: http.StatusNotFound, body: oktaNotFoundResponse()},
+		// First page: the user phase.
+		oktaRequestStep{method: http.MethodGet, path: "/api/v1/groups/" + testGroupID + "/users", statusCode: http.StatusOK, body: `[]`},
+		// Second page: the role phase.
+		oktaRequestStep{method: http.MethodGet, path: groupRolesPath, statusCode: http.StatusOK,
+			body: `[{"id":"` + testRoleAssignmentID + `","type":"HELP_DESK_ADMIN","label":"Help Desk Administrator","status":"ACTIVE","assignmentType":"GROUP"}]`},
+		oktaRequestStep{method: http.MethodGet, path: groupRolesPath + "/" + testRoleAssignmentID + "/targets/groups", statusCode: http.StatusOK,
+			body: `[{"id":"` + testTargetGroupA + `"}]`},
 	)
-	grants, err := testScopeConnector(client).roleScopeGrants(t.Context(), nil,
-		rolePrincipal{resourceType: resourceTypeUser.Id, id: testOktaUserID}, testRoleAssignmentID, mustScopedRole(t, "USER_ADMIN"))
+	gb := groupBuilder(&Okta{client: client, userFilters: &userFilterConfig{}, syncAdminRoleScopes: true})
+	res := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: testGroupID}}
+	ss := newMemorySessionStore()
+
+	_, results, err := gb.Grants(t.Context(), res, sdkResource.SyncOpAttrs{Session: ss})
 	if err != nil {
-		t.Fatalf("roleScopeGrants() error: %v", err)
+		t.Fatalf("Grants() user phase error: %v", err)
 	}
-	if len(grants) != 0 {
-		t.Fatalf("got %d grants, want none", len(grants))
+	grants, _, err := gb.Grants(t.Context(), res, sdkResource.SyncOpAttrs{Session: ss, PageToken: pagination.Token{Token: results.NextPageToken}})
+	if err != nil {
+		t.Fatalf("Grants() role phase error: %v", err)
+	}
+	assertEntitlementIDs(t, grants, "role:HELP_DESK_ADMIN:assigned", "group:"+testTargetGroupA+":help-desk-admin")
+	for _, g := range grants {
+		if got := g.GetPrincipal().GetId().GetResource(); got != testGroupID {
+			t.Errorf("%s principal = %q, want group %q", g.GetEntitlement().GetId(), got, testGroupID)
+		}
+		expandable := &v2.GrantExpandable{}
+		grantAnnos := annotations.Annotations(g.GetAnnotations())
+		if ok, _ := grantAnnos.Pick(expandable); !ok {
+			t.Errorf("%s is missing GrantExpandable to the group's members", g.GetEntitlement().GetId())
+		}
 	}
 }
 

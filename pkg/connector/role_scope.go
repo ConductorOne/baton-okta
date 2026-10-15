@@ -171,6 +171,15 @@ func (p rolePrincipal) apiPath() string {
 // the client's response cache on every page; Grant and Revoke need it because a
 // cached "no targets" answer would let them act on an assignment that has since
 // been narrowed.
+//
+// It reads every page in one call on purpose. Targets belong to a single
+// assignment and are short, and a role Grants page spans many assignments, so
+// there is no SDK page token to hand each target page to.
+//
+// Okta documents 404 (E0000007) on these endpoints when the role assignment does
+// not exist, and 403 when the caller lacks okta.roles.read. A 404 can also come
+// from an unsupported path, so callers must not treat it as absence without
+// checking; see roleAssignmentExists.
 func (o *Okta) listRoleTargets(ctx context.Context, principal rolePrincipal, assignmentID string, sr scopedRoleType, fresh bool) (roleTargets, error) {
 	var suffix string
 	switch sr.targetKind {
@@ -221,10 +230,39 @@ func (o *Okta) listRoleTargets(ctx context.Context, principal rolePrincipal, ass
 	return rv, nil
 }
 
+// roleAssignmentExists reads the principal's role assignments, bypassing the
+// response cache, and reports whether assignmentID is still among them.
+func (o *Okta) roleAssignmentExists(ctx context.Context, principal rolePrincipal, assignmentID string) (bool, error) {
+	apiPath, err := url.JoinPath(principal.apiPath(), principal.id, "roles")
+	if err != nil {
+		return false, err
+	}
+	rq := o.client.CloneRequestExecutor()
+	rq.RefreshNext()
+	req, err := rq.WithAccept(ContentType).WithContentType(ContentType).NewRequest(http.MethodGet, apiPath, nil)
+	if err != nil {
+		return false, err
+	}
+	var roles []*Roles
+	resp, err := rq.Do(ctx, req, &roles)
+	if err != nil {
+		return false, fmt.Errorf("okta-connector: failed to list role assignments for %s %s: %w",
+			principal.resourceType, principal.id, handleOktaResponseError(resp, err))
+	}
+	for _, r := range roles {
+		if r.Id == assignmentID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 var catalogAppInstancesPrefix = sessions.WithPrefix("catalogAppInstances")
 
 // catalogAppInstanceIDs resolves an OIN catalog app target, which covers every
-// instance of that app, to the app instance IDs in the org.
+// instance of that app, to the app instance IDs in the org. It reads every page
+// in one call for the same reason as listRoleTargets, and caches the result per
+// sync so each catalog app is looked up once.
 func (o *Okta) catalogAppInstanceIDs(ctx context.Context, ss sessions.SessionStore, appName string) ([]string, error) {
 	if ss != nil {
 		ids, found, err := session.GetJSON[[]string](ctx, ss, appName, catalogAppInstancesPrefix)
@@ -289,17 +327,25 @@ func (o *Okta) roleScopeGrants(
 ) ([]*v2.Grant, error) {
 	targets, err := o.listRoleTargets(ctx, principal, assignmentID, sr, false)
 	if err != nil {
-		// The assignment was removed after it was listed. Failing here would
-		// drop every other grant on this page, so emit no scope for it.
-		if status.Code(err) == codes.NotFound {
-			ctxzap.Extract(ctx).Debug("okta-connector: role assignment disappeared while listing its targets",
-				zap.String("role_type", sr.roleType),
-				zap.String("principal_type", principal.resourceType),
-				zap.String("principal_id", principal.id),
-			)
-			return nil, nil
+		if status.Code(err) != codes.NotFound {
+			return nil, err
 		}
-		return nil, err
+		// Skip only when a fresh read proves the assignment was removed after it
+		// was listed. Any other 404 fails the page rather than silently dropping
+		// every assignment's scope.
+		exists, existsErr := o.roleAssignmentExists(ctx, principal, assignmentID)
+		if existsErr != nil {
+			return nil, existsErr
+		}
+		if exists {
+			return nil, err
+		}
+		ctxzap.Extract(ctx).Debug("okta-connector: role assignment was removed while listing its targets",
+			zap.String("role_type", sr.roleType),
+			zap.String("principal_type", principal.resourceType),
+			zap.String("principal_id", principal.id),
+		)
+		return nil, nil
 	}
 
 	pr := &v2.Resource{Id: &v2.ResourceId{ResourceType: principal.resourceType, Resource: principal.id}}
