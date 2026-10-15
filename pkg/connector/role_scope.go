@@ -198,6 +198,10 @@ func (o *Okta) listRoleTargets(ctx context.Context, principal rolePrincipal, ass
 
 	var rv roleTargets
 	for reqURL != "" {
+		// Every page is read in this one call, so stop promptly when the sync is cancelled.
+		if err := ctx.Err(); err != nil {
+			return roleTargets{}, err
+		}
 		rq := o.client.CloneRequestExecutor()
 		if fresh {
 			rq.RefreshNext()
@@ -274,6 +278,9 @@ func (o *Okta) catalogAppInstanceIDs(ctx context.Context, ss sessions.SessionSto
 	var ids []string
 	after := ""
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		qp := query.NewQueryParams(
 			query.WithFilter(fmt.Sprintf("name eq %q", appName)),
 			query.WithLimit(defaultLimit),

@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -583,4 +584,21 @@ func TestRoleGrants_AdminRoleScopes(t *testing.T) {
 		assertEntitlementIDs(t, roleGrantsFor(t, rb, ss, "APP_ADMIN"),
 			"role:APP_ADMIN:assigned", "role:APP_ADMIN:entire-organization")
 	})
+}
+
+func TestRoleTargetPagingStopsOnCancel(t *testing.T) {
+	// No scripted requests: a cancelled context must stop before any page is read.
+	client := newScriptedOktaClient(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	o := testScopeConnector(client)
+	principal := rolePrincipal{resourceType: resourceTypeUser.Id, id: testOktaUserID}
+	_, err := o.listRoleTargets(ctx, principal, testRoleAssignmentID, mustScopedRole(t, "USER_ADMIN"), false)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("listRoleTargets() error = %v, want context.Canceled", err)
+	}
+	if _, err := o.catalogAppInstanceIDs(ctx, nil, "salesforce"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("catalogAppInstanceIDs() error = %v, want context.Canceled", err)
+	}
 }
