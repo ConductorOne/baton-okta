@@ -18,6 +18,7 @@ type Okta struct {
 	SyncSecrets bool `mapstructure:"sync-secrets"`
 	FilterEmailDomains []string `mapstructure:"filter-email-domains"`
 	SkipAppGroups bool `mapstructure:"skip-app-groups"`
+	SyncAdminRoleScopes bool `mapstructure:"sync-admin-role-scopes"`
 }
 
 func (c *Okta) findFieldByTag(tagValue string) (any, bool) {
