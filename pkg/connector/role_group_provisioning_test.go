@@ -135,8 +135,13 @@ func TestStandardRoleGroupRevoke(t *testing.T) {
 			alreadyRevoked: true,
 		},
 		{
-			name:           "unrelated and inactive assignments are not removed",
-			steps:          []oktaRequestStep{{method: http.MethodGet, path: rolesPath, statusCode: http.StatusOK, body: `[{"id":"different-role","type":"READ_ONLY_ADMIN","status":"ACTIVE"},{"id":"inactive-role","type":"USER_ADMIN","status":"INACTIVE"}]`}},
+			name: "unrelated and inactive assignments are not removed",
+			steps: []oktaRequestStep{{
+				method:     http.MethodGet,
+				path:       rolesPath,
+				statusCode: http.StatusOK,
+				body:       `[{"id":"different-role","type":"READ_ONLY_ADMIN","status":"ACTIVE"},{"id":"inactive-role","type":"USER_ADMIN","status":"INACTIVE"}]`,
+			}},
 			alreadyRevoked: true,
 		},
 		{
@@ -153,15 +158,25 @@ func TestStandardRoleGroupRevoke(t *testing.T) {
 			alreadyRevoked: true,
 		},
 		{
-			name:     "lookup permission denied remains an error",
-			steps:    []oktaRequestStep{{method: http.MethodGet, path: rolesPath, statusCode: http.StatusForbidden, body: `{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}`}},
+			name: "lookup permission denied remains an error",
+			steps: []oktaRequestStep{{
+				method:     http.MethodGet,
+				path:       rolesPath,
+				statusCode: http.StatusForbidden,
+				body:       `{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}`,
+			}},
 			wantCode: codes.PermissionDenied,
 		},
 		{
 			name: "delete permission denied remains an error",
 			steps: []oktaRequestStep{
 				listStep,
-				{method: http.MethodDelete, path: assignmentPath, statusCode: http.StatusForbidden, body: `{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}`},
+				{
+					method:     http.MethodDelete,
+					path:       assignmentPath,
+					statusCode: http.StatusForbidden,
+					body:       `{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}`,
+				},
 			},
 			wantCode: codes.PermissionDenied,
 		},
