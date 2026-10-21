@@ -115,7 +115,12 @@ func TestOperationErrorClassification(t *testing.T) {
 	}{
 		{name: "rate limited", statusCode: http.StatusTooManyRequests, want: codes.Unavailable},
 		{name: "permission denied", statusCode: http.StatusForbidden, body: `{"errorCode":"E0000006","errorSummary":"Permission denied"}`, want: codes.PermissionDenied},
-		{name: "typed permission error overrides server status", statusCode: http.StatusInternalServerError, body: `{"errorCode":"E0000006","errorSummary":"Permission denied"}`, want: codes.PermissionDenied},
+		{
+			name:       "typed permission error overrides server status",
+			statusCode: http.StatusInternalServerError,
+			body:       `{"errorCode":"E0000006","errorSummary":"Permission denied"}`,
+			want:       codes.PermissionDenied,
+		},
 		{name: "unauthenticated", statusCode: http.StatusUnauthorized, body: `{"errorCode":"E0000011","errorSummary":"Invalid token"}`, want: codes.Unauthenticated},
 		{name: "invalid request", statusCode: http.StatusBadRequest, body: `{"errorCode":"E0000001","errorSummary":"Invalid request"}`, want: codes.InvalidArgument},
 		{name: "not implemented", statusCode: http.StatusNotImplemented, body: `{"errorCode":"E0000099","errorSummary":"Not implemented"}`, want: codes.Unimplemented},
@@ -237,6 +242,9 @@ func TestGroupRoleReadErrorPropagation(t *testing.T) {
 		{name: "unreadable error body", step: oktaRequestStep{
 			method: http.MethodGet, path: path, statusCode: http.StatusServiceUnavailable, body: "Service unavailable",
 		}, want: codes.Unavailable},
+		// Compatibility coverage for a known gap, not the intended permission-error contract:
+		// group-role enumeration currently treats AccessDenied as an empty result.
+		// Changing that sync behavior is separate from preserving error classification.
 		{name: "access denied retains empty result", step: oktaRequestStep{
 			method: http.MethodGet, path: path, statusCode: http.StatusForbidden,
 			body: `{"errorCode":"E0000006","errorSummary":"Permission denied"}`,
