@@ -176,9 +176,9 @@ func (o *roleResourceType) Grants(
 		// Check if the user should be included after filtering by email domains.
 		shouldInclude, ok := o.connector.shouldIncludeUserFromCache(ctx, attrs.Session, userId)
 		if !ok {
-			user, _, err := o.connector.client.User.GetUser(ctx, userId)
+			user, resp, err := o.connector.client.User.GetUser(ctx, userId)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to get role assignee: %w", handleOktaResponseError(resp, err))
 			}
 			shouldInclude = o.connector.shouldIncludeUserAndSetCache(ctx, attrs.Session, user)
 		}
@@ -298,7 +298,7 @@ func listOktaIamCustomRoles(
 	var role *CustomRoles
 	resp, err := rq.Do(ctx, req, &role)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list custom roles: %w", handleOktaResponseError(resp, err))
 	}
 
 	respCtx, err := responseToContext(token, resp)
@@ -332,7 +332,7 @@ func listAllUsersWithRoleAssignments(
 	var role *RoleAssignments
 	resp, err := rq.Do(ctx, req, &role)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users with role assignments: %w", handleOktaResponseError(resp, err))
 	}
 
 	respCtx, err := responseToContext(token, resp)
@@ -480,7 +480,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			defer response.Body.Close()
 			errOkta, parseErr := getError(response)
 			if parseErr != nil {
-				return nil, parseErr
+				return nil, fmt.Errorf("okta-connector: failed to assign role to user: %w", handleOktaResponseError(response, errors.Join(err, parseErr)))
 			}
 
 			if errOkta.ErrorCode == alreadyAssignedRole {
@@ -524,7 +524,7 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			defer response.Body.Close()
 			errOkta, parseErr := getError(response)
 			if parseErr != nil {
-				return nil, parseErr
+				return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, errors.Join(err, parseErr)))
 			}
 
 			if errOkta.ErrorCode == alreadyAssignedRole {
