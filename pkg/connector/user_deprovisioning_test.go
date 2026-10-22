@@ -21,11 +21,12 @@ import (
 const testOktaUserID = "00u1abc2def3GHI4jk5"
 
 type oktaRequestStep struct {
-	method     string
-	path       string
-	query      map[string]string
-	statusCode int
-	body       string
+	method       string
+	path         string
+	query        map[string]string
+	statusCode   int
+	body         string
+	checkRequest func(*http.Request)
 	// headers are written before the body; use Link with rel="next" to make the
 	// Okta SDK report a next page.
 	headers map[string]string
@@ -58,6 +59,9 @@ func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client 
 			if got := r.URL.Query().Get(key); got != want {
 				t.Errorf("request %d query %s = %q, want %q", next, key, got, want)
 			}
+		}
+		if step.checkRequest != nil {
+			step.checkRequest(r)
 		}
 		for k, v := range step.headers {
 			w.Header().Set(k, v)
