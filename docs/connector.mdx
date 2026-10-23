@@ -61,6 +61,8 @@ Use this attribute in policies and access profiles to verify that bindings and g
 | Groups | Membership changes: group creation, user membership add/remove |
 | Applications | Lifecycle and membership changes: create, update, activate, user membership add/remove, group assignment add |
 | Roles | Membership changes: role grant/revoke via privilege events |
+
+Group-to-application assignment additions require a full sync when **Skip app groups** is enabled. Okta's event does not identify the group type, so the connector cannot safely determine whether that group was excluded from sync.
 </Note>
 
 <Note>

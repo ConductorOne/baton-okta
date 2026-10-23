@@ -86,6 +86,17 @@ func groupAssignmentFilter(t *testing.T) EventFilter {
 	return EventFilter{}
 }
 
+func TestListEventsGroupApplicationAssignmentWithSkippedAppGroups(t *testing.T) {
+	client := newScriptedOktaClient(t, oktaRequestStep{
+		method: http.MethodGet, path: "/api/v1/logs", statusCode: http.StatusOK,
+		body: "[" + groupAssignmentFixture + "]",
+	})
+	c := &Okta{client: client, skipAppGroups: true}
+	events, _, _, err := c.ListEvents(t.Context(), nil, &pagination.StreamToken{Size: 100})
+	require.NoError(t, err)
+	require.Empty(t, events)
+}
+
 func TestApplicationGroupAssignmentFilterRejectsMalformedTargets(t *testing.T) {
 	filter := groupAssignmentFilter(t)
 	for _, tt := range []struct {
