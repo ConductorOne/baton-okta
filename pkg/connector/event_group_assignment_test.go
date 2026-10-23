@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -17,25 +18,22 @@ import (
 	"go.uber.org/zap"
 )
 
-const groupAssignmentFixture = `{
- "uuid":"00000000-0000-4000-8000-000000000020",
- "eventType":"group.application_assignment.add",
- "published":"2026-10-23T17:38:52.970Z",
- "outcome":{"result":"SUCCESS"},
- "target":[
-  {"id":"group1","type":"UserGroup","displayName":"Engineering"},
-  {"id":"app1","type":"AppInstance","displayName":"Example application"}
- ]
-}`
+func groupAssignmentFixture(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile("testdata/group-application-assignment.json")
+	require.NoError(t, err)
+	return string(data)
+}
 
 func TestListEventsGroupApplicationAssignment(t *testing.T) {
 	var filterQuery string
+	fixture := groupAssignmentFixture(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/logs" {
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 		}
 		filterQuery = r.URL.Query().Get("filter")
-		writeOktaTestResponse(w, http.StatusOK, "["+groupAssignmentFixture+"]")
+		writeOktaTestResponse(w, http.StatusOK, "["+fixture+"]")
 	}))
 	defer server.Close()
 	_, client, err := oktaSDK.NewClient(context.Background(),
@@ -89,7 +87,7 @@ func groupAssignmentFilter(t *testing.T) EventFilter {
 func TestListEventsGroupApplicationAssignmentWithSkippedAppGroups(t *testing.T) {
 	client := newScriptedOktaClient(t, oktaRequestStep{
 		method: http.MethodGet, path: "/api/v1/logs", statusCode: http.StatusOK,
-		body: "[" + groupAssignmentFixture + "]",
+		body: "[" + groupAssignmentFixture(t) + "]",
 	})
 	c := &Okta{client: client, skipAppGroups: true}
 	events, _, _, err := c.ListEvents(t.Context(), nil, &pagination.StreamToken{Size: 100})
@@ -124,7 +122,7 @@ func TestApplicationGroupAssignmentFilterSkipsUnsuccessfulEvents(t *testing.T) {
 	filter := groupAssignmentFilter(t)
 	for _, outcome := range []*oktaSDK.LogOutcome{nil, {Result: "FAILURE"}, {Result: "SKIPPED"}, {Result: "UNKNOWN"}} {
 		event := &oktaSDK.LogEvent{}
-		require.NoError(t, json.Unmarshal([]byte(groupAssignmentFixture), event))
+		require.NoError(t, json.Unmarshal([]byte(groupAssignmentFixture(t)), event))
 		event.Outcome = outcome
 		rv, err := filter.Handle(zap.NewNop(), event)
 		require.NoError(t, err)
