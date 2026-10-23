@@ -23,6 +23,7 @@ var activeFilters = []EventFilter{
 	GroupChangeFilter,
 	ApplicationLifecycleFilter,
 	ApplicationMembershipFilter,
+	ApplicationGroupAssignmentFilter,
 	ApplicationMembershipRevokeFilter,
 	RoleMembershipFilter,
 	RoleMembershipRevokeFilter,
