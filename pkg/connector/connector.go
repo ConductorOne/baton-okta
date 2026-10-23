@@ -147,7 +147,7 @@ var (
 		"okta.apps.manage",
 	}
 	// The event feed reads Okta's System Log (GET /api/v1/logs). Requested
-	// unconditionally on the OAuth path because EventFeeds is always advertised
+	// unconditionally on the OAuth path because the event feeds are always advertised
 	// and C1 decides when to call ListEvents -- there is no local opt-in to gate
 	// on the way device sync has one.
 	eventFeedScopes = []string{
