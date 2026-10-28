@@ -591,6 +591,11 @@ func (o *groupResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, 
 
 	annos := rateLimitAnnotations(resp)
 
+	if o.connector.skipAppGroups && group.Type == appGroupType {
+		l.Debug("okta-connectorv2: skipping APP_GROUP type group", zap.String("group_id", group.Id))
+		return nil, annos, nil
+	}
+
 	resource, err := o.groupResource(group)
 	if err != nil {
 		return nil, annos, err
