@@ -22,9 +22,19 @@ func TestGroupGetRespectsSkipAppGroups(t *testing.T) {
 		{name: "built-in group retained", groupType: builtInGroupType, skipAppGroups: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body, err := json.Marshal(map[string]interface{}{"id": "group1", "type": tc.groupType, "profile": map[string]string{"name": "Renamed group", "description": "Updated description"}})
+			body, err := json.Marshal(map[string]interface{}{
+				"id":      "group1",
+				"type":    tc.groupType,
+				"profile": map[string]string{"name": "Renamed group", "description": "Updated description"},
+			})
 			require.NoError(t, err)
-			client := newScriptedOktaClient(t, oktaRequestStep{method: http.MethodGet, path: "/api/v1/groups/group1", query: map[string]string{"expand": "stats,app"}, statusCode: http.StatusOK, body: string(body)})
+			client := newScriptedOktaClient(t, oktaRequestStep{
+				method:     http.MethodGet,
+				path:       "/api/v1/groups/group1",
+				query:      map[string]string{"expand": "stats,app"},
+				statusCode: http.StatusOK,
+				body:       string(body),
+			})
 			o := &groupResourceType{resourceType: resourceTypeGroup, connector: &Okta{client: client, skipAppGroups: tc.skipAppGroups}}
 			resource, _, err := o.Get(t.Context(), &v2.ResourceId{ResourceType: "group", Resource: "group1"}, nil)
 			require.NoError(t, err)
