@@ -131,6 +131,48 @@ var (
 			return nil
 		},
 	}
+	ApplicationGroupAssignmentFilter = EventFilter{
+		EventTypes:    mapset.NewSet("group.application_assignment.add"),
+		TargetTypes:   mapset.NewSet("AppInstance", "UserGroup"),
+		OutcomeResult: "SUCCESS",
+		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
+			if len(targetMap["AppInstance"]) != 1 || targetMap["AppInstance"][0].Id == "" {
+				return fmt.Errorf("okta-connectorv2: expected one AppInstance target with an id")
+			}
+			if len(targetMap["UserGroup"]) != 1 || targetMap["UserGroup"][0].Id == "" {
+				return fmt.Errorf("okta-connectorv2: expected one UserGroup target with an id")
+			}
+			appInstance := targetMap["AppInstance"][0]
+			group := targetMap["UserGroup"][0]
+			resource, err := sdkResource.NewResource(appInstance.DisplayName, resourceTypeApp, appInstance.Id)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating application resource: %w", err)
+			}
+			principal, err := sdkResource.NewGroupResource(group.DisplayName, resourceTypeGroup, group.Id, nil)
+			if err != nil {
+				return fmt.Errorf("okta-connectorv2: error creating group principal: %w", err)
+			}
+			rv.Event = &v2.Event_CreateGrantEvent{
+				CreateGrantEvent: &v2.CreateGrantEvent{
+					Entitlement: sdkEntitlement.NewAssignmentEntitlement(resource, "access"),
+					Principal:   principal,
+					Annotations: annotations.New(&v2.GrantExpandable{
+						EntitlementIds: []string{fmt.Sprintf("group:%s:member", group.Id)},
+						Shallow:        true,
+					}),
+				},
+			}
+
+			l.Debug("okta-event-feed: ApplicationGroupAssignmentFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeApp.Id),
+				zap.String("resource_id", appInstance.Id),
+				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("group_id", group.Id),
+			)
+			return nil
+		},
+	}
 	ApplicationLifecycleFilter = EventFilter{
 		// Okta namespaces app lifecycle events under "application.lifecycle". The
 		// "app.lifecycle.create" this used to request is not a real event type, so
