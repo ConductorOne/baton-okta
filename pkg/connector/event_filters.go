@@ -162,6 +162,14 @@ var (
 					}),
 				},
 			}
+
+			l.Debug("okta-event-feed: ApplicationGroupAssignmentFilter",
+				zap.String("event_type", event.EventType),
+				zap.String("resource_type", resourceTypeApp.Id),
+				zap.String("resource_id", appInstance.Id),
+				zap.String("app_display_name", appInstance.DisplayName),
+				zap.String("group_id", group.Id),
+			)
 			return nil
 		},
 	}
