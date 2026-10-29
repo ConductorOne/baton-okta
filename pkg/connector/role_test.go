@@ -245,7 +245,6 @@ func TestRoleGrantGuardRejectsOtherPrincipalTypes(t *testing.T) {
 	})
 }
 
-
 // TestRoleRevokeNoActiveRoleMatch pins the fail-open short-circuit: when the list
 // step finds no active matching role, both branches must return GrantAlreadyRevoked
 // WITHOUT issuing a delete (the scripted client's cleanup assertion fails if the
@@ -301,7 +300,7 @@ func TestRoleRevokeServerErrorFailsClosed(t *testing.T) {
 			oktaRequestStep{
 				method: http.MethodDelete, path: "/api/v1/groups/" + testGroupID + "/roles/" + testRoleType,
 				statusCode: http.StatusInternalServerError, headers: roleTestHeaders,
-				body:       `{"errorCode":"E0000001","errorSummary":"Internal Server Error"}`,
+				body: `{"errorCode":"E0000001","errorSummary":"Internal Server Error"}`,
 			},
 		)
 		grant := &v2.Grant{Principal: appGroupPrincipal(), Entitlement: roleAssignedEntitlement()}
@@ -324,7 +323,7 @@ func TestRoleRevokeServerErrorFailsClosed(t *testing.T) {
 			oktaRequestStep{
 				method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID + "/roles/" + testRoleType,
 				statusCode: http.StatusInternalServerError, headers: roleTestHeaders,
-				body:       `{"errorCode":"E0000001","errorSummary":"Internal Server Error"}`,
+				body: `{"errorCode":"E0000001","errorSummary":"Internal Server Error"}`,
 			},
 		)
 		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: roleAssignedEntitlement()}
