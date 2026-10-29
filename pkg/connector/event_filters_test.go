@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -462,12 +461,16 @@ func TestOktaSystemLogLabelsCoversAllStandardRoles(t *testing.T) {
 	}
 }
 
-func groupAssignmentFixture(t *testing.T) string {
-	t.Helper()
-	data, err := os.ReadFile("testdata/group-application-assignment.json")
-	require.NoError(t, err)
-	return string(data)
-}
+const groupApplicationAssignmentEvent = `{
+  "uuid": "00000000-0000-4000-8000-000000000020",
+  "eventType": "group.application_assignment.add",
+  "published": "2026-10-23T17:38:52.970Z",
+  "outcome": {"result":"SUCCESS"},
+  "target": [
+    {"id":"group1","type":"UserGroup","displayName":"Engineering"},
+    {"id":"app1","type":"AppInstance","displayName":"Example application"}
+  ]
+}`
 
 func groupAssignmentFilter(t *testing.T) EventFilter {
 	t.Helper()
@@ -508,7 +511,7 @@ func listEventsCapturingFilter(t *testing.T, c *Okta, body string) ([]*v2.Event,
 }
 
 func TestListEventsGroupApplicationAssignment(t *testing.T) {
-	events, filterQuery := listEventsCapturingFilter(t, &Okta{}, "["+groupAssignmentFixture(t)+"]")
+	events, filterQuery := listEventsCapturingFilter(t, &Okta{}, "["+groupApplicationAssignmentEvent+"]")
 	require.Contains(t, filterQuery, `eventType eq "group.application_assignment.add"`)
 	require.Contains(t, filterQuery, `outcome.result eq "SUCCESS"`)
 	require.Len(t, events, 1)
@@ -539,7 +542,7 @@ func TestListEventsGroupApplicationAssignment(t *testing.T) {
 func TestListEventsGroupApplicationAssignmentWithSkippedAppGroups(t *testing.T) {
 	// The event cannot tell an APP_GROUP from other groups, so it is emitted
 	// regardless; C1 drops grants whose group principal was never synced.
-	events, filterQuery := listEventsCapturingFilter(t, &Okta{skipAppGroups: true}, "["+groupAssignmentFixture(t)+"]")
+	events, filterQuery := listEventsCapturingFilter(t, &Okta{skipAppGroups: true}, "["+groupApplicationAssignmentEvent+"]")
 	require.Contains(t, filterQuery, `eventType eq "group.application_assignment.add"`)
 	require.Len(t, events, 1)
 	require.Equal(t, "group1", events[0].GetCreateGrantEvent().GetPrincipal().GetId().GetResource())
@@ -581,7 +584,7 @@ func TestApplicationGroupAssignmentFilterMatchesOnlySuccessfulEvents(t *testing.
 		{outcome: &oktaSDK.LogOutcome{Result: "SUCCESS"}, want: true},
 	} {
 		event := &oktaSDK.LogEvent{}
-		require.NoError(t, json.Unmarshal([]byte(groupAssignmentFixture(t)), event))
+		require.NoError(t, json.Unmarshal([]byte(groupApplicationAssignmentEvent), event))
 		event.Outcome = tt.outcome
 		require.Equal(t, tt.want, filter.Matches(event))
 	}
