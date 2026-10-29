@@ -21,6 +21,8 @@ type EventFilter struct {
 	// Optional, will only match events which contain the given target types.
 	// May contain additional targets.
 	TargetTypes mapset.Set[string]
+	// Optional, will only match events with the given outcome result.
+	OutcomeResult string
 	// Required, will be called for each event that matches the filter.
 	// Leave rv.Event unset to skip the event without emitting anything.
 	EventHandler func(*zap.Logger, *oktaSDK.LogEvent, map[string][]*oktaSDK.LogTarget, *v2.Event) error
@@ -57,8 +59,13 @@ func (filter *EventFilter) Filter() string {
 	}
 	targetFilter := filterJoiner(" and ", targetFilters...)
 
+	outcomeFilter := ""
+	if filter.OutcomeResult != "" {
+		outcomeFilter = filterMaker("outcome.result", filter.OutcomeResult)
+	}
+
 	filters := []string{}
-	for _, filter := range []string{eventFilter, actorFilter, targetFilter} {
+	for _, filter := range []string{eventFilter, actorFilter, targetFilter, outcomeFilter} {
 		if filter != "" {
 			filters = append(filters, filter)
 		}
@@ -75,6 +82,10 @@ func (filter *EventFilter) Matches(event *oktaSDK.LogEvent) bool {
 
 	// if we have actor types, is the actor type in our set?
 	if filter.ActorType != "" && filter.ActorType != event.Actor.Type {
+		return false
+	}
+
+	if filter.OutcomeResult != "" && (event.Outcome == nil || event.Outcome.Result != filter.OutcomeResult) {
 		return false
 	}
 

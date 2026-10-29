@@ -2,9 +2,17 @@ package connector
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/pagination"
+	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/stretchr/testify/require"
@@ -451,5 +459,130 @@ func TestOktaSystemLogLabelsCoversAllStandardRoles(t *testing.T) {
 				"role %s has no oktaSystemLogLabels entry -- its grant/revoke events will be silently dropped",
 				role.Type)
 		})
+	}
+}
+
+func groupAssignmentFixture(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile("testdata/group-application-assignment.json")
+	require.NoError(t, err)
+	return string(data)
+}
+
+func groupAssignmentFilter(t *testing.T) EventFilter {
+	t.Helper()
+	for _, filter := range activeFilters {
+		if filter.EventTypes.Contains("group.application_assignment.add") {
+			return filter
+		}
+	}
+	t.Fatal("group application assignment filter is not registered")
+	return EventFilter{}
+}
+
+// listEventsCapturingFilter serves body as the System Log page and returns the
+// emitted events along with the filter the connector sent.
+func listEventsCapturingFilter(t *testing.T, c *Okta, body string) ([]*v2.Event, string) {
+	t.Helper()
+	var filterQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/logs" {
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+		filterQuery = r.URL.Query().Get("filter")
+		writeOktaTestResponse(w, http.StatusOK, body)
+	}))
+	t.Cleanup(server.Close)
+	_, client, err := oktaSDK.NewClient(t.Context(),
+		oktaSDK.WithOrgUrl(server.URL),
+		oktaSDK.WithToken("test-token"),
+		oktaSDK.WithHttpClientPtr(server.Client()),
+		oktaSDK.WithTestingDisableHttpsCheck(true),
+		oktaSDK.WithCache(false),
+	)
+	require.NoError(t, err)
+	c.client = client
+	events, _, _, err := c.ListEvents(t.Context(), nil, &pagination.StreamToken{Size: 100})
+	require.NoError(t, err)
+	return events, filterQuery
+}
+
+func TestListEventsGroupApplicationAssignment(t *testing.T) {
+	events, filterQuery := listEventsCapturingFilter(t, &Okta{}, "["+groupAssignmentFixture(t)+"]")
+	require.Contains(t, filterQuery, `eventType eq "group.application_assignment.add"`)
+	require.Contains(t, filterQuery, `outcome.result eq "SUCCESS"`)
+	require.Len(t, events, 1)
+	require.Equal(t, "00000000-0000-4000-8000-000000000020", events[0].GetId())
+	require.True(t, events[0].GetOccurredAt().AsTime().Equal(time.Date(2026, time.October, 23, 17, 38, 52, 970000000, time.UTC)))
+	grant := events[0].GetCreateGrantEvent()
+	require.NotNil(t, grant)
+	require.Equal(t, "app:app1:access", grant.GetEntitlement().GetId())
+	require.Equal(t, "access", grant.GetEntitlement().GetSlug())
+	require.Equal(t, "app", grant.GetEntitlement().GetResource().GetId().GetResourceType())
+	require.Equal(t, "app1", grant.GetEntitlement().GetResource().GetId().GetResource())
+	require.Equal(t, "group", grant.GetPrincipal().GetId().GetResourceType())
+	require.Equal(t, "group1", grant.GetPrincipal().GetId().GetResource())
+	resource, err := sdkResource.NewResource("Example application", resourceTypeApp, "app1")
+	require.NoError(t, err)
+	fullSyncGrant := sdkGrant.NewGrant(resource, "access", grant.GetPrincipal())
+	eventGrant := sdkGrant.NewGrantID(grant.GetPrincipal(), grant.GetEntitlement())
+	require.Equal(t, fullSyncGrant.GetId(), eventGrant)
+	expansion := &v2.GrantExpandable{}
+	annos := annotations.Annotations(grant.GetAnnotations())
+	found, err := annos.Pick(expansion)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, []string{"group:group1:member"}, expansion.GetEntitlementIds())
+	require.True(t, expansion.GetShallow())
+}
+
+func TestListEventsGroupApplicationAssignmentWithSkippedAppGroups(t *testing.T) {
+	// The event cannot tell an APP_GROUP from other groups, so it is emitted
+	// regardless; C1 drops grants whose group principal was never synced.
+	events, filterQuery := listEventsCapturingFilter(t, &Okta{skipAppGroups: true}, "["+groupAssignmentFixture(t)+"]")
+	require.Contains(t, filterQuery, `eventType eq "group.application_assignment.add"`)
+	require.Len(t, events, 1)
+	require.Equal(t, "group1", events[0].GetCreateGrantEvent().GetPrincipal().GetId().GetResource())
+}
+
+func TestApplicationGroupAssignmentFilterRejectsMalformedTargets(t *testing.T) {
+	filter := groupAssignmentFilter(t)
+	for _, tt := range []struct {
+		name    string
+		targets []*oktaSDK.LogTarget
+	}{
+		{name: "missing group", targets: []*oktaSDK.LogTarget{{Type: "AppInstance", Id: "app1"}}},
+		{name: "missing application", targets: []*oktaSDK.LogTarget{{Type: "UserGroup", Id: "group1"}}},
+		{name: "duplicate groups", targets: []*oktaSDK.LogTarget{{Type: "UserGroup", Id: "group1"}, {Type: "UserGroup", Id: "group2"}, {Type: "AppInstance", Id: "app1"}}},
+		{name: "duplicate applications", targets: []*oktaSDK.LogTarget{{Type: "UserGroup", Id: "group1"}, {Type: "AppInstance", Id: "app1"}, {Type: "AppInstance", Id: "app2"}}},
+		{name: "empty group id", targets: []*oktaSDK.LogTarget{{Type: "UserGroup"}, {Type: "AppInstance", Id: "app1"}}},
+		{name: "empty application id", targets: []*oktaSDK.LogTarget{{Type: "UserGroup", Id: "group1"}, {Type: "AppInstance"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			event := logEvent("group.application_assignment.add", tt.targets...)
+			event.Outcome = &oktaSDK.LogOutcome{Result: "SUCCESS"}
+			rv, err := filter.Handle(zap.NewNop(), event)
+			require.Error(t, err)
+			require.Nil(t, rv)
+		})
+	}
+}
+
+func TestApplicationGroupAssignmentFilterMatchesOnlySuccessfulEvents(t *testing.T) {
+	filter := groupAssignmentFilter(t)
+	for _, tt := range []struct {
+		outcome *oktaSDK.LogOutcome
+		want    bool
+	}{
+		{outcome: nil, want: false},
+		{outcome: &oktaSDK.LogOutcome{Result: "FAILURE"}, want: false},
+		{outcome: &oktaSDK.LogOutcome{Result: "SKIPPED"}, want: false},
+		{outcome: &oktaSDK.LogOutcome{Result: "UNKNOWN"}, want: false},
+		{outcome: &oktaSDK.LogOutcome{Result: "SUCCESS"}, want: true},
+	} {
+		event := &oktaSDK.LogEvent{}
+		require.NoError(t, json.Unmarshal([]byte(groupAssignmentFixture(t)), event))
+		event.Outcome = tt.outcome
+		require.Equal(t, tt.want, filter.Matches(event))
 	}
 }

@@ -132,13 +132,10 @@ var (
 		},
 	}
 	ApplicationGroupAssignmentFilter = EventFilter{
-		EventTypes:  mapset.NewSet("group.application_assignment.add"),
-		TargetTypes: mapset.NewSet("AppInstance", "UserGroup"),
+		EventTypes:    mapset.NewSet("group.application_assignment.add"),
+		TargetTypes:   mapset.NewSet("AppInstance", "UserGroup"),
+		OutcomeResult: "SUCCESS",
 		EventHandler: func(l *zap.Logger, event *oktaSDK.LogEvent, targetMap map[string][]*oktaSDK.LogTarget, rv *v2.Event) error {
-			if event.Outcome == nil || event.Outcome.Result != "SUCCESS" {
-				l.Debug("okta-event-feed: skipping unsuccessful group application assignment", zap.String("event_id", event.Uuid))
-				return nil
-			}
 			if len(targetMap["AppInstance"]) != 1 || targetMap["AppInstance"][0].Id == "" {
 				return fmt.Errorf("okta-connectorv2: expected one AppInstance target with an id")
 			}
