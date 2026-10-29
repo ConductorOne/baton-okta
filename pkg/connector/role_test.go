@@ -245,3 +245,96 @@ func TestRoleGrantGuardRejectsOtherPrincipalTypes(t *testing.T) {
 	})
 }
 
+
+// TestRoleRevokeNoActiveRoleMatch pins the fail-open short-circuit: when the list
+// step finds no active matching role, both branches must return GrantAlreadyRevoked
+// WITHOUT issuing a delete (the scripted client's cleanup assertion fails if the
+// DELETE step is consumed) — the D5 fail-open surface.
+func TestRoleRevokeNoActiveRoleMatch(t *testing.T) {
+	t.Run("group principal: no active match revokes nothing", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/groups/" + testGroupID + "/roles",
+			statusCode: http.StatusOK, headers: roleTestHeaders, body: `[]`,
+		})
+		grant := &v2.Grant{Principal: appGroupPrincipal(), Entitlement: roleAssignedEntitlement()}
+
+		annos, err := roleBuilder(client, nil).Revoke(t.Context(), grant)
+		if err != nil {
+			t.Fatalf("Revoke() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("annotations = %v, want GrantAlreadyRevoked", annos)
+		}
+		// No delete step was scripted: newScriptedOktaClient's cleanup fails the
+		// test if the branch issues an unexpected DELETE.
+	})
+
+	t.Run("user principal: no active match revokes nothing", func(t *testing.T) {
+		client := newScriptedOktaClient(t, oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID + "/roles",
+			statusCode: http.StatusOK, headers: roleTestHeaders, body: `[]`,
+		})
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: roleAssignedEntitlement()}
+
+		annos, err := roleBuilder(client, nil).Revoke(t.Context(), grant)
+		if err != nil {
+			t.Fatalf("Revoke() error: %v", err)
+		}
+		if !annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("annotations = %v, want GrantAlreadyRevoked", annos)
+		}
+	})
+}
+
+// TestRoleRevokeServerErrorFailsClosed pins the fail-closed direction of the
+// idempotency classification: a server error on the delete must stay a wrapped
+// error, never degrade into GrantAlreadyRevoked.
+func TestRoleRevokeServerErrorFailsClosed(t *testing.T) {
+	listBody := `[{"id":"` + testRoleType + `","status":"ACTIVE","type":"SUPER_ADMIN","label":"Super Administrator"}]`
+
+	t.Run("group principal: delete 500 is an error", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{
+				method: http.MethodGet, path: "/api/v1/groups/" + testGroupID + "/roles",
+				statusCode: http.StatusOK, headers: roleTestHeaders, body: listBody,
+			},
+			oktaRequestStep{
+				method: http.MethodDelete, path: "/api/v1/groups/" + testGroupID + "/roles/" + testRoleType,
+				statusCode: http.StatusInternalServerError, headers: roleTestHeaders,
+				body:       `{"errorCode":"E0000001","errorSummary":"Internal Server Error"}`,
+			},
+		)
+		grant := &v2.Grant{Principal: appGroupPrincipal(), Entitlement: roleAssignedEntitlement()}
+
+		annos, err := roleBuilder(client, nil).Revoke(t.Context(), grant)
+		if err == nil {
+			t.Fatalf("Revoke() = nil error, want wrapped server error")
+		}
+		if annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("annotations = %v, must not report GrantAlreadyRevoked on a server error", annos)
+		}
+	})
+
+	t.Run("user principal: delete 500 is an error", func(t *testing.T) {
+		client := newScriptedOktaClient(t,
+			oktaRequestStep{
+				method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID + "/roles",
+				statusCode: http.StatusOK, headers: roleTestHeaders, body: listBody,
+			},
+			oktaRequestStep{
+				method: http.MethodDelete, path: "/api/v1/users/" + testOktaUserID + "/roles/" + testRoleType,
+				statusCode: http.StatusInternalServerError, headers: roleTestHeaders,
+				body:       `{"errorCode":"E0000001","errorSummary":"Internal Server Error"}`,
+			},
+		)
+		grant := &v2.Grant{Principal: testUserPrincipal(), Entitlement: roleAssignedEntitlement()}
+
+		annos, err := roleBuilder(client, nil).Revoke(t.Context(), grant)
+		if err == nil {
+			t.Fatalf("Revoke() = nil error, want wrapped server error")
+		}
+		if annos.Contains(&v2.GrantAlreadyRevoked{}) {
+			t.Fatalf("annotations = %v, must not report GrantAlreadyRevoked on a server error", annos)
+		}
+	})
+}
