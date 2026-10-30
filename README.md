@@ -85,6 +85,8 @@ By default, `baton-okta` will sync information for inactive applications. You ca
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 
+To sync whether standard admin roles (Group, Help Desk, Group Membership, and Application Administrator) are constrained to the entire organization or to specific groups and apps, provide `--sync-admin-role-scopes`. Its default value is `false`. When enabled, each of those roles gets an `entire-organization` entitlement, and each group and app gets an entitlement per admin role that can be constrained to it.
+
 `--skip-app-groups` excludes `APP_GROUP` type groups — the ones Okta imports from an app or directory integration — from the group sync. This changes how app access is attributed, so it is worth understanding before enabling it.
 
 Normally a group assigned to an app gets a group-principal grant that ConductorOne expands to the group's members, recording the group as the source of their access. A skipped group is never synced, so access conferred by one has nothing to expand into. To avoid dropping that access, the connector falls back to emitting direct user grants for the affected app users.
@@ -241,6 +243,7 @@ Flags:
       --skip-full-sync                                   This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
       --skip-secondary-emails                            Whether to skip syncing secondary emails or not ($BATON_SKIP_SECONDARY_EMAILS)
       --storage-engine string                            The storage engine to use when opening the sync c1z file: sqlite or pebble. Leave unset to use the baton-sdk default. ($BATON_STORAGE_ENGINE)
+      --sync-admin-role-scopes                           Whether to sync what standard admin roles are constrained to: the entire organization, or specific groups and apps ($BATON_SYNC_ADMIN_ROLE_SCOPES)
       --sync-custom-roles                                Whether to enable syncing custom roles or not ($BATON_SYNC_CUSTOM_ROLES)
       --sync-inactive-apps                               Whether to sync inactive apps or not ($BATON_SYNC_INACTIVE_APPS) (default true)
       --sync-resource-types strings                      The resource type IDs to sync ($BATON_SYNC_RESOURCE_TYPES)

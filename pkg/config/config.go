@@ -88,6 +88,11 @@ var (
 		field.WithDescription("Whether to skip syncing APP_GROUP type groups (Okta push groups created by SCIM-integrated apps) or not"),
 		field.WithDefaultValue(false),
 	)
+	syncAdminRoleScopes = field.BoolField("sync-admin-role-scopes",
+		field.WithDisplayName("Sync admin role scopes"),
+		field.WithDescription("Whether to sync what standard admin roles are constrained to: the entire organization, or specific groups and apps"),
+		field.WithDefaultValue(false),
+	)
 )
 
 //go:generate go run ./gen
@@ -106,6 +111,7 @@ var Config = field.NewConfiguration([]field.SchemaField{
 	syncSecrets,
 	filterEmailDomains,
 	skipAppGroups,
+	syncAdminRoleScopes,
 },
 	field.WithConnectorDisplayName("Okta"),
 	field.WithIconUrl("/static/app-icons/okta.svg"),
@@ -126,7 +132,8 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				skipSecondaryEmails,
 				syncSecrets,
 				filterEmailDomains,
-				skipAppGroups},
+				skipAppGroups,
+				syncAdminRoleScopes},
 		},
 		{
 			Name:        PrivateKeyGroup,
@@ -145,7 +152,8 @@ var Config = field.NewConfiguration([]field.SchemaField{
 				skipSecondaryEmails,
 				syncSecrets,
 				filterEmailDomains,
-				skipAppGroups},
+				skipAppGroups,
+				syncAdminRoleScopes},
 		},
 	}),
 )
