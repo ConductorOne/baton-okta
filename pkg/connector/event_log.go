@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -32,7 +32,7 @@ var activeFilters = []EventFilter{
 	CreateRevokeFilter,
 }
 
-func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *query.Params {
+func (connector *Okta) createQueryParams(earliestEvent *timestamppb.Timestamp, pToken *pagination.StreamToken, filters ...string) *okta.QueryParams {
 	qp := queryParams(pToken.Size, pToken.Cursor)
 	if earliestEvent != nil {
 		qp.Since = earliestEvent.AsTime().Format(time.RFC3339)
@@ -72,10 +72,10 @@ func (connector *Okta) ListEvents(
 
 	qp := connector.createQueryParams(earliestEvent, pToken, filters...)
 
-	logs, resp, err := connector.client.LogEvent.GetLogs(ctx, qp)
+	logs, resp, err := connector.client.ListLogEvents(ctx, qp)
 	if err != nil {
 		// Route through the shared handler like every other call site; bare, this
-		// returned an SDK error carrying no grpc code, no status, and no prefix.
+		// returned a client error carrying no grpc code, no status, and no prefix.
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to list system log events: %w", handleOktaResponseError(resp, err))
 	}
 

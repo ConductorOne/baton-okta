@@ -12,17 +12,15 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
+	"github.com/conductorone/baton-okta/pkg/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
 
 type resourceSetsResourceType struct {
 	resourceType *v2.ResourceType
 	client       *okta.Client
-	clientV5     *oktav5.APIClient
 	domain       string
 }
 
@@ -57,7 +55,7 @@ func resourceSetsResource(rs *ResourceSets, parentResourceID *v2.ResourceId) (*v
 	)
 }
 
-func resourceSetResource(rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+func resourceSetResource(rs *okta.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":                    *rs.Id,
 		profileFieldLabel:       *rs.Label,
@@ -80,7 +78,7 @@ func listResourceSets(
 	ctx context.Context,
 	client *okta.Client,
 	token *pagination.Token,
-	qp *query.Params,
+	qp *okta.QueryParams,
 ) ([]ResourceSets, *responseContext, error) {
 	uri := apiPathListIamResourceSets
 	if qp != nil {
@@ -188,15 +186,7 @@ func listBindings(
 }
 
 func doRequest(ctx context.Context, url, httpMethod string, res interface{}, client *okta.Client) (*okta.Response, error) {
-	rq := client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(httpMethod, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := rq.Do(ctx, req, &res)
+	resp, err := client.Do(ctx, httpMethod, url, nil, res)
 	if err != nil {
 		return resp, fmt.Errorf("okta-connectorv2: request failed: %w", handleOktaResponseError(resp, err))
 	}
@@ -307,7 +297,7 @@ func (rs *resourceSetsResourceType) Get(ctx context.Context, resourceId *v2.Reso
 	l := ctxzap.Extract(ctx)
 	l.Debug("getting resource set", zap.String("resource_set_id", resourceId.Resource))
 
-	resourceSet, _, err := rs.clientV5.ResourceSetAPI.GetResourceSet(ctx, resourceId.Resource).Execute()
+	resourceSet, _, err := rs.client.GetResourceSet(ctx, resourceId.Resource)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -320,11 +310,10 @@ func (rs *resourceSetsResourceType) Get(ctx context.Context, resourceId *v2.Reso
 	return resource, nil, nil
 }
 
-func resourceSetsBuilder(domain string, client *okta.Client, clientV5 *oktav5.APIClient) *resourceSetsResourceType {
+func resourceSetsBuilder(domain string, client *okta.Client) *resourceSetsResourceType {
 	return &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		domain:       domain,
 		client:       client,
-		clientV5:     clientV5,
 	}
 }

@@ -1,0 +1,402 @@
+package okta
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+)
+
+// RequestOption adjusts a single request.
+type RequestOption func(*request)
+
+// WithContentType overrides the request Content-Type (sent even without a body).
+func WithContentType(ct string) RequestOption {
+	return func(r *request) { r.contentType = ct }
+}
+
+// WithFreshRead makes a GET skip the response cache.
+func WithFreshRead() RequestOption {
+	return func(r *request) { r.fresh = true }
+}
+
+// withStatusLineErrors makes non-2xx responses surface as *GenericError
+// carrying the HTTP status line, waits out an exhausted rate-limit window
+// before sending, and treats a 429 as final. The device, API token and
+// resource-set lookups have always behaved this way.
+func withStatusLineErrors() RequestOption {
+	return func(r *request) {
+		r.errorStyle = errorStyleGeneric
+		r.rateLimitPrevention = true
+		r.noRetry = true
+	}
+}
+
+// Do sends method to path (which may include a query string), JSON-encoding
+// body when non-nil and decoding a successful JSON response into v when
+// non-nil. A non-2xx response is returned alongside an *Error.
+func (c *Client) Do(ctx context.Context, method, path string, body, v any, opts ...RequestOption) (*Response, error) {
+	req := request{method: method, path: path, body: body}
+	for _, o := range opts {
+		o(&req)
+	}
+	return c.do(ctx, req, v)
+}
+
+func (c *Client) get(ctx context.Context, path string, qp *QueryParams, v any, opts ...RequestOption) (*Response, error) {
+	return c.Do(ctx, http.MethodGet, path+qp.String(), nil, v, opts...)
+}
+
+// ---- Org
+
+// GetOrgSettings reads GET /api/v1/org.
+func (c *Client) GetOrgSettings(ctx context.Context) (*OrgSetting, *Response, error) {
+	var out *OrgSetting
+	resp, err := c.get(ctx, "/api/v1/org", nil, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// ---- Users
+
+// GetUser reads GET /api/v1/users/{idOrLogin}.
+func (c *Client) GetUser(ctx context.Context, userID string, opts ...RequestOption) (*User, *Response, error) {
+	var out *User
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/users/%v", userID), nil, &out, opts...)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// CreateUser sends POST /api/v1/users.
+func (c *Client) CreateUser(ctx context.Context, body CreateUserRequest, qp *QueryParams) (*User, *Response, error) {
+	var out *User
+	resp, err := c.Do(ctx, http.MethodPost, "/api/v1/users"+qp.String(), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// PartialUpdateUser sends POST /api/v1/users/{id}, merging the given profile.
+func (c *Client) PartialUpdateUser(ctx context.Context, userID string, body User) (*User, *Response, error) {
+	var out *User
+	resp, err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%v", userID), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// lifecycle sends POST /api/v1/users/{id}/lifecycle/{op}.
+func (c *Client) lifecycle(ctx context.Context, userID, op string, qp *QueryParams) (*Response, error) {
+	var out map[string]any
+	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%v/lifecycle/%s", userID, op)+qp.String(), nil, &out)
+}
+
+// ActivateUser activates a STAGED or DEPROVISIONED user.
+func (c *Client) ActivateUser(ctx context.Context, userID string, qp *QueryParams) (*Response, error) {
+	return c.lifecycle(ctx, userID, "activate", qp)
+}
+
+// DeactivateUser deprovisions a user.
+func (c *Client) DeactivateUser(ctx context.Context, userID string, qp *QueryParams) (*Response, error) {
+	return c.lifecycle(ctx, userID, "deactivate", qp)
+}
+
+// SuspendUser suspends an ACTIVE user.
+func (c *Client) SuspendUser(ctx context.Context, userID string) (*Response, error) {
+	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%v/lifecycle/suspend", userID), nil, nil)
+}
+
+// UnsuspendUser returns a SUSPENDED user to ACTIVE.
+func (c *Client) UnsuspendUser(ctx context.Context, userID string) (*Response, error) {
+	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%v/lifecycle/unsuspend", userID), nil, nil)
+}
+
+// DeleteUser sends DELETE /api/v1/users/{id}: it deactivates an active user
+// and permanently deletes a DEPROVISIONED one.
+func (c *Client) DeleteUser(ctx context.Context, userID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/users/%v", userID), nil, nil)
+}
+
+// ListUserRoles reads GET /api/v1/users/{id}/roles.
+func (c *Client) ListUserRoles(ctx context.Context, userID string) ([]*Role, *Response, error) {
+	var out []*Role
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/users/%v/roles", userID), nil, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// AssignRoleToUser sends POST /api/v1/users/{id}/roles.
+func (c *Client) AssignRoleToUser(ctx context.Context, userID string, body AssignRoleRequest) (*Role, *Response, error) {
+	var out *Role
+	resp, err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%v/roles", userID), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// RemoveRoleFromUser sends DELETE /api/v1/users/{id}/roles/{roleAssignmentId}.
+func (c *Client) RemoveRoleFromUser(ctx context.Context, userID, roleID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/users/%v/roles/%v", userID, roleID), nil, nil)
+}
+
+// ---- Groups
+
+// ListGroups reads GET /api/v1/groups.
+func (c *Client) ListGroups(ctx context.Context, qp *QueryParams) ([]*Group, *Response, error) {
+	var out []*Group
+	resp, err := c.get(ctx, "/api/v1/groups", qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// GetGroup reads GET /api/v1/groups/{id}.
+func (c *Client) GetGroup(ctx context.Context, groupID string, qp *QueryParams) (*Group, *Response, error) {
+	var out *Group
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v", groupID), qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// CreateGroup sends POST /api/v1/groups.
+func (c *Client) CreateGroup(ctx context.Context, body Group) (*Group, *Response, error) {
+	var out *Group
+	resp, err := c.Do(ctx, http.MethodPost, "/api/v1/groups", body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// UpdateGroup sends PUT /api/v1/groups/{id}.
+func (c *Client) UpdateGroup(ctx context.Context, groupID string, body Group) (*Group, *Response, error) {
+	var out *Group
+	resp, err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/groups/%v", groupID), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// DeleteGroup sends DELETE /api/v1/groups/{id}.
+func (c *Client) DeleteGroup(ctx context.Context, groupID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v", groupID), nil, nil)
+}
+
+// ListGroupUsers reads GET /api/v1/groups/{id}/users.
+func (c *Client) ListGroupUsers(ctx context.Context, groupID string, qp *QueryParams) ([]*User, *Response, error) {
+	var out []*User
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v/users", groupID), qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// AddUserToGroup sends PUT /api/v1/groups/{groupId}/users/{userId}.
+func (c *Client) AddUserToGroup(ctx context.Context, groupID, userID string) (*Response, error) {
+	return c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/groups/%v/users/%v", groupID, userID), nil, nil)
+}
+
+// RemoveUserFromGroup sends DELETE /api/v1/groups/{groupId}/users/{userId}.
+func (c *Client) RemoveUserFromGroup(ctx context.Context, groupID, userID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v/users/%v", groupID, userID), nil, nil)
+}
+
+// ListGroupRoles reads GET /api/v1/groups/{id}/roles.
+func (c *Client) ListGroupRoles(ctx context.Context, groupID string) ([]*Role, *Response, error) {
+	var out []*Role
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v/roles", groupID), nil, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// AssignRoleToGroup sends POST /api/v1/groups/{id}/roles.
+func (c *Client) AssignRoleToGroup(ctx context.Context, groupID string, body AssignRoleRequest) (*Role, *Response, error) {
+	var out *Role
+	resp, err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/groups/%v/roles", groupID), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// RemoveRoleFromGroup sends DELETE /api/v1/groups/{id}/roles/{roleAssignmentId}.
+func (c *Client) RemoveRoleFromGroup(ctx context.Context, groupID, roleID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v/roles/%v", groupID, roleID), nil, nil)
+}
+
+// ---- Apps
+
+// ListApplications reads GET /api/v1/apps.
+func (c *Client) ListApplications(ctx context.Context, qp *QueryParams) ([]*Application, *Response, error) {
+	var out []*Application
+	resp, err := c.get(ctx, "/api/v1/apps", qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// GetApplication reads GET /api/v1/apps/{id}.
+func (c *Client) GetApplication(ctx context.Context, appID string) (*Application, *Response, error) {
+	var out *Application
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/apps/%v", appID), nil, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// ListApplicationUsers reads GET /api/v1/apps/{id}/users.
+func (c *Client) ListApplicationUsers(ctx context.Context, appID string, qp *QueryParams) ([]*AppUser, *Response, error) {
+	var out []*AppUser
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/apps/%v/users", appID), qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// GetApplicationUser reads GET /api/v1/apps/{id}/users/{userId}.
+func (c *Client) GetApplicationUser(ctx context.Context, appID, userID string) (*AppUser, *Response, error) {
+	var out *AppUser
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/apps/%v/users/%v", appID, userID), nil, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// AssignUserToApplication sends POST /api/v1/apps/{id}/users.
+func (c *Client) AssignUserToApplication(ctx context.Context, appID string, body AppUser) (*AppUser, *Response, error) {
+	var out *AppUser
+	resp, err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/apps/%v/users", appID), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// DeleteApplicationUser sends DELETE /api/v1/apps/{id}/users/{userId}.
+func (c *Client) DeleteApplicationUser(ctx context.Context, appID, userID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/apps/%v/users/%v", appID, userID), nil, nil)
+}
+
+// ListApplicationGroupAssignments reads GET /api/v1/apps/{id}/groups.
+func (c *Client) ListApplicationGroupAssignments(ctx context.Context, appID string, qp *QueryParams) ([]*ApplicationGroupAssignment, *Response, error) {
+	var out []*ApplicationGroupAssignment
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/apps/%v/groups", appID), qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// GetApplicationGroupAssignment reads GET /api/v1/apps/{id}/groups/{groupId}.
+func (c *Client) GetApplicationGroupAssignment(ctx context.Context, appID, groupID string) (*ApplicationGroupAssignment, *Response, error) {
+	var out *ApplicationGroupAssignment
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/apps/%v/groups/%v", appID, groupID), nil, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// CreateApplicationGroupAssignment sends PUT /api/v1/apps/{id}/groups/{groupId}.
+func (c *Client) CreateApplicationGroupAssignment(ctx context.Context, appID, groupID string, body ApplicationGroupAssignment) (*ApplicationGroupAssignment, *Response, error) {
+	var out *ApplicationGroupAssignment
+	resp, err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/apps/%v/groups/%v", appID, groupID), body, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// DeleteApplicationGroupAssignment sends DELETE /api/v1/apps/{id}/groups/{groupId}.
+func (c *Client) DeleteApplicationGroupAssignment(ctx context.Context, appID, groupID string) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/apps/%v/groups/%v", appID, groupID), nil, nil)
+}
+
+// ---- System Log
+
+// ListLogEvents reads GET /api/v1/logs.
+func (c *Client) ListLogEvents(ctx context.Context, qp *QueryParams) ([]*LogEvent, *Response, error) {
+	var out []*LogEvent
+	resp, err := c.get(ctx, "/api/v1/logs", qp, &out)
+	if err != nil {
+		return nil, resp, err
+	}
+	return out, resp, nil
+}
+
+// ---- Devices, API tokens and resource-set lookups (status-line errors)
+
+// ListDevices reads GET /api/v1/devices, or the next page when nextPage is set.
+func (c *Client) ListDevices(ctx context.Context, limit int32, nextPage string) ([]Device, *Response, error) {
+	path := nextPage
+	if path == "" {
+		path = fmt.Sprintf("/api/v1/devices?limit=%d", limit)
+	}
+	var out []Device
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors())
+	return out, resp, err
+}
+
+// ListAPITokens reads GET /api/v1/api-tokens, or the next page when nextPage is set.
+func (c *Client) ListAPITokens(ctx context.Context, nextPage string) ([]APIToken, *Response, error) {
+	path := nextPage
+	if path == "" {
+		path = "/api/v1/api-tokens"
+	}
+	var out []APIToken
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors())
+	return out, resp, err
+}
+
+// GetAPIToken reads GET /api/v1/api-tokens/{id}.
+func (c *Client) GetAPIToken(ctx context.Context, tokenID string) (*APIToken, *Response, error) {
+	var out APIToken
+	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/api-tokens/"+pathEscape(tokenID), nil, &out, withStatusLineErrors())
+	if err != nil {
+		return nil, resp, err
+	}
+	return &out, resp, nil
+}
+
+// GetResourceSet reads GET /api/v1/iam/resource-sets/{id}.
+func (c *Client) GetResourceSet(ctx context.Context, resourceSetID string) (*ResourceSet, *Response, error) {
+	var out ResourceSet
+	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/iam/resource-sets/"+pathEscape(resourceSetID), nil, &out, withStatusLineErrors())
+	if err != nil {
+		return nil, resp, err
+	}
+	return &out, resp, nil
+}
+
+// GetResourceSetBinding reads GET /api/v1/iam/resource-sets/{id}/bindings/{roleId}.
+func (c *Client) GetResourceSetBinding(ctx context.Context, resourceSetID, roleID string) (*ResourceSetBinding, *Response, error) {
+	var out ResourceSetBinding
+	resp, err := c.Do(ctx, http.MethodGet,
+		"/api/v1/iam/resource-sets/"+pathEscape(resourceSetID)+"/bindings/"+pathEscape(roleID), nil, &out, withStatusLineErrors())
+	if err != nil {
+		return nil, resp, err
+	}
+	return &out, resp, nil
+}
+
+func pathEscape(s string) string { return url.PathEscape(s) }

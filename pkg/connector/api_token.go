@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -47,30 +47,29 @@ func (o *apiTokenResourceType) List(
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to parse page token: %w", err)
 	}
 
-	var apiTokens []oktav5.ApiToken
-	var resp *oktav5.APIResponse
+	var apiTokens []okta.APIToken
+	var resp *okta.Response
 
 	if prevSerializedResp == "" {
-		apiTokens, resp, err = o.connector.clientV5.ApiTokenAPI.ListApiTokens(ctx).Execute()
+		apiTokens, resp, err = o.connector.client.ListAPITokens(ctx, "")
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to list api tokens: %w", err)
 		}
 	} else {
-		prevResp, err := deserializeOktaResponseV5(prevSerializedResp)
+		next, err := nextPageFromLinkToken(prevSerializedResp)
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to deserialize page token: %w", err)
 		}
 
-		localOktaAPIResponse := oktav5.NewAPIResponse(prevResp.Response, o.connector.clientV5, nil)
-		if localOktaAPIResponse.HasNextPage() {
-			resp, err = localOktaAPIResponse.Next(&apiTokens)
+		if next != "" {
+			apiTokens, resp, err = o.connector.client.ListAPITokens(ctx, next)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 	}
 
-	nextPage, annos, err := parseRespV5(resp)
+	nextPage, annos, err := parseRespLinkToken(resp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to parse response: %w", err)
 	}
@@ -114,7 +113,7 @@ func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceI
 
 	var annos annotations.Annotations
 
-	apiToken, resp, err := o.connector.clientV5.ApiTokenAPI.GetApiToken(ctx, resourceId.Resource).Execute()
+	apiToken, resp, err := o.connector.client.GetAPIToken(ctx, resourceId.Resource)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to get api token: %w", err)
 	}
@@ -135,7 +134,7 @@ func (o *apiTokenResourceType) Get(ctx context.Context, resourceId *v2.ResourceI
 	return resource, annos, nil
 }
 
-func apiTokenResource(apiToken *oktav5.ApiToken) (*v2.Resource, error) {
+func apiTokenResource(apiToken *okta.APIToken) (*v2.Resource, error) {
 	options := []resource.SecretTraitOption{
 		resource.WithSecretExpiresAt(*apiToken.ExpiresAt),
 		resource.WithSecretIdentityID(&v2.ResourceId{

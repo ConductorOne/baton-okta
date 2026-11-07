@@ -12,14 +12,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -75,26 +74,17 @@ func extractFieldAsString(args *structpb.Struct, fieldName string) (string, erro
 	return value, nil
 }
 
-func queryParams(size int, after string) *query.Params {
+func queryParams(size int, after string) *okta.QueryParams {
 	if size == 0 || size > defaultLimit {
 		size = defaultLimit
 	}
-	if after == "" {
-		return query.NewQueryParams(query.WithLimit(int64(size)))
-	}
-
-	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after))
+	return &okta.QueryParams{Limit: int64(size), After: after}
 }
 
-func queryParamsExpand(size int, after string, expand string) *query.Params {
-	if size == 0 || size > defaultLimit {
-		size = defaultLimit
-	}
-	if after == "" {
-		return query.NewQueryParams(query.WithLimit(int64(size)), query.WithExpand(expand))
-	}
-
-	return query.NewQueryParams(query.WithLimit(int64(size)), query.WithAfter(after), query.WithExpand(expand))
+func queryParamsExpand(size int, after string, expand string) *okta.QueryParams {
+	qp := queryParams(size, after)
+	qp.Expand = expand
+	return qp
 }
 
 func responseToContext(token *pagination.Token, resp *okta.Response) (*responseContext, error) {
@@ -199,7 +189,7 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 		}
 	}
 
-	// Do drops the response on every 429 that leaves the SDK's retry loop, so the fallback
+	// The client drops the response on every 429 that leaves its retry loop, so the fallback
 	// below never sees it. The retryer waits on Unavailable, not ResourceExhausted.
 	if resp == nil && slices.ContainsFunc(oktaRateLimitTexts, func(text string) bool {
 		return strings.Contains(err.Error(), text)
@@ -220,8 +210,8 @@ func handleOktaResponseError(resp *okta.Response, err error) error {
 	return err
 }
 
-// oktaRateLimitTexts are the messages a 429 leaves once it exits the v2 SDK's retry loop:
-// the exhausted-retries sentinel, plus Get429BackoffTime's two header-parse failures.
+// oktaRateLimitTexts are the messages a 429 leaves once it exits the client's retry loop:
+// the exhausted-retries sentinel, plus the two header-parse failures of its backoff calculation.
 var oktaRateLimitTexts = []string{
 	"too many requests",
 	"date header is missing or invalid",

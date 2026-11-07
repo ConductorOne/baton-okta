@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
@@ -19,8 +20,6 @@ import (
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -304,12 +303,12 @@ func (o *groupResourceType) Grants(
 	}
 }
 
-func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
+func (o *groupResourceType) listGroups(ctx context.Context, token *pagination.Token, qp *okta.QueryParams) ([]*okta.Group, *responseContext, error) {
 	return listGroupsHelper(ctx, o.connector.client, token, qp)
 }
 
-func listGroupsHelper(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.Group, *responseContext, error) {
-	groups, resp, err := client.Group.ListGroups(ctx, qp)
+func listGroupsHelper(ctx context.Context, client *okta.Client, token *pagination.Token, qp *okta.QueryParams) ([]*okta.Group, *responseContext, error) {
+	groups, resp, err := client.ListGroups(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch groups from okta: %w", handleOktaResponseError(resp, err))
 	}
@@ -329,20 +328,11 @@ func (o *groupResourceType) GetGroupWithParams(
 		return nil, nil, err
 	}
 
-	qp := query.NewQueryParams(query.WithExpand("stats,app")).String()
-	reqUrlStr := reqUrl.String() + qp
-
-	rq := o.connector.client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, reqUrlStr, nil)
-	if err != nil {
-		return nil, nil, err
-	}
+	qp := &okta.QueryParams{Expand: "stats,app"}
+	reqUrlStr := reqUrl.String() + qp.String()
 
 	var group *okta.Group
-	resp, err := rq.Do(ctx, req, &group)
+	resp, err := o.connector.client.Do(ctx, http.MethodGet, reqUrlStr, nil, &group)
 	if err != nil {
 		return nil, resp, fmt.Errorf("okta-connectorv2: failed to get group: %w", handleOktaResponseError(resp, err))
 	}
@@ -350,8 +340,8 @@ func (o *groupResourceType) GetGroupWithParams(
 	return group, resp, nil
 }
 
-func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
-	users, resp, err := o.connector.client.Group.ListGroupUsers(ctx, groupID, qp)
+func (o *groupResourceType) listGroupUsers(ctx context.Context, groupID string, token *pagination.Token, qp *okta.QueryParams) ([]*okta.User, *responseContext, error) {
+	users, resp, err := o.connector.client.ListGroupUsers(ctx, groupID, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch group users from okta: %w", handleOktaResponseError(resp, err))
 	}
@@ -535,7 +525,7 @@ func (g *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, e
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
 
-	response, err := g.connector.client.Group.AddUserToGroup(ctx, groupId, userId)
+	response, err := g.connector.client.AddUserToGroup(ctx, groupId, userId)
 	if err != nil {
 		return nil, fmt.Errorf("okta-connector: failed to add user to group: %w", handleOktaResponseError(response, err))
 	}
@@ -565,7 +555,7 @@ func (g *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annota
 	groupId := entitlement.Resource.Id.Resource
 	userId := principal.Id.Resource
 
-	response, err := g.connector.client.Group.RemoveUserFromGroup(ctx, groupId, userId)
+	response, err := g.connector.client.RemoveUserFromGroup(ctx, groupId, userId)
 	if err != nil {
 		return revokeNotFoundOrError(ctx, principal, response, err,
 			"okta-connector: revoke: user does not have group membership",
@@ -680,7 +670,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 	}
 
 	// Fetch the current group to get existing values
-	existingGroup, resp, err := o.connector.client.Group.GetGroup(ctx, groupId)
+	existingGroup, resp, err := o.connector.client.GetGroup(ctx, groupId, nil)
 	if err != nil {
 		if resp != nil {
 			defer resp.Body.Close()
@@ -721,7 +711,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 		return actions.NewReturnValues(true, resourceRv), nil, nil
 	}
 
-	updatedGroup, updateResp, err := o.connector.client.Group.UpdateGroup(ctx, groupId, okta.Group{
+	updatedGroup, updateResp, err := o.connector.client.UpdateGroup(ctx, groupId, okta.Group{
 		Profile: profile,
 	})
 	if err != nil {
@@ -814,7 +804,7 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 		},
 	}
 
-	createdGroup, resp, err := o.connector.client.Group.CreateGroup(ctx, newGroup)
+	createdGroup, resp, err := o.connector.client.CreateGroup(ctx, newGroup)
 	if err != nil {
 		if resp != nil {
 			defer resp.Body.Close()
@@ -831,7 +821,7 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 	userMemberIDs, ok := actions.GetResourceIdListArg(args, "userMembers")
 	if ok {
 		for _, memberID := range userMemberIDs {
-			memberResp, err := o.connector.client.Group.AddUserToGroup(ctx, createdGroup.Id, memberID.Resource)
+			memberResp, err := o.connector.client.AddUserToGroup(ctx, createdGroup.Id, memberID.Resource)
 			if err != nil {
 				if memberResp != nil {
 					memberResp.Body.Close()
@@ -863,7 +853,7 @@ func (o *groupResourceType) Delete(ctx context.Context, resourceId *v2.ResourceI
 
 	groupId := resourceId.Resource
 
-	resp, err := o.connector.client.Group.DeleteGroup(ctx, groupId)
+	resp, err := o.connector.client.DeleteGroup(ctx, groupId)
 	if err != nil {
 		if resp != nil {
 			defer resp.Body.Close()

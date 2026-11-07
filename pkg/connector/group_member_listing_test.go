@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
 const testStatsGroupID = "00gEXAMPLESTATSGRP01"

@@ -10,11 +10,11 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/conductorone/baton-okta/pkg/okta"
 )
 
 func operationArgs(t *testing.T, values map[string]any) *structpb.Struct {
@@ -173,7 +173,7 @@ func TestRawReadErrorClassification(t *testing.T) {
 		call func(context.Context, *okta.Client) error
 	}{
 		{name: "users", path: "/api/v1/users", call: func(ctx context.Context, client *okta.Client) error {
-			_, _, err := listUsers(ctx, client, &pagination.Token{}, query.NewQueryParams())
+			_, _, err := listUsers(ctx, client, &pagination.Token{}, &okta.QueryParams{})
 			return err
 		}},
 		{name: "custom roles", path: "/api/v1/iam/roles", call: func(ctx context.Context, client *okta.Client) error {

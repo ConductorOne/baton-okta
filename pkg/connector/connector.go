@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	cfg "github.com/conductorone/baton-okta/pkg/config"
+	"github.com/conductorone/baton-okta/pkg/okta"
 	"github.com/conductorone/baton-okta/pkg/oktaauth"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -18,9 +20,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -36,12 +37,8 @@ const (
 	devicesReadScope   = "okta.devices.read"
 )
 
-// oktaSDKAuthSentinel activates the SDK's Bearer auth path; the oktaauth RoundTripper substitutes the real DPoP/Bearer token per request.
-const oktaSDKAuthSentinel = "dpop-managed"
-
 type Okta struct {
 	client              *okta.Client
-	clientV5            *oktav5.APIClient
 	domain              string
 	apiToken            string
 	syncInactiveApps    bool
@@ -199,7 +196,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		roleBuilder(o.client, o),
 		userBuilder(o),
 		groupBuilder(o),
-		deviceBuilder(o.clientV5),
+		deviceBuilder(o.client),
 	}
 
 	var filterEmailDomains []string
@@ -213,8 +210,8 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 	if o.SyncCustomRoles {
 		resourceSyncer = append(resourceSyncer,
 			customRoleBuilder(o),
-			resourceSetsBuilder(o.domain, o.client, o.clientV5),
-			resourceSetsBindingsBuilder(o.domain, o.client, o.clientV5),
+			resourceSetsBuilder(o.domain, o.client),
+			resourceSetsBindingsBuilder(o.domain, o.client),
 		)
 	}
 
@@ -410,8 +407,6 @@ func parseOktaOrgURL(raw string) (*url.URL, error) {
 }
 
 func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
-	var oktaClient *okta.Client
-
 	orgURL, err := parseOktaOrgURL(cc.Domain)
 	if err != nil {
 		return nil, nil, err
@@ -419,13 +414,12 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 	// Host keeps an explicit port when present (Hostname() would drop it).
 	domain := orgURL.Host
 
-	client, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
+	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	cacheTTI, err := safeCacheInt32(cc.CacheTti)
-	if err != nil {
+	if _, err := safeCacheInt32(cc.CacheTti); err != nil {
 		return nil, nil, err
 	}
 
@@ -434,42 +428,23 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		return nil, nil, err
 	}
 
-	var oktaClientV5 *oktav5.APIClient
-
 	authMethod := ""
 	if opts != nil {
 		authMethod = opts.SelectedAuthMethod
+	}
+
+	clientCfg := okta.Config{
+		OrgURL:       orgURL,
+		HTTPClient:   httpClient,
+		CacheEnabled: cc.Cache,
+		CacheTTL:     time.Duration(cacheTTL) * time.Second,
 	}
 
 	switch authMethod {
 	default:
 		fallthrough
 	case cfg.ApiTokenGroup:
-		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(orgURL.String()),
-			okta.WithToken(cc.ApiToken),
-			okta.WithHttpClientPtr(client),
-			okta.WithCache(cc.Cache),
-			okta.WithCacheTti(cacheTTI),
-			okta.WithCacheTtl(cacheTTL),
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		config, err := oktav5.NewConfiguration(
-			oktav5.WithOrgUrl(orgURL.String()),
-			oktav5.WithToken(cc.ApiToken),
-			oktav5.WithHttpClientPtr(client),
-			oktav5.WithCache(cc.Cache),
-			oktav5.WithCacheTti(cacheTTI),
-			oktav5.WithCacheTtl(cacheTTL),
-			oktav5.WithRateLimitPrevent(true),
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-		oktaClientV5 = oktav5.NewAPIClient(config)
+		clientCfg.APIToken = cc.ApiToken
 	case cfg.PrivateKeyGroup:
 		scopes := privateKeyScopes(cc, opts)
 
@@ -479,44 +454,22 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 			PrivateKeyPEM: cc.OktaPrivateKey,
 			PrivateKeyID:  cc.OktaPrivateKeyId,
 			Scopes:        scopes,
-		}, client)
+		}, httpClient)
 		if err != nil {
 			return nil, nil, fmt.Errorf("baton-okta: build dpop http client: %w", err)
 		}
 
-		// Bearer mode lets the oktaauth transport own auth; bypasses v5's native PrivateKey/DPoP path.
-		_, oktaClient, err = okta.NewClient(ctx,
-			okta.WithOrgUrl(orgURL.String()),
-			okta.WithAuthorizationMode("Bearer"),
-			okta.WithToken(oktaSDKAuthSentinel),
-			okta.WithHttpClientPtr(dpopClient),
-			okta.WithCache(cc.Cache),
-			okta.WithCacheTti(cacheTTI),
-			okta.WithCacheTtl(cacheTTL),
-		)
-		if err != nil {
-			return nil, nil, err
-		}
+		// The oktaauth transport sets Authorization (DPoP or Bearer) on every request.
+		clientCfg.HTTPClient = dpopClient
+	}
 
-		config, err := oktav5.NewConfiguration(
-			oktav5.WithOrgUrl(orgURL.String()),
-			oktav5.WithAuthorizationMode("Bearer"),
-			oktav5.WithToken(oktaSDKAuthSentinel),
-			oktav5.WithHttpClientPtr(dpopClient),
-			oktav5.WithCache(cc.Cache),
-			oktav5.WithCacheTti(cacheTTI),
-			oktav5.WithCacheTtl(cacheTTL),
-			oktav5.WithRateLimitPrevent(true),
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-		oktaClientV5 = oktav5.NewAPIClient(config)
+	oktaClient, err := okta.NewClient(clientCfg)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return &Okta{
 		client:              oktaClient,
-		clientV5:            oktaClientV5,
 		domain:              domain,
 		apiToken:            cc.ApiToken,
 		syncInactiveApps:    cc.SyncInactiveApps,

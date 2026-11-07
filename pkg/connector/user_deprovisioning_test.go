@@ -1,18 +1,18 @@
 package connector
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	sdkActions "github.com/conductorone/baton-sdk/pkg/actions"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -27,12 +27,27 @@ type oktaRequestStep struct {
 	statusCode int
 	body       string
 	// headers are written before the body; use Link with rel="next" to make the
-	// Okta SDK report a next page.
+	// Okta client report a next page.
 	headers map[string]string
+	// repeat serves the step this many times in a row (default 1). The client
+	// retries a 429 itself, so an exhausted rate limit consumes 1+retries requests.
+	repeat int
 }
 
 func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client {
 	t.Helper()
+
+	var expanded []oktaRequestStep
+	for _, step := range steps {
+		n := step.repeat
+		if n < 1 {
+			n = 1
+		}
+		for i := 0; i < n; i++ {
+			expanded = append(expanded, step)
+		}
+	}
+	steps = expanded
 
 	var mu sync.Mutex
 	next := 0
@@ -73,14 +88,15 @@ func newScriptedOktaClient(t *testing.T, steps ...oktaRequestStep) *okta.Client 
 		}
 	})
 
-	_, client, err := okta.NewClient(
-		context.Background(),
-		okta.WithOrgUrl(server.URL),
-		okta.WithToken("test-token"),
-		okta.WithHttpClientPtr(server.Client()),
-		okta.WithTestingDisableHttpsCheck(true),
-		okta.WithRateLimitMaxRetries(0),
-	)
+	orgURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse Okta test server URL: %v", err)
+	}
+	client, err := okta.NewClient(okta.Config{
+		OrgURL:     orgURL,
+		APIToken:   "test-token",
+		HTTPClient: server.Client(),
+	})
 	if err != nil {
 		t.Fatalf("create Okta test client: %v", err)
 	}

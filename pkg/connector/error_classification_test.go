@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -31,11 +31,14 @@ func rateLimitedStep(method, path string) oktaRequestStep {
 		method:     method,
 		path:       path,
 		statusCode: http.StatusTooManyRequests,
+		// The client retries a 429 twice before giving up; the reset below is
+		// already past so those retries don't sleep.
+		repeat: 3,
 		headers: map[string]string{
 			"Date":                   now.Format(http.TimeFormat),
 			"X-Rate-Limit-Limit":     "20",
 			"X-Rate-Limit-Remaining": "0",
-			"X-Rate-Limit-Reset":     strconv.FormatInt(now.Add(2*time.Second).Unix(), 10),
+			"X-Rate-Limit-Reset":     strconv.FormatInt(now.Add(-2*time.Second).Unix(), 10),
 		},
 		body: `{"errorCode":"E0000047","errorSummary":"API call exceeded rate limit"}`,
 	}
@@ -253,7 +256,7 @@ func TestRevokeIdempotency(t *testing.T) {
 			Entitlement: &v2.Entitlement{Resource: &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeResourceSets.Id, Resource: resourceSetId}}},
 		}
 
-		annos, err := resourceSetsBuilder("", client, nil).Revoke(t.Context(), grant)
+		annos, err := resourceSetsBuilder("", client).Revoke(t.Context(), grant)
 		if err != nil {
 			t.Fatalf("Revoke() error: %v", err)
 		}
@@ -338,7 +341,7 @@ func TestResourceSetBindingGrantIdempotency(t *testing.T) {
 			},
 		)
 
-		annos, err := resourceSetsBindingsBuilder("", client, nil).Grant(t.Context(), testUserPrincipal(), entitlement)
+		annos, err := resourceSetsBindingsBuilder("", client).Grant(t.Context(), testUserPrincipal(), entitlement)
 		if err != nil {
 			t.Fatalf("Grant() error: %v", err)
 		}
@@ -366,7 +369,7 @@ func TestResourceSetBindingRevokeIdempotency(t *testing.T) {
 			},
 		)
 
-		annos, err := resourceSetsBindingsBuilder("", client, nil).Revoke(t.Context(), grant)
+		annos, err := resourceSetsBindingsBuilder("", client).Revoke(t.Context(), grant)
 		if err != nil {
 			t.Fatalf("Revoke() error: %v", err)
 		}

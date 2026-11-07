@@ -9,6 +9,7 @@ import (
 	"time"
 
 	cfg "github.com/conductorone/baton-okta/pkg/config"
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/cli"
@@ -16,8 +17,6 @@ import (
 	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,7 +45,7 @@ var (
 func waitForPrivilegeGrantRoleLabel(ctx context.Context, client *okta.Client, userID string, since time.Time) (string, error) {
 	deadline := time.Now().Add(60 * time.Second)
 	for {
-		logs, _, err := client.LogEvent.GetLogs(ctx, &query.Params{
+		logs, _, err := client.ListLogEvents(ctx, &okta.QueryParams{
 			Filter: `eventType eq "user.account.privilege.grant" and target.type eq "User" and target.type eq "ROLE"`,
 			Since:  since.UTC().Format(time.RFC3339),
 			Limit:  50,
@@ -97,12 +96,12 @@ func TestStandardRoleTypesMatchOkta(t *testing.T) {
 		t.Run(want.Type, func(t *testing.T) {
 			since := time.Now().Add(-time.Second)
 
-			assigned, _, err := cliTest.client.User.AssignRoleToUser(ctxTest, roleDriftTestUserID, okta.AssignRoleRequest{Type: want.Type}, nil)
+			assigned, _, err := cliTest.client.AssignRoleToUser(ctxTest, roleDriftTestUserID, okta.AssignRoleRequest{Type: want.Type})
 			require.Nil(t, err)
 			require.NotNil(t, assigned)
 
 			defer func() {
-				_, err := cliTest.client.User.RemoveRoleFromUser(ctxTest, roleDriftTestUserID, assigned.Id)
+				_, err := cliTest.client.RemoveRoleFromUser(ctxTest, roleDriftTestUserID, assigned.Id)
 				require.Nil(t, err)
 			}()
 
@@ -180,7 +179,7 @@ func TestUserResourceTypeList(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, res)
 
-	oktaUsers, resp, err := o.connector.client.User.ListAssignedRolesForUser(ctxTest, "00ujp5a9z0rMTsPRW697", nil)
+	oktaUsers, resp, err := o.connector.client.ListUserRoles(ctxTest, "00ujp5a9z0rMTsPRW697")
 	require.Nil(t, err)
 	require.NotNil(t, resp)
 	require.NotNil(t, oktaUsers)
@@ -282,7 +281,6 @@ func TestResourcSetRevoke(t *testing.T) {
 	r := &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 	}
 	// it removes everything associated to custom-role-id
 	_, err = r.Revoke(ctxTest, gr)
@@ -303,7 +301,6 @@ func TestResourceSetsList(t *testing.T) {
 	o := &resourceSetsResourceType{
 		resourceType: resourceTypeUser,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 	}
 	res, _, err := o.List(ctxTest, &v2.ResourceId{}, sdkResource.SyncOpAttrs{
 		PageToken: pagination.Token{},
@@ -326,7 +323,6 @@ func TestResourceSetsBindingsList(t *testing.T) {
 	o := &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeUser,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 		domain:       batonDomain,
 	}
 	res, _, err := o.List(ctxTest, &v2.ResourceId{}, sdkResource.SyncOpAttrs{
@@ -350,7 +346,6 @@ func TestResourceSetGrants(t *testing.T) {
 	o := &resourceSetsResourceType{
 		resourceType: resourceTypeResourceSets,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 	}
 
 	rs, err := getResourceSetForTesting("iamju0t17k506Mo3x697", "test", "")
@@ -378,7 +373,6 @@ func TestResourceSetBindingsGrants(t *testing.T) {
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 	}
 
 	rs, err := getResourceSetBindingsResourceForTesting("iamju0t17k506Mo3x697:cr0kp21kkuhjwMgRP697", "test", "")
@@ -439,7 +433,6 @@ func TestResourceSetBidingUserGrant(t *testing.T) {
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{
@@ -481,7 +474,6 @@ func TestResourceSetBidingGroupGrant(t *testing.T) {
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       batonDomain,
 		client:       cliTest.client,
-		clientV5:     cliTest.clientV5,
 	}
 	_, err = r.Grant(ctxTest, &v2.Resource{
 		Id: &v2.ResourceId{

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/okta/okta-sdk-golang/v2/okta"
+	"github.com/conductorone/baton-okta/pkg/okta"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

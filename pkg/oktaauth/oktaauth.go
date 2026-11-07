@@ -1,6 +1,7 @@
 // Package oktaauth builds a DPoP-aware *http.Client for the Okta OAuth 2.0
-// private_key_jwt flow (RFC 7523 + RFC 9449). It feeds both the v2 and v5
-// Okta SDKs in Bearer mode; the RoundTripper owns the token, proof, and nonce dance.
+// private_key_jwt flow (RFC 7523 + RFC 9449). The connector's Okta API client
+// sends requests through it unauthenticated; the RoundTripper owns the token,
+// proof, and nonce dance.
 package oktaauth
 
 import (

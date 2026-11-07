@@ -2,17 +2,17 @@ package connector
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
-
+	"github.com/conductorone/baton-okta/pkg/okta"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 )
 
-func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, error) {
+// parseRespLinkToken is the pagination used by the device and API token
+// listings: the page token stores the response's Link headers and request URL,
+// and the next call follows the rel="next" link they describe.
+func parseRespLinkToken(resp *okta.Response) (string, annotations.Annotations, error) {
 	var annos annotations.Annotations
 
 	if resp == nil {
@@ -23,7 +23,7 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 		annos.WithRateLimiting(desc)
 	}
 
-	nextPage, err := serializeOktaResponseV5(resp)
+	nextPage, err := serializeLinkToken(resp)
 	if err != nil {
 		return "", nil, err
 	}
@@ -31,17 +31,19 @@ func parseRespV5(resp *oktav5.APIResponse) (string, annotations.Annotations, err
 	return nextPage, annos, nil
 }
 
-type SerializableOktaResponseV5 struct {
+// linkPageToken is the page-token payload. Its JSON shape is unchanged from
+// earlier releases, so an in-flight sync resumes across an upgrade.
+type linkPageToken struct {
 	Link []string
 	Url  string
 }
 
-func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
+func serializeLinkToken(resp *okta.Response) (string, error) {
 	if resp == nil {
 		return "", nil
 	}
 
-	serializable := &SerializableOktaResponseV5{
+	serializable := &linkPageToken{
 		Link: resp.Header["Link"],
 		Url:  resp.Request.URL.String(),
 	}
@@ -54,26 +56,19 @@ func serializeOktaResponseV5(resp *oktav5.APIResponse) (string, error) {
 	return string(jsonBytes), nil
 }
 
-func deserializeOktaResponseV5(serialized string) (*oktav5.APIResponse, error) {
-	var serializable SerializableOktaResponseV5
+// nextPageFromLinkToken returns the next page path a serialized token points
+// at, or "" when the previous page was the last.
+func nextPageFromLinkToken(serialized string) (string, error) {
+	var serializable linkPageToken
 	err := json.Unmarshal([]byte(serialized), &serializable)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	parsedUrl, err := url.Parse(serializable.Url)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &oktav5.APIResponse{
-		Response: &http.Response{
-			Request: &http.Request{
-				URL: parsedUrl,
-			},
-			Header: http.Header{
-				"Link": serializable.Link,
-			},
-		},
-	}, nil
+	return okta.NextPageFromLinks(parsedUrl, serializable.Link), nil
 }
