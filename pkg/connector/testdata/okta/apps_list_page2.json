@@ -1,0 +1,140 @@
+[
+  {
+    "id": "0oa4oid7wXy1zA3bC5d7",
+    "name": "oidc_client",
+    "label": "Internal Admin Console",
+    "status": "ACTIVE",
+    "lastUpdated": "2025-03-11T18:21:05.000Z",
+    "created": "2024-11-02T09:14:33.000Z",
+    "accessibility": {
+      "selfService": false,
+      "errorRedirectUrl": null,
+      "loginRedirectUrl": null
+    },
+    "visibility": {
+      "autoSubmitToolbar": false,
+      "hide": {
+        "iOS": false,
+        "web": false
+      },
+      "appLinks": {
+        "login": true
+      }
+    },
+    "features": [],
+    "signOnMode": "OPENID_CONNECT",
+    "credentials": {
+      "userNameTemplate": {
+        "template": "${source.login}",
+        "type": "BUILT_IN"
+      },
+      "signing": {
+        "kid": "dGVzdC1raWQ"
+      },
+      "oauthClient": {
+        "autoKeyRotation": true,
+        "client_id": "0oa4oid7wXy1zA3bC5d7",
+        "token_endpoint_auth_method": "client_secret_basic"
+      }
+    },
+    "settings": {
+      "app": {},
+      "oauthClient": {
+        "client_uri": null,
+        "logo_uri": null,
+        "redirect_uris": [
+          "https://admin.example.com/callback"
+        ],
+        "response_types": [
+          "code"
+        ],
+        "grant_types": [
+          "authorization_code"
+        ],
+        "application_type": "web"
+      }
+    },
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/apps/0oa4oid7wXy1zA3bC5d7"
+      },
+      "appLinks": [
+        {
+          "name": "login",
+          "href": "https://okta.test/home/oidc_client/0oa4oid7wXy1zA3bC5d7/aln5z7uhkbM6y7bMy5d6",
+          "type": "text/html"
+        }
+      ],
+      "groups": {
+        "href": "https://okta.test/api/v1/apps/0oa4oid7wXy1zA3bC5d7/groups"
+      },
+      "users": {
+        "href": "https://okta.test/api/v1/apps/0oa4oid7wXy1zA3bC5d7/users"
+      },
+      "deactivate": {
+        "href": "https://okta.test/api/v1/apps/0oa4oid7wXy1zA3bC5d7/lifecycle/deactivate"
+      }
+    }
+  },
+  {
+    "id": "0oa5swa4Hj6Kl8Mn0d7",
+    "name": "template_swa",
+    "label": "Old Intranet SWA",
+    "status": "INACTIVE",
+    "lastUpdated": "2025-03-11T18:21:05.000Z",
+    "created": "2024-11-02T09:14:33.000Z",
+    "accessibility": {
+      "selfService": false,
+      "errorRedirectUrl": null,
+      "loginRedirectUrl": null
+    },
+    "visibility": {
+      "autoSubmitToolbar": false,
+      "hide": {
+        "iOS": false,
+        "web": false
+      },
+      "appLinks": {
+        "login": true
+      }
+    },
+    "features": [],
+    "signOnMode": "BROWSER_PLUGIN",
+    "credentials": {
+      "userNameTemplate": {
+        "template": "${source.login}",
+        "type": "BUILT_IN"
+      },
+      "signing": {}
+    },
+    "settings": {
+      "app": {
+        "buttonField": "btn-login",
+        "passwordField": "txtbox-password",
+        "usernameField": "txtbox-username",
+        "url": "https://intranet.example.com/login"
+      }
+    },
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/apps/0oa5swa4Hj6Kl8Mn0d7"
+      },
+      "appLinks": [
+        {
+          "name": "login",
+          "href": "https://okta.test/home/template_swa/0oa5swa4Hj6Kl8Mn0d7/aln5z7uhkbM6y7bMy5d6",
+          "type": "text/html"
+        }
+      ],
+      "groups": {
+        "href": "https://okta.test/api/v1/apps/0oa5swa4Hj6Kl8Mn0d7/groups"
+      },
+      "users": {
+        "href": "https://okta.test/api/v1/apps/0oa5swa4Hj6Kl8Mn0d7/users"
+      },
+      "deactivate": {
+        "href": "https://okta.test/api/v1/apps/0oa5swa4Hj6Kl8Mn0d7/lifecycle/deactivate"
+      }
+    }
+  }
+]

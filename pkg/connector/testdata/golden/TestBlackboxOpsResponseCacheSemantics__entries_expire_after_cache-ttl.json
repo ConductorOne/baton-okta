@@ -1,0 +1,204 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uttl"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uttl"
+    }
+  ],
+  "steps": [
+    {
+      "name": "GetResource first",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00uttl"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00uttl"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+              "account_type": "ACCOUNT_TYPE_HUMAN",
+              "emails": [
+                {
+                  "address": "00uttl@example.com",
+                  "is_primary": true
+                }
+              ],
+              "login": "00uttl@example.com",
+              "login_aliases": [
+                "00uttl"
+              ],
+              "status": {
+                "status": "STATUS_ENABLED"
+              }
+            }
+          ],
+          "created_at": "2024-01-02T03:04:05Z",
+          "display_name": "Ops User",
+          "id": {
+            "resource": "00uttl",
+            "resource_type": "user"
+          },
+          "profile": {
+            "c1_okta_raw_user_status": "ACTIVE",
+            "email": "00uttl@example.com",
+            "firstName": "Ops",
+            "lastName": "User",
+            "login": "00uttl@example.com"
+          },
+          "status": {
+            "details": "ACTIVE",
+            "status": "RESOURCE_STATUS_ENABLED"
+          }
+        }
+      }
+    },
+    {
+      "name": "GetResource cached",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00uttl"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00uttl"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+              "account_type": "ACCOUNT_TYPE_HUMAN",
+              "emails": [
+                {
+                  "address": "00uttl@example.com",
+                  "is_primary": true
+                }
+              ],
+              "login": "00uttl@example.com",
+              "login_aliases": [
+                "00uttl"
+              ],
+              "status": {
+                "status": "STATUS_ENABLED"
+              }
+            }
+          ],
+          "created_at": "2024-01-02T03:04:05Z",
+          "display_name": "Ops User",
+          "id": {
+            "resource": "00uttl",
+            "resource_type": "user"
+          },
+          "profile": {
+            "c1_okta_raw_user_status": "ACTIVE",
+            "email": "00uttl@example.com",
+            "firstName": "Ops",
+            "lastName": "User",
+            "login": "00uttl@example.com"
+          },
+          "status": {
+            "details": "ACTIVE",
+            "status": "RESOURCE_STATUS_ENABLED"
+          }
+        }
+      }
+    },
+    {
+      "name": "GetResource after ttl",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00uttl"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00uttl"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+              "account_type": "ACCOUNT_TYPE_HUMAN",
+              "emails": [
+                {
+                  "address": "00uttl@example.com",
+                  "is_primary": true
+                }
+              ],
+              "login": "00uttl@example.com",
+              "login_aliases": [
+                "00uttl"
+              ],
+              "status": {
+                "status": "STATUS_ENABLED"
+              }
+            }
+          ],
+          "created_at": "2024-01-02T03:04:05Z",
+          "display_name": "Ops User",
+          "id": {
+            "resource": "00uttl",
+            "resource_type": "user"
+          },
+          "profile": {
+            "c1_okta_raw_user_status": "ACTIVE",
+            "email": "00uttl@example.com",
+            "firstName": "Ops",
+            "lastName": "User",
+            "login": "00uttl@example.com"
+          },
+          "status": {
+            "details": "ACTIVE",
+            "status": "RESOURCE_STATUS_ENABLED"
+          }
+        }
+      }
+    }
+  ]
+}

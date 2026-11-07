@@ -1,0 +1,17 @@
+{
+  "id": "00g4newgroup000004",
+  "lastUpdated": "2025-02-01T10:00:00.000Z",
+  "priority": 0,
+  "profile": {},
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups/00g4newgroup000004"
+    },
+    "app": {
+      "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+    },
+    "group": {
+      "href": "https://okta.test/api/v1/groups/00g4newgroup000004"
+    }
+  }
+}

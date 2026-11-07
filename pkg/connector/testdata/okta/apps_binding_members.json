@@ -1,0 +1,39 @@
+{
+  "members": [
+    {
+      "id": "irb1member00000001",
+      "created": "2024-12-03T08:00:00.000Z",
+      "lastUpdated": "2024-12-03T08:00:00.000Z",
+      "_links": {
+        "self": {
+          "href": "https://okta.test/api/v1/users/00u1alice00000001"
+        }
+      }
+    },
+    {
+      "id": "irb2member00000002",
+      "created": "2024-12-03T08:00:00.000Z",
+      "lastUpdated": "2024-12-03T08:00:00.000Z",
+      "_links": {
+        "self": {
+          "href": "https://okta.test/api/v1/groups/00g1engineering01"
+        }
+      }
+    },
+    {
+      "id": "irb3member00000003",
+      "created": "2024-12-03T08:00:00.000Z",
+      "lastUpdated": "2024-12-03T08:00:00.000Z",
+      "_links": {
+        "self": {
+          "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+        }
+      }
+    }
+  ],
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    }
+  }
+}

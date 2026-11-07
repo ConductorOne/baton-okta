@@ -1,0 +1,74 @@
+[
+  {
+    "id": "guo3pixel00000003",
+    "status": "ACTIVE",
+    "created": "2025-02-01T00:00:00.000Z",
+    "lastUpdated": "2025-04-01T00:00:00.000Z",
+    "profile": {
+      "displayName": "Carol Pixel",
+      "platform": "ANDROID",
+      "manufacturer": "Generic",
+      "model": "Pixel 8",
+      "osVersion": "14",
+      "registered": true,
+      "secureHardwarePresent": true,
+      "diskEncryptionType": "ALL_INTERNAL_VOLUMES"
+    },
+    "resourceType": "UDDevice",
+    "resourceDisplayName": {
+      "value": "Carol Pixel",
+      "sensitive": false
+    },
+    "resourceAlternateId": null,
+    "resourceId": "guo3pixel00000003",
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/devices/guo3pixel00000003",
+        "hints": {
+          "allow": [
+            "GET"
+          ]
+        }
+      },
+      "users": {
+        "href": "https://okta.test/api/v1/devices/guo3pixel00000003/users"
+      }
+    }
+  },
+  {
+    "id": "guo4unknown0000004",
+    "status": "ACTIVE",
+    "created": "2025-02-01T00:00:00.000Z",
+    "lastUpdated": "2025-04-01T00:00:00.000Z",
+    "profile": {
+      "displayName": "",
+      "platform": "FREEBSD",
+      "manufacturer": "Generic",
+      "model": "",
+      "osVersion": "13",
+      "registered": true,
+      "secureHardwarePresent": true,
+      "diskEncryptionType": "ALL_INTERNAL_VOLUMES"
+    },
+    "resourceType": "UDDevice",
+    "resourceDisplayName": {
+      "value": "",
+      "sensitive": false
+    },
+    "resourceAlternateId": null,
+    "resourceId": "guo4unknown0000004",
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/devices/guo4unknown0000004",
+        "hints": {
+          "allow": [
+            "GET"
+          ]
+        }
+      },
+      "users": {
+        "href": "https://okta.test/api/v1/devices/guo4unknown0000004/users"
+      }
+    }
+  }
+]

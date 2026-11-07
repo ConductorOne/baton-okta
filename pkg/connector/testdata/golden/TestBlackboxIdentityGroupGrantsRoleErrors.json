@@ -1,0 +1,514 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gbuiltin00000000g1/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gbuiltin00000000g1/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gzeroapps000000000g4/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gzeroapps000000000g4/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00glong0000000000000g5/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00glong0000000000000g5/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gapp0000000000000g3/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gapp0000000000000g3/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gspace000000000000g6/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gspace000000000000g6/roles"
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources group page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "built_in",
+                "raw_group_source_type": "BUILT_IN"
+              }
+            ],
+            "description": "All users in your organization",
+            "display_name": "Everyone",
+            "id": {
+              "resource": "00gbuiltin00000000g1",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 3,
+              "description": "All users in your organization",
+              "name": "Everyone",
+              "type": "BUILT_IN",
+              "users_count": 120
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "display_name": "Engineering",
+            "id": {
+              "resource": "00geng0000000000000g2",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "",
+              "name": "Engineering",
+              "type": "OKTA_GROUP",
+              "users_count": 0
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"group\"}}"
+      }
+    },
+    {
+      "name": "ListResources group page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gapp0000000000000g3"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gapp0000000000000g3"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "app_imported",
+                "raw_group_source_type": "APP_GROUP"
+              }
+            ],
+            "description": "Imported from Active Directory",
+            "display_name": "Okta_Sync Admins",
+            "id": {
+              "resource": "00gapp0000000000000g3",
+              "resource_type": "group"
+            },
+            "profile": {
+              "description": "Imported from Active Directory",
+              "name": "Okta_Sync Admins",
+              "type": "APP_GROUP"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gzeroapps000000000g4"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gzeroapps000000000g4"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "description": "Count lags behind",
+            "display_name": "Zero Users",
+            "id": {
+              "resource": "00gzeroapps000000000g4",
+              "resource_type": "group"
+            },
+            "profile": {
+              "description": "Count lags behind",
+              "name": "Zero Users",
+              "type": "OKTA_GROUP",
+              "users_count": 0
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00glong0000000000000g5"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00glong0000000000000g5"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "description": "ÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆ",
+            "display_name": "Long Description",
+            "id": {
+              "resource": "00glong0000000000000g5",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "ÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆ tail",
+              "name": "Long Description",
+              "type": "OKTA_GROUP",
+              "users_count": 2
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gspace000000000000g6"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gspace000000000000g6"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "display_name": "Whitespace Description",
+            "id": {
+              "resource": "00gspace000000000000g6",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 1,
+              "description": "   \n\t ",
+              "name": "Whitespace Description",
+              "type": "OKTA_GROUP",
+              "users_count": 7
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gunknown00000000000g7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gunknown00000000000g7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "raw_group_source_type": "DYNAMIC_GROUP"
+              }
+            ],
+            "description": "Some future group type",
+            "display_name": "Unknown Type",
+            "id": {
+              "resource": "00gunknown00000000000g7",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "Some future group type",
+              "name": "Unknown Type",
+              "type": "DYNAMIC_GROUP",
+              "users_count": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListGrants group/00gbuiltin00000000g1 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "name": "ListGrants group/00gbuiltin00000000g1 page 2",
+      "response": {}
+    },
+    {
+      "name": "ListGrants group/00geng0000000000000g2 page 1",
+      "response": {
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: listing grants for resource group/00geng0000000000000g2 failed: okta-connectorv2: failed to list group roles: okta-connectorv2: request failed: rpc error: code = NotFound desc = Not found: Resource not found: 00uzzz (User)\nthe API returned an error: Not found: Resource not found: 00uzzz (User)"
+      },
+      "name": "ListGrants group/00geng0000000000000g2 page 2"
+    },
+    {
+      "name": "ListGrants group/00gzeroapps000000000g4 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing grants for resource group/00gzeroapps000000000g4 failed: okta-connectorv2: failed to list group roles: okta-connectorv2: request failed: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-7"
+      },
+      "name": "ListGrants group/00gzeroapps000000000g4 page 2"
+    },
+    {
+      "name": "ListGrants group/00glong0000000000000g5 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing grants for resource group/00glong0000000000000g5 failed: okta-connectorv2: failed to list group roles: okta-connectorv2: request failed: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-9\nrpc error: code = Unavailable desc = okta-connectorv2: 500 Internal Server Error: unparseable error body \"\"\nunexpected end of JSON input"
+      },
+      "name": "ListGrants group/00glong0000000000000g5 page 2"
+    },
+    {
+      "name": "ListGrants group/00gapp0000000000000g3 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "error: listing grants for resource group/00gapp0000000000000g3 failed: okta-connectorv2: failed to list group roles: okta-connectorv2: request failed: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "ListGrants group/00gapp0000000000000g3 page 2"
+    },
+    {
+      "name": "ListGrants group/00gspace000000000000g6 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing grants for resource group/00gspace000000000000g6 failed: okta-connectorv2: failed to list group roles: okta-connectorv2: request failed: rpc error: code = Unavailable desc = 502 Bad Gateway\nthe API returned an unknown error\nrpc error: code = Unavailable desc = okta-connectorv2: 502 Bad Gateway: unparseable error body \"<html>bad gateway</html>\"\ninvalid character '<' looking for beginning of value"
+      },
+      "name": "ListGrants group/00gspace000000000000g6 page 2"
+    }
+  ]
+}

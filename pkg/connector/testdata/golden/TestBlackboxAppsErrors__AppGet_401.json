@@ -1,0 +1,21 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "error: get resource failed: okta-connectorv2: failed to get application: okta-connectorv2: failed to fetch app from okta: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "GetResource app"
+    }
+  ]
+}

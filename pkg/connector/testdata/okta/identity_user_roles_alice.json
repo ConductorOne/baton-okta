@@ -1,0 +1,46 @@
+[
+  {
+    "id": "irbA000000000000001",
+    "label": "Super Administrator",
+    "type": "SUPER_ADMIN",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "USER",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  },
+  {
+    "id": "irbA000000000000002",
+    "label": "Support Triage",
+    "type": "CUSTOM",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "USER",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    },
+    "role": "cr0support000000000001",
+    "resource-set": "iam5555555555555555"
+  },
+  {
+    "id": "irbA000000000000003",
+    "label": "Application Administrator",
+    "type": "APP_ADMIN",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  }
+]

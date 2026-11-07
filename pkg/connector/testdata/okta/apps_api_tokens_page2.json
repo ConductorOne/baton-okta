@@ -1,0 +1,26 @@
+[
+  {
+    "id": "00Tabcdef0123456789c",
+    "name": "Splunk Export",
+    "userId": "00u4dave000000004",
+    "tokenWindow": "P30D",
+    "clientName": "Okta API",
+    "network": {
+      "connection": "ANYWHERE"
+    },
+    "created": "2025-01-02T03:04:05.000Z",
+    "lastUpdated": "2025-06-07T08:09:10.000Z",
+    "expiresAt": "2026-12-31T23:59:59.000Z",
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/api-tokens/00Tabcdef0123456789c",
+        "hints": {
+          "allow": [
+            "GET",
+            "DELETE"
+          ]
+        }
+      }
+    }
+  }
+]

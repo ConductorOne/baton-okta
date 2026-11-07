@@ -1,0 +1,101 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uzzz"
+    }
+  ],
+  "steps": [
+    {
+      "name": "GetResource user/00uaa1111111111111a1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00uaa1111111111111a1"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00uaa1111111111111a1"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+              "account_type": "ACCOUNT_TYPE_HUMAN",
+              "emails": [
+                {
+                  "address": "alice@acme.com",
+                  "is_primary": true
+                },
+                {
+                  "address": "alice.a@gmail.com"
+                }
+              ],
+              "employee_ids": [
+                "E-1001"
+              ],
+              "last_login": "2024-05-02T14:11:09Z",
+              "login": "alice@acme.com",
+              "login_aliases": [
+                "alice"
+              ],
+              "status": {
+                "status": "STATUS_ENABLED"
+              }
+            }
+          ],
+          "created_at": "2019-03-11T18:02:41Z",
+          "display_name": "Alice Anderson (Eng)",
+          "id": {
+            "resource": "00uaa1111111111111a1",
+            "resource_type": "user"
+          },
+          "profile": {
+            "c1_okta_raw_user_status": "ACTIVE",
+            "displayName": "Alice Anderson (Eng)",
+            "email": "alice@acme.com",
+            "employeeNumber": "E-1001",
+            "firstName": "Alice",
+            "lastName": "Anderson",
+            "login": "alice@acme.com",
+            "secondEmail": "alice.a@gmail.com"
+          },
+          "status": {
+            "details": "ACTIVE",
+            "status": "RESOURCE_STATUS_ENABLED"
+          }
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = NotFound desc = Not found: Resource not found: 00uzzz (User)\nthe API returned an error: Not found: Resource not found: 00uzzz (User)"
+      },
+      "name": "GetResource user/00uzzz"
+    }
+  ]
+}

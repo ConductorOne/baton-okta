@@ -1,0 +1,93 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "email": "new.user@example.com",
+          "firstName": "New",
+          "lastName": "User",
+          "login": "new.user@example.com"
+        },
+        "type": {
+          "created": "<now>",
+          "createdBy": "ConductorOne"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users",
+      "query": {
+        "activate": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/new.user@example.com"
+    }
+  ],
+  "steps": [
+    {
+      "name": "CreateAccount",
+      "response": {
+        "already_exists": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uexisting02"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uexisting02"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "new.user@example.com",
+                    "is_primary": true
+                  }
+                ],
+                "login": "new.user@example.com",
+                "login_aliases": [
+                  "new.user"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2024-01-02T03:04:05Z",
+            "display_name": "Ops User",
+            "id": {
+              "resource": "00uexisting02",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "STAGED",
+              "email": "new.user@example.com",
+              "firstName": "Ops",
+              "lastName": "User",
+              "login": "new.user@example.com"
+            },
+            "status": {
+              "details": "STAGED",
+              "status": "RESOURCE_STATUS_DISABLED"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

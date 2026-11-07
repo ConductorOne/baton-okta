@@ -1,0 +1,10 @@
+{
+  "id": "00gops000000000002",
+  "created": "2024-04-01T12:00:00.000Z",
+  "lastUpdated": "2024-04-01T12:00:00.000Z",
+  "lastMembershipUpdated": "2024-04-01T12:00:00.000Z",
+  "objectClass": ["okta:user_group"],
+  "type": "OKTA_GROUP",
+  "profile": {"name": "Security Reviewers", "description": "Reviews security changes"},
+  "_links": {"self": {"href": "https://example.okta.com/api/v1/groups/00gops000000000002"}}
+}

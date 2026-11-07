@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "rpc error: code = NotFound desc = error: list resources with unknown resource type custom-role"
+      },
+      "name": "ListResources custom-role"
+    }
+  ]
+}

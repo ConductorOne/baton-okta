@@ -1,0 +1,318 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uprov"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ulocked"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ustaged"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ustaged/lifecycle/activate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ususpended"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ususpended/lifecycle/unsuspend"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00udeprov"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00unobody"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive2"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uactive2/lifecycle/suspend"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ustaged2"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00unobody"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uforbid"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uforbid/lifecycle/suspend"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ubadreq"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ubadreq/lifecycle/unsuspend"
+    }
+  ],
+  "steps": [
+    {
+      "name": "enable ACTIVE is a no-op",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "message": "Account 00uactive was already enabled (Okta status ACTIVE)",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "enable PROVISIONED is a no-op",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "message": "Account 00uprov was already enabled (Okta status PROVISIONED)",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "enable LOCKED_OUT is a no-op",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "message": "Account 00ulocked was already enabled (Okta status LOCKED_OUT)",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "enable STAGED activates with sendEmail=false",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "message": "Account 00ustaged has been successfully enabled",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "enable SUSPENDED unsuspends",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "message": "Account 00ususpended has been successfully enabled",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "enable DEPROVISIONED is unsupported",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "error": "rpc error: code = FailedPrecondition desc = okta-connectorv2: cannot enable user 00udeprov from Okta status DEPROVISIONED"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "enable unknown user is 404",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "error": "okta-connectorv2: failed to find user 00unobody: okta-connectorv2: failed to get user: rpc error: code = NotFound desc = Not found: Resource not found: 00unobody (User)\nthe API returned an error: Not found: Resource not found: 00unobody (User)"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "enable missing user_id",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "error": "okta-connectorv2: user_id cannot be empty"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "disable ACTIVE suspends",
+      "response": {
+        "name": "disable_user",
+        "response": {
+          "message": "Account 00uactive2 has been successfully disabled",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "disable SUSPENDED is a no-op",
+      "response": {
+        "name": "disable_user",
+        "response": {
+          "message": "Account 00ususpended was already disabled (Okta status SUSPENDED)",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "disable DEPROVISIONED is a no-op",
+      "response": {
+        "name": "disable_user",
+        "response": {
+          "message": "Account 00udeprov was already disabled (Okta status DEPROVISIONED)",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "disable STAGED is a no-op",
+      "response": {
+        "name": "disable_user",
+        "response": {
+          "message": "Account 00ustaged2 was already disabled (Okta status STAGED)",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "disable unknown user is 404",
+      "response": {
+        "name": "disable_user",
+        "response": {
+          "error": "okta-connectorv2: failed to find user 00unobody: okta-connectorv2: failed to get user: rpc error: code = NotFound desc = Not found: Resource not found: 00unobody (User)\nthe API returned an error: Not found: Resource not found: 00unobody (User)"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "disable suspend 403",
+      "response": {
+        "name": "disable_user",
+        "response": {
+          "error": "okta-connectorv2: failed to suspend user: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "enable unsuspend 400 E0000001",
+      "response": {
+        "name": "enable_user",
+        "response": {
+          "error": "okta-connectorv2: failed to unsuspend user: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed. Causes: errorSummary: transition not allowed"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    }
+  ]
+}

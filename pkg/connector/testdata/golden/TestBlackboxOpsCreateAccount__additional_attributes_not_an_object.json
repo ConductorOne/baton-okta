@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: additionalAttributes must be an object, got string"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

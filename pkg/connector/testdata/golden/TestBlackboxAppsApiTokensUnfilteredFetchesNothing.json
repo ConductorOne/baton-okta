@@ -1,0 +1,16 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "name": "ListResources api-token page 1",
+      "response": {}
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "rpc error: code = NotFound desc = error: get resource returned nil"
+      },
+      "name": "GetResource api-token"
+    }
+  ]
+}

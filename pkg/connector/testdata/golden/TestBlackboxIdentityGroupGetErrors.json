@@ -1,0 +1,46 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00g403",
+      "query": {
+        "expand": [
+          "stats,app"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00g500",
+      "query": {
+        "expand": [
+          "stats,app"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: get resource failed: okta-connectorv2: failed to get group: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nokta-connectorv2: failed to get group: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "GetResource group/00g403"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to get group: okta-connectorv2: failed to get group: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-2"
+      },
+      "name": "GetResource group/00g500"
+    }
+  ]
+}

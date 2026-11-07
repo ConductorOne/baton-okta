@@ -1,0 +1,121 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "limit": [
+          "2"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "2"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources resource-set page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Engineering Apps",
+            "id": {
+              "resource": "iam1abcdefghijklmn01",
+              "resource_type": "resource-set"
+            },
+            "profile": {
+              "description": "Apps owned by engineering",
+              "id": "iam1abcdefghijklmn01",
+              "label": "Engineering Apps"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Finance Users",
+            "id": {
+              "resource": "iam2abcdefghijklmn02",
+              "resource_type": "resource-set"
+            },
+            "profile": {
+              "description": "Finance department users",
+              "id": "iam2abcdefghijklmn02",
+              "label": "Finance Users"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"resource-set\"}}"
+      }
+    },
+    {
+      "name": "ListResources resource-set page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Unbound Set",
+            "id": {
+              "resource": "iam3abcdefghijklmn03",
+              "resource_type": "resource-set"
+            },
+            "profile": {
+              "description": "No bindings",
+              "id": "iam3abcdefghijklmn03",
+              "label": "Unbound Set"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

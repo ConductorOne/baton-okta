@@ -1,0 +1,279 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u5erin000000005"
+    },
+    {
+      "body": {
+        "credentials": {
+          "userName": "erin@example.com"
+        },
+        "id": "00u5erin000000005",
+        "scope": "USER"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u5erin000000005"
+    },
+    {
+      "body": {
+        "credentials": {
+          "userName": "erin@example.com"
+        },
+        "id": "00u5erin000000005",
+        "scope": "USER"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users/00u5erin000000005"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Grant user not yet assigned",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grant user already assigned",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyExists"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "grant failed: okta-connector: failed to fetch application user: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Grant user lookup forbidden"
+    },
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "grant failed: okta-connector: the app specified cannot be assigned to the user: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: user"
+      },
+      "name": "Grant user assign rejected"
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "grant failed: okta-connector: failed to get user: rpc error: code = NotFound desc = Not found: Resource not found: user (User)\nthe API returned an error: Not found: Resource not found: user (User)"
+      },
+      "name": "Grant user missing in okta"
+    },
+    {
+      "name": "Revoke user assigned",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke user not assigned",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke user delete not found",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "revoke failed: okta-connector: failed to remove user from application: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Revoke user delete forbidden"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "grant failed: okta-connector: only users or groups can be granted app membership"
+      },
+      "name": "Grant unsupported principal"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "revoke failed: okta-connector:only users or groups can have app membership revoked"
+      },
+      "name": "Revoke unsupported principal"
+    }
+  ]
+}

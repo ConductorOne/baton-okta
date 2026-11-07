@@ -1,0 +1,86 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa3ina2kLm9nP4rS5d7"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa9missing0000000000"
+    }
+  ],
+  "steps": [
+    {
+      "name": "GetResource active app",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "0oa1gjh63g214q0Hq0g4"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "0oa1gjh63g214q0Hq0g4"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.NonHumanIdentityTrait",
+              "nhi_detail": "okta.app.saml_2_0",
+              "nhi_type": "NHI_TYPE_APP_REGISTRATION"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+            }
+          ],
+          "display_name": "Salesforce Sandbox",
+          "id": {
+            "resource": "0oa1gjh63g214q0Hq0g4",
+            "resource_type": "app"
+          },
+          "profile": {
+            "status": "ACTIVE"
+          }
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "rpc error: code = NotFound desc = error: get resource returned nil"
+      },
+      "name": "GetResource inactive app (not syncing inactive)"
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to get application: okta-connectorv2: failed to fetch app from okta: rpc error: code = NotFound desc = Not found: Resource not found: /api/v1/apps/0oa9missing0000000000 (GET)\nthe API returned an error: Not found: Resource not found: /api/v1/apps/0oa9missing0000000000 (GET)"
+      },
+      "name": "GetResource missing app"
+    }
+  ]
+}

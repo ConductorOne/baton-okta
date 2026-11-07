@@ -1,0 +1,239 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups",
+      "query": {
+        "expand": [
+          "group"
+        ],
+        "limit": [
+          "1000"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users",
+      "query": {
+        "limit": [
+          "1000"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "1000"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 1",
+      "response": {
+        "next_page_token": "{\"states\":null,\"current_state\":{\"type\":\"app\",\"id\":\"group\"}}"
+      }
+    },
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00g1engineering01"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00g1engineering01:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:group:00g1engineering01",
+            "principal": {
+              "id": {
+                "resource": "00g1engineering01",
+                "resource_type": "group"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"type\":\"app\",\"id\":\"user\"}}"
+      }
+    },
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 3",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00u1alice00000001"
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:user:00u1alice00000001",
+            "principal": {
+              "id": {
+                "resource": "00u1alice00000001",
+                "resource_type": "user"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00u3carol00000003"
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:user:00u3carol00000003",
+            "principal": {
+              "id": {
+                "resource": "00u3carol00000003",
+                "resource_type": "user"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"app\",\"id\":\"user\"}}"
+      }
+    },
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 4",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00u4dave000000004"
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:user:00u4dave000000004",
+            "principal": {
+              "id": {
+                "resource": "00u4dave000000004",
+                "resource_type": "user"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00u6eve000000006"
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:user:00u6eve000000006",
+            "principal": {
+              "id": {
+                "resource": "00u6eve000000006",
+                "resource_type": "user"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

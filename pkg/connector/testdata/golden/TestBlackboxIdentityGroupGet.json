@@ -1,0 +1,143 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2",
+      "query": {
+        "expand": [
+          "stats,app"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gzeroapps000000000g4",
+      "query": {
+        "expand": [
+          "stats,app"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gmissing",
+      "query": {
+        "expand": [
+          "stats,app"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "GetResource group/00geng0000000000000g2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00geng0000000000000g2"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00geng0000000000000g2"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+              "group_source_type": "native",
+              "raw_group_source_type": "OKTA_GROUP"
+            }
+          ],
+          "description": "Product engineering",
+          "display_name": "Engineering",
+          "id": {
+            "resource": "00geng0000000000000g2",
+            "resource_type": "group"
+          },
+          "profile": {
+            "apps_count": 2,
+            "description": "Product engineering",
+            "name": "Engineering",
+            "type": "OKTA_GROUP",
+            "users_count": 42
+          }
+        }
+      }
+    },
+    {
+      "name": "GetResource group/00gzeroapps000000000g4",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00gzeroapps000000000g4"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00gzeroapps000000000g4"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+              "group_source_type": "native",
+              "raw_group_source_type": "OKTA_GROUP"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.SkipGrants"
+            }
+          ],
+          "description": "Empty",
+          "display_name": "Zero Users",
+          "id": {
+            "resource": "00gzeroapps000000000g4",
+            "resource_type": "group"
+          },
+          "profile": {
+            "apps_count": 0,
+            "description": "Empty",
+            "name": "Zero Users",
+            "type": "OKTA_GROUP",
+            "users_count": 0
+          }
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to get group: rpc error: code = NotFound desc = Not found: Resource not found: /api/v1/groups/00gmissing (GET)\nokta-connectorv2: failed to get group: rpc error: code = NotFound desc = Not found: Resource not found: /api/v1/groups/00gmissing (GET)\nthe API returned an error: Not found: Resource not found: /api/v1/groups/00gmissing (GET)"
+      },
+      "name": "GetResource group/00gmissing"
+    }
+  ]
+}

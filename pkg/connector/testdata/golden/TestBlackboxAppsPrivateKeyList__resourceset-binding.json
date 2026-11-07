@@ -1,0 +1,146 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "limit": [
+          "2"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam2abcdefghijklmn02/bindings"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "2"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam3abcdefghijklmn03/bindings"
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources resourceset-binding page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Engineering Apps",
+            "id": {
+              "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+              "resource_type": "resourceset-binding"
+            },
+            "profile": {
+              "description": "Apps owned by engineering",
+              "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+              "label": "Engineering Apps"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Engineering Apps",
+            "id": {
+              "resource": "iam1abcdefghijklmn01:cr0auditrole00000002",
+              "resource_type": "resourceset-binding"
+            },
+            "profile": {
+              "description": "Apps owned by engineering",
+              "id": "iam1abcdefghijklmn01:cr0auditrole00000002",
+              "label": "Engineering Apps"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Finance Users",
+            "id": {
+              "resource": "iam2abcdefghijklmn02:cr0adminrole00000001",
+              "resource_type": "resourceset-binding"
+            },
+            "profile": {
+              "description": "Finance department users",
+              "id": "iam2abcdefghijklmn02:cr0adminrole00000001",
+              "label": "Finance Users"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"resource-set\"}}"
+      }
+    },
+    {
+      "name": "ListResources resourceset-binding page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    }
+  ]
+}

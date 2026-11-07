@@ -1,0 +1,16 @@
+{
+  "roles": [
+    {
+      "id": "cr0adminrole00000001",
+      "_links": {
+        "self": {
+          "href": "https://okta.test/api/v1/iam/resource-sets/iam2abcdefghijklmn02/bindings/cr0adminrole00000001"
+        },
+        "bindings": {
+          "href": "https://okta.test/api/v1/iam/resource-sets/iam2abcdefghijklmn02/bindings/cr0adminrole00000001/members"
+        }
+      }
+    }
+  ],
+  "_links": {}
+}

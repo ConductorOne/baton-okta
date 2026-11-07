@@ -1,0 +1,29 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps",
+      "query": {
+        "filter": [
+          "status eq \"ACTIVE\""
+        ],
+        "limit": [
+          "1000"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list users: okta-connectorv2: failed to fetch apps from okta: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "ListResources app page 1"
+    }
+  ]
+}

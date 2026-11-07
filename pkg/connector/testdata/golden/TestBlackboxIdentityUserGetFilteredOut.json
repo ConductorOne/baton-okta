@@ -1,0 +1,92 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa5555555555555a5"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "rpc error: code = NotFound desc = error: get resource returned nil"
+      },
+      "name": "GetResource user/00uaa1111111111111a1"
+    },
+    {
+      "name": "GetResource user/00uaa5555555555555a5",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "00uaa5555555555555a5"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RawId",
+              "id": "00uaa5555555555555a5"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+              "account_type": "ACCOUNT_TYPE_HUMAN",
+              "emails": [
+                {
+                  "address": "erin@other.org",
+                  "is_primary": true
+                }
+              ],
+              "last_login": "2024-05-02T14:11:09Z",
+              "login": "erin@other.org",
+              "login_aliases": [
+                "erin"
+              ],
+              "status": {
+                "status": "STATUS_ENABLED"
+              }
+            }
+          ],
+          "created_at": "2019-03-11T18:02:41Z",
+          "display_name": "Erin Evans",
+          "id": {
+            "resource": "00uaa5555555555555a5",
+            "resource_type": "user"
+          },
+          "profile": {
+            "c1_okta_raw_user_status": "DEPROVISIONED",
+            "email": "erin@other.org",
+            "firstName": "Erin",
+            "lastName": "Evans",
+            "login": "erin@other.org"
+          },
+          "status": {
+            "details": "DEPROVISIONED",
+            "status": "RESOURCE_STATUS_DISABLED"
+          }
+        }
+      }
+    }
+  ]
+}

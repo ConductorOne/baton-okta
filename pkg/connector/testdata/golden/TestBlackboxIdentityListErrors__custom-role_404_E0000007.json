@@ -1,0 +1,26 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles",
+      "query": {
+        "limit": [
+          "50"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list custom roles: okta-connectorv2: failed to list custom roles: okta-connectorv2: failed to list custom roles: rpc error: code = NotFound desc = Not found: Resource not found: 00uzzz (User)\nthe API returned an error: Not found: Resource not found: 00uzzz (User)"
+      },
+      "name": "ListResources custom-role page 1"
+    }
+  ]
+}

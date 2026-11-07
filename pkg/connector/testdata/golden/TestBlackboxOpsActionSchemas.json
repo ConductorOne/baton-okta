@@ -1,0 +1,765 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "name": "global schemas",
+      "response": {
+        "schemas": [
+          {
+            "action_type": [
+              "ACTION_TYPE_RESOURCE_CREATE"
+            ],
+            "arguments": [
+              {
+                "description": "The name of the Okta group to create",
+                "display_name": "Group Name",
+                "is_required": true,
+                "name": "name",
+                "string_field": {
+                  "rules": {
+                    "max_len": "255",
+                    "min_len": "1"
+                  }
+                }
+              },
+              {
+                "description": "Description of the group",
+                "display_name": "Description",
+                "name": "description",
+                "string_field": {}
+              },
+              {
+                "description": "List of user resource IDs to add as initial members",
+                "display_name": "Initial User Members",
+                "name": "userMembers",
+                "resource_id_slice_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              }
+            ],
+            "name": "create",
+            "resource_type_id": "group",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Created Group",
+                "name": "resource",
+                "resource_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_RESOURCE_DISABLE"
+            ],
+            "arguments": [
+              {
+                "description": "The Okta user to deactivate.",
+                "display_name": "User",
+                "is_required": true,
+                "name": "user_id",
+                "resource_id_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Destructively deprovisions an Okta user from assigned applications while retaining the Okta user record.",
+            "display_name": "Deactivate User",
+            "name": "deactivate_user",
+            "resource_type_id": "user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Message",
+                "name": "message",
+                "string_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_RESOURCE_DELETE"
+            ],
+            "arguments": [
+              {
+                "description": "The Okta user to permanently delete.",
+                "display_name": "User",
+                "is_required": true,
+                "name": "user_id",
+                "resource_id_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Deactivates and then permanently deletes an Okta user. This operation cannot be recovered.",
+            "display_name": "Delete User",
+            "name": "delete_user",
+            "resource_type_id": "user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Message",
+                "name": "message",
+                "string_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_ACCOUNT",
+              "ACTION_TYPE_ACCOUNT_DISABLE"
+            ],
+            "arguments": [
+              {
+                "display_name": "User ID",
+                "is_required": true,
+                "name": "user_id",
+                "string_field": {}
+              }
+            ],
+            "name": "disable_user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Message",
+                "name": "message",
+                "string_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_ACCOUNT",
+              "ACTION_TYPE_ACCOUNT_ENABLE"
+            ],
+            "arguments": [
+              {
+                "display_name": "User ID",
+                "is_required": true,
+                "name": "user_id",
+                "string_field": {}
+              }
+            ],
+            "name": "enable_user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Message",
+                "name": "message",
+                "string_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_UNSPECIFIED"
+            ],
+            "arguments": [
+              {
+                "description": "The Okta group ID to modify.",
+                "display_name": "Group ID",
+                "is_required": true,
+                "name": "group_id",
+                "string_field": {}
+              },
+              {
+                "description": "The new name for the group.",
+                "display_name": "Group Name",
+                "name": "name",
+                "string_field": {
+                  "rules": {
+                    "max_len": "255",
+                    "min_len": "1"
+                  }
+                }
+              },
+              {
+                "description": "The new description for the group.",
+                "display_name": "Description",
+                "name": "description",
+                "string_field": {}
+              }
+            ],
+            "description": "Update the name and/or description of an existing Okta group.",
+            "display_name": "Modify Group",
+            "name": "modify_group",
+            "resource_type_id": "group",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Updated Group",
+                "name": "resource",
+                "resource_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_ACCOUNT_UPDATE_PROFILE"
+            ],
+            "arguments": [
+              {
+                "description": "The user to update",
+                "display_name": "User",
+                "is_required": true,
+                "name": "user_id",
+                "resource_id_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              },
+              {
+                "description": "The user's username (Okta profile attribute login)",
+                "display_name": "login",
+                "name": "login",
+                "string_field": {}
+              },
+              {
+                "description": "The user's primary email address (Okta profile attribute email)",
+                "display_name": "email",
+                "name": "email",
+                "string_field": {}
+              },
+              {
+                "description": "The user's secondary email address (Okta profile attribute secondEmail)",
+                "display_name": "secondEmail",
+                "name": "secondEmail",
+                "string_field": {}
+              },
+              {
+                "description": "The user's first name (Okta profile attribute firstName)",
+                "display_name": "firstName",
+                "name": "firstName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's last name (Okta profile attribute lastName)",
+                "display_name": "lastName",
+                "name": "lastName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's middle name (Okta profile attribute middleName)",
+                "display_name": "middleName",
+                "name": "middleName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's display name (Okta profile attribute displayName)",
+                "display_name": "displayName",
+                "name": "displayName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's job title (Okta profile attribute title)",
+                "display_name": "title",
+                "name": "title",
+                "string_field": {}
+              },
+              {
+                "description": "The user's department (Okta profile attribute department)",
+                "display_name": "department",
+                "name": "department",
+                "string_field": {}
+              },
+              {
+                "description": "The user's division (Okta profile attribute division)",
+                "display_name": "division",
+                "name": "division",
+                "string_field": {}
+              },
+              {
+                "description": "The user's organization (Okta profile attribute organization)",
+                "display_name": "organization",
+                "name": "organization",
+                "string_field": {}
+              },
+              {
+                "description": "The user's employee number (Okta profile attribute employeeNumber)",
+                "display_name": "employeeNumber",
+                "name": "employeeNumber",
+                "string_field": {}
+              },
+              {
+                "description": "The user's cost center (Okta profile attribute costCenter)",
+                "display_name": "costCenter",
+                "name": "costCenter",
+                "string_field": {}
+              },
+              {
+                "description": "The user's employment type (Okta profile attribute userType)",
+                "display_name": "userType",
+                "name": "userType",
+                "string_field": {}
+              },
+              {
+                "description": "The user's primary phone number (Okta profile attribute primaryPhone)",
+                "display_name": "primaryPhone",
+                "name": "primaryPhone",
+                "string_field": {}
+              },
+              {
+                "description": "The user's mobile phone number (Okta profile attribute mobilePhone)",
+                "display_name": "mobilePhone",
+                "name": "mobilePhone",
+                "string_field": {}
+              },
+              {
+                "description": "The user's country code, ISO 3166 (Okta profile attribute countryCode)",
+                "display_name": "countryCode",
+                "name": "countryCode",
+                "string_field": {}
+              },
+              {
+                "description": "The Okta user ID of the user's manager (Okta profile attribute managerId)",
+                "display_name": "managerId",
+                "name": "managerId",
+                "string_field": {}
+              },
+              {
+                "description": "Additional Okta profile attributes to set (e.g. custom schema attributes). Use the raw Okta attribute name as the key.",
+                "display_name": "Additional Attributes",
+                "name": "additionalAttributes",
+                "string_map_field": {}
+              }
+            ],
+            "description": "Update an existing Okta user's profile attributes",
+            "display_name": "Update User Profile",
+            "name": "update_profile",
+            "resource_type_id": "user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Updated User",
+                "name": "updated_user",
+                "resource_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_ACCOUNT",
+              "ACTION_TYPE_ACCOUNT_UPDATE_PROFILE"
+            ],
+            "arguments": [
+              {
+                "description": "The ID of the user to update.",
+                "display_name": "User Resource ID",
+                "is_required": true,
+                "name": "user_id",
+                "string_field": {}
+              },
+              {
+                "description": "A JSON object of Okta profile attributes to update.",
+                "display_name": "User Profile Data",
+                "is_required": true,
+                "name": "user_profile",
+                "string_field": {}
+              }
+            ],
+            "description": "Updates a user's profile attributes from a user_profile JSON object. Used by C1's automated profile-push pipeline; for manual invocation with individual typed fields, use update_profile instead.",
+            "display_name": "Update User",
+            "name": "update_user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Updated Fields",
+                "name": "updated_fields",
+                "string_field": {}
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "user schemas",
+      "response": {
+        "schemas": [
+          {
+            "action_type": [
+              "ACTION_TYPE_RESOURCE_DISABLE"
+            ],
+            "arguments": [
+              {
+                "description": "The Okta user to deactivate.",
+                "display_name": "User",
+                "is_required": true,
+                "name": "user_id",
+                "resource_id_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Destructively deprovisions an Okta user from assigned applications while retaining the Okta user record.",
+            "display_name": "Deactivate User",
+            "name": "deactivate_user",
+            "resource_type_id": "user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Message",
+                "name": "message",
+                "string_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_RESOURCE_DELETE"
+            ],
+            "arguments": [
+              {
+                "description": "The Okta user to permanently delete.",
+                "display_name": "User",
+                "is_required": true,
+                "name": "user_id",
+                "resource_id_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Deactivates and then permanently deletes an Okta user. This operation cannot be recovered.",
+            "display_name": "Delete User",
+            "name": "delete_user",
+            "resource_type_id": "user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Message",
+                "name": "message",
+                "string_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_ACCOUNT_UPDATE_PROFILE"
+            ],
+            "arguments": [
+              {
+                "description": "The user to update",
+                "display_name": "User",
+                "is_required": true,
+                "name": "user_id",
+                "resource_id_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              },
+              {
+                "description": "The user's username (Okta profile attribute login)",
+                "display_name": "login",
+                "name": "login",
+                "string_field": {}
+              },
+              {
+                "description": "The user's primary email address (Okta profile attribute email)",
+                "display_name": "email",
+                "name": "email",
+                "string_field": {}
+              },
+              {
+                "description": "The user's secondary email address (Okta profile attribute secondEmail)",
+                "display_name": "secondEmail",
+                "name": "secondEmail",
+                "string_field": {}
+              },
+              {
+                "description": "The user's first name (Okta profile attribute firstName)",
+                "display_name": "firstName",
+                "name": "firstName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's last name (Okta profile attribute lastName)",
+                "display_name": "lastName",
+                "name": "lastName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's middle name (Okta profile attribute middleName)",
+                "display_name": "middleName",
+                "name": "middleName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's display name (Okta profile attribute displayName)",
+                "display_name": "displayName",
+                "name": "displayName",
+                "string_field": {}
+              },
+              {
+                "description": "The user's job title (Okta profile attribute title)",
+                "display_name": "title",
+                "name": "title",
+                "string_field": {}
+              },
+              {
+                "description": "The user's department (Okta profile attribute department)",
+                "display_name": "department",
+                "name": "department",
+                "string_field": {}
+              },
+              {
+                "description": "The user's division (Okta profile attribute division)",
+                "display_name": "division",
+                "name": "division",
+                "string_field": {}
+              },
+              {
+                "description": "The user's organization (Okta profile attribute organization)",
+                "display_name": "organization",
+                "name": "organization",
+                "string_field": {}
+              },
+              {
+                "description": "The user's employee number (Okta profile attribute employeeNumber)",
+                "display_name": "employeeNumber",
+                "name": "employeeNumber",
+                "string_field": {}
+              },
+              {
+                "description": "The user's cost center (Okta profile attribute costCenter)",
+                "display_name": "costCenter",
+                "name": "costCenter",
+                "string_field": {}
+              },
+              {
+                "description": "The user's employment type (Okta profile attribute userType)",
+                "display_name": "userType",
+                "name": "userType",
+                "string_field": {}
+              },
+              {
+                "description": "The user's primary phone number (Okta profile attribute primaryPhone)",
+                "display_name": "primaryPhone",
+                "name": "primaryPhone",
+                "string_field": {}
+              },
+              {
+                "description": "The user's mobile phone number (Okta profile attribute mobilePhone)",
+                "display_name": "mobilePhone",
+                "name": "mobilePhone",
+                "string_field": {}
+              },
+              {
+                "description": "The user's country code, ISO 3166 (Okta profile attribute countryCode)",
+                "display_name": "countryCode",
+                "name": "countryCode",
+                "string_field": {}
+              },
+              {
+                "description": "The Okta user ID of the user's manager (Okta profile attribute managerId)",
+                "display_name": "managerId",
+                "name": "managerId",
+                "string_field": {}
+              },
+              {
+                "description": "Additional Okta profile attributes to set (e.g. custom schema attributes). Use the raw Okta attribute name as the key.",
+                "display_name": "Additional Attributes",
+                "name": "additionalAttributes",
+                "string_map_field": {}
+              }
+            ],
+            "description": "Update an existing Okta user's profile attributes",
+            "display_name": "Update User Profile",
+            "name": "update_profile",
+            "resource_type_id": "user",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Updated User",
+                "name": "updated_user",
+                "resource_field": {}
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "group schemas",
+      "response": {
+        "schemas": [
+          {
+            "action_type": [
+              "ACTION_TYPE_RESOURCE_CREATE"
+            ],
+            "arguments": [
+              {
+                "description": "The name of the Okta group to create",
+                "display_name": "Group Name",
+                "is_required": true,
+                "name": "name",
+                "string_field": {
+                  "rules": {
+                    "max_len": "255",
+                    "min_len": "1"
+                  }
+                }
+              },
+              {
+                "description": "Description of the group",
+                "display_name": "Description",
+                "name": "description",
+                "string_field": {}
+              },
+              {
+                "description": "List of user resource IDs to add as initial members",
+                "display_name": "Initial User Members",
+                "name": "userMembers",
+                "resource_id_slice_field": {
+                  "rules": {
+                    "allowed_resource_type_ids": [
+                      "user"
+                    ]
+                  }
+                }
+              }
+            ],
+            "name": "create",
+            "resource_type_id": "group",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Created Group",
+                "name": "resource",
+                "resource_field": {}
+              }
+            ]
+          },
+          {
+            "action_type": [
+              "ACTION_TYPE_UNSPECIFIED"
+            ],
+            "arguments": [
+              {
+                "description": "The Okta group ID to modify.",
+                "display_name": "Group ID",
+                "is_required": true,
+                "name": "group_id",
+                "string_field": {}
+              },
+              {
+                "description": "The new name for the group.",
+                "display_name": "Group Name",
+                "name": "name",
+                "string_field": {
+                  "rules": {
+                    "max_len": "255",
+                    "min_len": "1"
+                  }
+                }
+              },
+              {
+                "description": "The new description for the group.",
+                "display_name": "Description",
+                "name": "description",
+                "string_field": {}
+              }
+            ],
+            "description": "Update the name and/or description of an existing Okta group.",
+            "display_name": "Modify Group",
+            "name": "modify_group",
+            "resource_type_id": "group",
+            "return_types": [
+              {
+                "bool_field": {},
+                "display_name": "Success",
+                "name": "success"
+              },
+              {
+                "display_name": "Updated Group",
+                "name": "resource",
+                "resource_field": {}
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "app schemas",
+      "response": {}
+    },
+    {
+      "name": "unknown type schemas",
+      "response": {}
+    }
+  ]
+}

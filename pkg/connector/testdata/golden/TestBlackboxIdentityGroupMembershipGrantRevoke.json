@@ -1,0 +1,64 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00geng0000000000000g2/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00geng0000000000000g2/users/00uaa1111111111111a1"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Grant group member",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke group member",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "grant failed: okta-connector: only users can be granted group membership"
+      },
+      "name": "Grant group principal"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "revoke failed: okta-connector:only users can have group membership revoked"
+      },
+      "name": "Revoke group principal"
+    }
+  ]
+}

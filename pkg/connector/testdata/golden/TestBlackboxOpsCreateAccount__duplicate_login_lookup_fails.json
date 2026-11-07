@@ -1,0 +1,41 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "email": "new.user@example.com",
+          "firstName": "New",
+          "lastName": "User",
+          "login": "new.user@example.com"
+        },
+        "type": {
+          "created": "<now>",
+          "createdBy": "ConductorOne"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/new.user@example.com"
+    }
+  ],
+  "steps": [
+    {
+      "name": "CreateAccount",
+      "response": {
+        "already_exists": {}
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "00o1abcdEXAMPLE",
+  "subdomain": "example",
+  "companyName": "Example Corp",
+  "status": "ACTIVE",
+  "created": "2019-01-01T00:00:00.000Z",
+  "lastUpdated": "2025-06-01T00:00:00.000Z",
+  "expiresAt": null,
+  "website": "https://example.com",
+  "_links": {"self": {"href": "https://example.okta.com/api/v1/org"}}
+}

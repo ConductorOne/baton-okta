@@ -1,0 +1,36 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "validate failed: okta-connector: verify failed to fetch org: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "Validate"
+    },
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "okta-connector: verify failed to fetch org: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "GetMetadata"
+    }
+  ]
+}

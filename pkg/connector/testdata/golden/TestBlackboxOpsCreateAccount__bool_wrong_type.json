@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: send_activation_email must be a boolean or its string form, got float64"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

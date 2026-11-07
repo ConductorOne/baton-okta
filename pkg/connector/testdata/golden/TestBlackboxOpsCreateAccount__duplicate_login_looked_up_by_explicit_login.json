@@ -1,0 +1,85 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "email": "new.user@example.com",
+          "firstName": "New",
+          "lastName": "User",
+          "login": "nuser"
+        },
+        "type": {
+          "created": "<now>",
+          "createdBy": "ConductorOne"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/nuser"
+    }
+  ],
+  "steps": [
+    {
+      "name": "CreateAccount",
+      "response": {
+        "already_exists": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uexisting04"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uexisting04"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "nuser",
+                    "is_primary": true
+                  }
+                ],
+                "login": "nuser",
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2024-01-02T03:04:05Z",
+            "display_name": "Ops User",
+            "id": {
+              "resource": "00uexisting04",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "ACTIVE",
+              "email": "nuser",
+              "firstName": "Ops",
+              "lastName": "User",
+              "login": "nuser"
+            },
+            "status": {
+              "details": "ACTIVE",
+              "status": "RESOURCE_STATUS_ENABLED"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

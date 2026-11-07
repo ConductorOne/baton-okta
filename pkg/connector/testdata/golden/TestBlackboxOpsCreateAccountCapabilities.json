@@ -1,0 +1,165 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "name": "ListResourceTypes",
+      "response": {
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "api-token"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                "permissions": [
+                  {
+                    "permission": "okta.apiTokens.read"
+                  }
+                ]
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
+              }
+            ],
+            "display_name": "API Token",
+            "id": "api-token",
+            "traits": [
+              "TRAIT_SECRET"
+            ]
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "app"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                "permissions": [
+                  {
+                    "permission": "okta.apps.read"
+                  },
+                  {
+                    "permission": "okta.apps.manage"
+                  }
+                ]
+              }
+            ],
+            "display_name": "App",
+            "id": "app",
+            "traits": [
+              "TRAIT_APP"
+            ]
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "device"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                "permissions": [
+                  {
+                    "permission": "okta.devices.read"
+                  }
+                ]
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
+              }
+            ],
+            "display_name": "Device",
+            "id": "device",
+            "traits": [
+              "TRAIT_MANAGED_DEVICE"
+            ]
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "group"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                "permissions": [
+                  {
+                    "permission": "okta.groups.read"
+                  },
+                  {
+                    "permission": "okta.groups.manage"
+                  }
+                ]
+              }
+            ],
+            "display_name": "Group",
+            "id": "group",
+            "traits": [
+              "TRAIT_GROUP"
+            ]
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                "permissions": [
+                  {
+                    "permission": "okta.roles.read"
+                  },
+                  {
+                    "permission": "okta.roles.manage"
+                  }
+                ]
+              }
+            ],
+            "display_name": "Role",
+            "id": "role",
+            "traits": [
+              "TRAIT_ROLE"
+            ]
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "user"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                "permissions": [
+                  {
+                    "permission": "okta.users.read"
+                  },
+                  {
+                    "permission": "okta.users.manage"
+                  }
+                ]
+              }
+            ],
+            "display_name": "User",
+            "id": "user",
+            "traits": [
+              "TRAIT_USER"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

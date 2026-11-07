@@ -1,0 +1,42 @@
+[
+  {
+    "id": "00ub0oNGTSWTBKOLGLNR",
+    "status": "ACTIVE",
+    "created": "2013-06-24T16:39:18.000Z",
+    "activated": "2013-06-24T16:39:19.000Z",
+    "statusChanged": "2013-06-24T16:39:19.000Z",
+    "lastLogin": "2013-06-24T17:39:19.000Z",
+    "lastUpdated": "2013-07-02T21:36:25.344Z",
+    "passwordChanged": "2013-07-02T21:36:25.344Z",
+    "type": {"id": "otyfnjfba4ye7pgjB0g4"},
+    "profile": {
+      "firstName": "Isaac",
+      "lastName": "Brock",
+      "email": "isaac.brock@example.com",
+      "secondEmail": "ibrock@personal.example.org",
+      "login": "isaac.brock@example.com",
+      "mobilePhone": "555-415-1337",
+      "employeeNumber": "E1001"
+    },
+    "_links": {"self": {"href": "https://example.okta.com/api/v1/users/00ub0oNGTSWTBKOLGLNR"}}
+  },
+  {
+    "id": "00ub0oNGTSWTBKOLGLNS",
+    "status": "SUSPENDED",
+    "created": "2014-01-02T10:00:00.000Z",
+    "activated": null,
+    "statusChanged": "2015-01-02T10:00:00.000Z",
+    "lastLogin": null,
+    "lastUpdated": "2015-01-02T10:00:00.000Z",
+    "passwordChanged": null,
+    "type": {"id": "otyfnjfba4ye7pgjB0g4"},
+    "profile": {
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "displayName": "Jane Q. Doe",
+      "email": "jane.doe@other.example.net",
+      "login": "jdoe",
+      "employeeId": "E2002"
+    }
+  }
+]

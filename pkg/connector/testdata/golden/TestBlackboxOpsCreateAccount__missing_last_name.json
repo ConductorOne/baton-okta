@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: missing last name in account info"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

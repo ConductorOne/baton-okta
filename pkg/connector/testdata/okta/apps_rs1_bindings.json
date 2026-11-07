@@ -1,0 +1,34 @@
+{
+  "roles": [
+    {
+      "id": "cr0adminrole00000001",
+      "_links": {
+        "self": {
+          "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001"
+        },
+        "bindings": {
+          "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+        }
+      }
+    },
+    {
+      "id": "cr0auditrole00000002",
+      "_links": {
+        "self": {
+          "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0auditrole00000002"
+        },
+        "bindings": {
+          "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0auditrole00000002/members"
+        }
+      }
+    }
+  ],
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    "resource-set": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01"
+    }
+  }
+}

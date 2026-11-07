@@ -1,0 +1,857 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gbuiltin00000000g1/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gbuiltin00000000g1/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gbuiltin00000000g1/roles"
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources group page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "built_in",
+                "raw_group_source_type": "BUILT_IN"
+              }
+            ],
+            "description": "All users in your organization",
+            "display_name": "Everyone",
+            "id": {
+              "resource": "00gbuiltin00000000g1",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 3,
+              "description": "All users in your organization",
+              "name": "Everyone",
+              "type": "BUILT_IN",
+              "users_count": 120
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "display_name": "Engineering",
+            "id": {
+              "resource": "00geng0000000000000g2",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "",
+              "name": "Engineering",
+              "type": "OKTA_GROUP",
+              "users_count": 0
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"group\"}}"
+      }
+    },
+    {
+      "name": "ListResources group page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gapp0000000000000g3"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gapp0000000000000g3"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "app_imported",
+                "raw_group_source_type": "APP_GROUP"
+              }
+            ],
+            "description": "Imported from Active Directory",
+            "display_name": "Okta_Sync Admins",
+            "id": {
+              "resource": "00gapp0000000000000g3",
+              "resource_type": "group"
+            },
+            "profile": {
+              "description": "Imported from Active Directory",
+              "name": "Okta_Sync Admins",
+              "type": "APP_GROUP"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gzeroapps000000000g4"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gzeroapps000000000g4"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "description": "Count lags behind",
+            "display_name": "Zero Users",
+            "id": {
+              "resource": "00gzeroapps000000000g4",
+              "resource_type": "group"
+            },
+            "profile": {
+              "description": "Count lags behind",
+              "name": "Zero Users",
+              "type": "OKTA_GROUP",
+              "users_count": 0
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00glong0000000000000g5"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00glong0000000000000g5"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "description": "ÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆ",
+            "display_name": "Long Description",
+            "id": {
+              "resource": "00glong0000000000000g5",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "ÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆ tail",
+              "name": "Long Description",
+              "type": "OKTA_GROUP",
+              "users_count": 2
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gspace000000000000g6"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gspace000000000000g6"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "display_name": "Whitespace Description",
+            "id": {
+              "resource": "00gspace000000000000g6",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 1,
+              "description": "   \n\t ",
+              "name": "Whitespace Description",
+              "type": "OKTA_GROUP",
+              "users_count": 7
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gunknown00000000000g7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gunknown00000000000g7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "raw_group_source_type": "DYNAMIC_GROUP"
+              }
+            ],
+            "description": "Some future group type",
+            "display_name": "Unknown Type",
+            "id": {
+              "resource": "00gunknown00000000000g7",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "Some future group type",
+              "name": "Unknown Type",
+              "type": "DYNAMIC_GROUP",
+              "users_count": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListGrants group/00geng0000000000000g2 page 1",
+      "response": {
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "name": "ListGrants group/00geng0000000000000g2 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:USER_ADMIN:00geng0000000000000g2"
+              }
+            ],
+            "entitlement": {
+              "id": "role:USER_ADMIN:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:USER_ADMIN"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Group Administrator",
+                "id": {
+                  "resource": "USER_ADMIN",
+                  "resource_type": "role"
+                },
+                "profile": {
+                  "id": "",
+                  "label": "Group Administrator",
+                  "type": "USER_ADMIN"
+                }
+              }
+            },
+            "id": "role:USER_ADMIN:assigned:group:00geng0000000000000g2",
+            "principal": {
+              "id": {
+                "resource": "00geng0000000000000g2",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:cr0support000000000001:00geng0000000000000g2"
+              }
+            ],
+            "entitlement": {
+              "id": "custom-role:cr0support000000000001:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:cr0support000000000001"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Support Triage",
+                "id": {
+                  "resource": "cr0support000000000001",
+                  "resource_type": "custom-role"
+                },
+                "profile": {
+                  "id": "cr0support000000000001",
+                  "label": "Support Triage",
+                  "type": ""
+                }
+              }
+            },
+            "id": "custom-role:cr0support000000000001:assigned:group:00geng0000000000000g2",
+            "principal": {
+              "id": {
+                "resource": "00geng0000000000000g2",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:ORG_ADMIN:00geng0000000000000g2"
+              }
+            ],
+            "entitlement": {
+              "id": "role:ORG_ADMIN:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:ORG_ADMIN"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Organizational Administrator",
+                "id": {
+                  "resource": "ORG_ADMIN",
+                  "resource_type": "role"
+                },
+                "profile": {
+                  "id": "",
+                  "label": "Organizational Administrator",
+                  "type": "ORG_ADMIN"
+                }
+              }
+            },
+            "id": "role:ORG_ADMIN:assigned:group:00geng0000000000000g2",
+            "principal": {
+              "id": {
+                "resource": "00geng0000000000000g2",
+                "resource_type": "group"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListGrants group/00gbuiltin00000000g1 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:00gbuiltin00000000g1:00uaa1111111111111a1"
+              }
+            ],
+            "entitlement": {
+              "id": "group:00gbuiltin00000000g1:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                    "group_source_type": "built_in",
+                    "raw_group_source_type": "BUILT_IN"
+                  }
+                ],
+                "description": "All users in your organization",
+                "display_name": "Everyone",
+                "id": {
+                  "resource": "00gbuiltin00000000g1",
+                  "resource_type": "group"
+                },
+                "profile": {
+                  "apps_count": 3,
+                  "description": "All users in your organization",
+                  "name": "Everyone",
+                  "type": "BUILT_IN",
+                  "users_count": 120
+                }
+              }
+            },
+            "id": "group:00gbuiltin00000000g1:member:user:00uaa1111111111111a1",
+            "principal": {
+              "id": {
+                "resource": "00uaa1111111111111a1",
+                "resource_type": "user"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:00gbuiltin00000000g1:00uaa2222222222222a2"
+              }
+            ],
+            "entitlement": {
+              "id": "group:00gbuiltin00000000g1:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                    "group_source_type": "built_in",
+                    "raw_group_source_type": "BUILT_IN"
+                  }
+                ],
+                "description": "All users in your organization",
+                "display_name": "Everyone",
+                "id": {
+                  "resource": "00gbuiltin00000000g1",
+                  "resource_type": "group"
+                },
+                "profile": {
+                  "apps_count": 3,
+                  "description": "All users in your organization",
+                  "name": "Everyone",
+                  "type": "BUILT_IN",
+                  "users_count": 120
+                }
+              }
+            },
+            "id": "group:00gbuiltin00000000g1:member:user:00uaa2222222222222a2",
+            "principal": {
+              "id": {
+                "resource": "00uaa2222222222222a2",
+                "resource_type": "user"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":[{\"type\":\"role\"}],\"current_state\":{\"token\":\"cursor1\",\"type\":\"user\"}}"
+      }
+    },
+    {
+      "name": "ListGrants group/00gbuiltin00000000g1 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:00gbuiltin00000000g1:00uaa3333333333333a3"
+              }
+            ],
+            "entitlement": {
+              "id": "group:00gbuiltin00000000g1:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                    "group_source_type": "built_in",
+                    "raw_group_source_type": "BUILT_IN"
+                  }
+                ],
+                "description": "All users in your organization",
+                "display_name": "Everyone",
+                "id": {
+                  "resource": "00gbuiltin00000000g1",
+                  "resource_type": "group"
+                },
+                "profile": {
+                  "apps_count": 3,
+                  "description": "All users in your organization",
+                  "name": "Everyone",
+                  "type": "BUILT_IN",
+                  "users_count": 120
+                }
+              }
+            },
+            "id": "group:00gbuiltin00000000g1:member:user:00uaa3333333333333a3",
+            "principal": {
+              "id": {
+                "resource": "00uaa3333333333333a3",
+                "resource_type": "user"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:00gbuiltin00000000g1:00uaa4444444444444a4"
+              }
+            ],
+            "entitlement": {
+              "id": "group:00gbuiltin00000000g1:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                    "id": "00gbuiltin00000000g1"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                    "group_source_type": "built_in",
+                    "raw_group_source_type": "BUILT_IN"
+                  }
+                ],
+                "description": "All users in your organization",
+                "display_name": "Everyone",
+                "id": {
+                  "resource": "00gbuiltin00000000g1",
+                  "resource_type": "group"
+                },
+                "profile": {
+                  "apps_count": 3,
+                  "description": "All users in your organization",
+                  "name": "Everyone",
+                  "type": "BUILT_IN",
+                  "users_count": 120
+                }
+              }
+            },
+            "id": "group:00gbuiltin00000000g1:member:user:00uaa4444444444444a4",
+            "principal": {
+              "id": {
+                "resource": "00uaa4444444444444a4",
+                "resource_type": "user"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "name": "ListGrants group/00gbuiltin00000000g1 page 3",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:USER_ADMIN:00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00gbuiltin00000000g1:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "role:USER_ADMIN:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:USER_ADMIN"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Group Administrator",
+                "id": {
+                  "resource": "USER_ADMIN",
+                  "resource_type": "role"
+                },
+                "profile": {
+                  "id": "",
+                  "label": "Group Administrator",
+                  "type": "USER_ADMIN"
+                }
+              }
+            },
+            "id": "role:USER_ADMIN:assigned:group:00gbuiltin00000000g1",
+            "principal": {
+              "id": {
+                "resource": "00gbuiltin00000000g1",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:cr0support000000000001:00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00gbuiltin00000000g1:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "custom-role:cr0support000000000001:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:cr0support000000000001"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Support Triage",
+                "id": {
+                  "resource": "cr0support000000000001",
+                  "resource_type": "custom-role"
+                },
+                "profile": {
+                  "id": "cr0support000000000001",
+                  "label": "Support Triage",
+                  "type": ""
+                }
+              }
+            },
+            "id": "custom-role:cr0support000000000001:assigned:group:00gbuiltin00000000g1",
+            "principal": {
+              "id": {
+                "resource": "00gbuiltin00000000g1",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:ORG_ADMIN:00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00gbuiltin00000000g1:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "role:ORG_ADMIN:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:ORG_ADMIN"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Organizational Administrator",
+                "id": {
+                  "resource": "ORG_ADMIN",
+                  "resource_type": "role"
+                },
+                "profile": {
+                  "id": "",
+                  "label": "Organizational Administrator",
+                  "type": "ORG_ADMIN"
+                }
+              }
+            },
+            "id": "role:ORG_ADMIN:assigned:group:00gbuiltin00000000g1",
+            "principal": {
+              "id": {
+                "resource": "00gbuiltin00000000g1",
+                "resource_type": "group"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing grants for resource role/SUPER_ADMIN failed: okta-connectorv2: failed to list all users with role assignments: okta-connectorv2: failed to list users with role assignments: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-1"
+      },
+      "name": "ListGrants role/SUPER_ADMIN page 1"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing grants for resource group/00geng0000000000000g2 failed: okta-connectorv2: failed to fetch group users from okta: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-2"
+      },
+      "name": "ListGrants group/00geng0000000000000g2 page 1"
+    }
+  ]
+}

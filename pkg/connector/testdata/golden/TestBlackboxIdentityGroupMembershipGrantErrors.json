@@ -1,0 +1,81 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00g400/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00g403/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00g404/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00g500/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00g500e/users/00uaa1111111111111a1"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "grant failed: okta-connector: failed to add user to group: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: type. Causes: errorSummary: type: The role type is not valid"
+      },
+      "name": "Grant 00g400"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "grant failed: okta-connector: failed to add user to group: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Grant 00g403"
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "grant failed: okta-connector: failed to add user to group: rpc error: code = NotFound desc = Not found: Resource not found: 00uzzz (User)\nthe API returned an error: Not found: Resource not found: 00uzzz (User)"
+      },
+      "name": "Grant 00g404"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "grant failed: okta-connector: failed to add user to group: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-4"
+      },
+      "name": "Grant 00g500"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "grant failed: okta-connector: failed to add user to group: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-5"
+      },
+      "name": "Grant 00g500e"
+    }
+  ]
+}

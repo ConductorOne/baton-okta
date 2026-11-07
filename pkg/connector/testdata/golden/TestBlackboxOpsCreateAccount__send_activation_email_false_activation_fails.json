@@ -1,0 +1,52 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "email": "new.user@example.com",
+          "firstName": "New",
+          "lastName": "User",
+          "login": "new.user@example.com"
+        },
+        "type": {
+          "created": "<now>",
+          "createdBy": "ConductorOne"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users",
+      "query": {
+        "activate": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ucreated0001/lifecycle/activate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: create account failed: okta-connectorv2: user 00ucreated0001 is staged but activation failed: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

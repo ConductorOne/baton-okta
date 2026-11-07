@@ -1,0 +1,81 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "email": "new.user@example.com",
+          "firstName": "New",
+          "lastName": "User",
+          "login": "new.user@example.com"
+        },
+        "type": {
+          "created": "<now>",
+          "createdBy": "ConductorOne"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "Content-Type": "application/json",
+        "DPoP": "<proof>"
+      },
+      "method": "POST",
+      "path": "/api/v1/users"
+    }
+  ],
+  "steps": [
+    {
+      "name": "CreateAccount",
+      "response": {
+        "success": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00ucreated0001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00ucreated0001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "new.user@example.com",
+                    "is_primary": true
+                  }
+                ],
+                "login": "new.user@example.com",
+                "login_aliases": [
+                  "new.user"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2024-01-02T03:04:05Z",
+            "display_name": "Ops User",
+            "id": {
+              "resource": "00ucreated0001",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "PROVISIONED",
+              "email": "new.user@example.com",
+              "firstName": "Ops",
+              "lastName": "User",
+              "login": "new.user@example.com"
+            },
+            "status": {
+              "details": "PROVISIONED",
+              "status": "RESOURCE_STATUS_ENABLED"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

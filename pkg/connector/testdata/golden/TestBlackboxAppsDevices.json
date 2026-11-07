@@ -1,0 +1,158 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/devices",
+      "query": {
+        "limit": [
+          "2"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/devices",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "2"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources device page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.ManagedDeviceTrait",
+                "model": "MacBook Pro 16",
+                "os": {
+                  "name": "MACOS",
+                  "type": "OS_TYPE_MACOS",
+                  "version": "14.5"
+                },
+                "serial": "C02XYZ123ABC",
+                "udid": "A1B2C3D4-0000-1111-2222-333344445555",
+                "vendor": "Apple"
+              }
+            ],
+            "display_name": "Alice's MacBook Pro",
+            "id": {
+              "resource": "guo1macbook0000001",
+              "resource_type": "device"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.ManagedDeviceTrait",
+                "model": "ThinkPad X1",
+                "os": {
+                  "name": "WINDOWS",
+                  "type": "OS_TYPE_WINDOWS",
+                  "version": "11.0.22631"
+                },
+                "serial": "PF3ABC12",
+                "vendor": "Generic"
+              }
+            ],
+            "display_name": "BOB-THINKPAD",
+            "id": {
+              "resource": "guo2thinkpad0000002",
+              "resource_type": "device"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"{\\\"Link\\\":[\\\"\\\\u003chttps://okta.test/api/v1/devices?limit=2\\\\u003e; rel=\\\\\\\"self\\\\\\\"\\\",\\\"\\\\u003chttps://okta.test/api/v1/devices?after=cursor1\\\\u0026limit=2\\\\u003e; rel=\\\\\\\"next\\\\\\\"\\\"],\\\"Url\\\":\\\"https://example.com/api/v1/devices?limit=2\\\"}\",\"type\":\"device\"}}"
+      }
+    },
+    {
+      "name": "ListResources device page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.ManagedDeviceTrait",
+                "model": "Pixel 8",
+                "os": {
+                  "name": "ANDROID",
+                  "type": "OS_TYPE_ANDROID",
+                  "version": "14"
+                },
+                "vendor": "Generic"
+              }
+            ],
+            "display_name": "Carol Pixel",
+            "id": {
+              "resource": "guo3pixel00000003",
+              "resource_type": "device"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.ManagedDeviceTrait",
+                "os": {
+                  "name": "FREEBSD",
+                  "version": "13"
+                },
+                "vendor": "Generic"
+              }
+            ],
+            "display_name": "guo4unknown0000004",
+            "id": {
+              "resource": "guo4unknown0000004",
+              "resource_type": "device"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"{\\\"Link\\\":[\\\"\\\\u003chttps://okta.test/api/v1/devices?after=cursor1\\\\u0026limit=2\\\\u003e; rel=\\\\\\\"self\\\\\\\"\\\"],\\\"Url\\\":\\\"https://example.com/api/v1/devices?after=cursor1\\\\u0026limit=2\\\"}\",\"type\":\"device\"}}"
+      }
+    },
+    {
+      "name": "ListResources device page 3",
+      "response": {}
+    },
+    {
+      "name": "ListEntitlements device/guo1macbook0000001 page 1",
+      "response": {}
+    },
+    {
+      "name": "ListGrants device/guo1macbook0000001 page 1",
+      "response": {}
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+[
+  {
+    "id": "00u1alice00000001",
+    "externalId": null,
+    "created": "2025-01-10T12:00:00.000Z",
+    "lastUpdated": "2025-01-10T12:00:00.000Z",
+    "scope": "USER",
+    "status": "ACTIVE",
+    "statusChanged": "2025-01-10T12:00:00.000Z",
+    "passwordChanged": null,
+    "syncState": "DISABLED",
+    "credentials": {
+      "userName": "alice@example.com"
+    },
+    "profile": {
+      "email": "alice@example.com",
+      "firstName": "Test",
+      "lastName": "0001"
+    },
+    "_links": {
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "user": {
+        "href": "https://okta.test/api/v1/users/00u1alice00000001"
+      }
+    }
+  },
+  {
+    "id": "00u2bob0000000002",
+    "externalId": null,
+    "created": "2025-01-10T12:00:00.000Z",
+    "lastUpdated": "2025-01-10T12:00:00.000Z",
+    "scope": "GROUP",
+    "status": "ACTIVE",
+    "statusChanged": "2025-01-10T12:00:00.000Z",
+    "passwordChanged": null,
+    "syncState": "DISABLED",
+    "credentials": {
+      "userName": "bob@Contractor.net"
+    },
+    "profile": {
+      "email": "bob@Contractor.net",
+      "firstName": "Test",
+      "lastName": "0002"
+    },
+    "_links": {
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "user": {
+        "href": "https://okta.test/api/v1/users/00u2bob0000000002"
+      }
+    }
+  },
+  {
+    "id": "00u3carol00000003",
+    "externalId": null,
+    "created": "2025-01-10T12:00:00.000Z",
+    "lastUpdated": "2025-01-10T12:00:00.000Z",
+    "scope": "USER",
+    "status": "ACTIVE",
+    "statusChanged": "2025-01-10T12:00:00.000Z",
+    "passwordChanged": null,
+    "syncState": "DISABLED",
+    "credentials": {
+      "userName": "carol@partner.org"
+    },
+    "profile": {
+      "email": "carol@partner.org",
+      "firstName": "Test",
+      "lastName": "0003",
+      "secondEmail": "carol@example.com"
+    },
+    "_links": {
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "user": {
+        "href": "https://okta.test/api/v1/users/00u3carol00000003"
+      }
+    }
+  }
+]

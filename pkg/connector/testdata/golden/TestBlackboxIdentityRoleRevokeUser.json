@@ -1,0 +1,150 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa1111111111111a1/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00uaa1111111111111a1/roles/irbC000000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa2222222222222a2/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00uaa2222222222222a2/roles/irbC000000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa3333333333333a3/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa4444444444444a4/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00uaa4444444444444a4/roles/irbC000000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa5555555555555a5/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00uaa5555555555555a5/roles/irbC000000000000001"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Revoke 00uaa1111111111111a1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke 00uaa2222222222222a2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "revoke failed: okta-connector: failed to get roles: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Revoke 00uaa3333333333333a3"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "revoke failed: okta-connector: failed to remove role: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-7"
+      },
+      "name": "Revoke 00uaa4444444444444a4"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "revoke failed: okta-connector: failed to remove role: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Revoke 00uaa5555555555555a5"
+    },
+    {
+      "name": "Revoke inactive-role",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke unassigned-role",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    }
+  ]
+}

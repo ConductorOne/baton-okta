@@ -1,0 +1,76 @@
+[
+  {
+    "uuid": "evt-0001", "published": "2026-01-05T10:00:00.000Z", "eventType": "group.lifecycle.create",
+    "displayMessage": "Create okta group", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "00gops000000000002", "type": "UserGroup", "alternateId": "unknown", "displayName": "Security Reviewers"}]
+  },
+  {
+    "uuid": "evt-0002", "published": "2026-01-05T10:01:00.000Z", "eventType": "group.user_membership.add",
+    "displayMessage": "Add user to group membership", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+      {"id": "00gops000000000002", "type": "UserGroup", "alternateId": "unknown", "displayName": "Security Reviewers"}
+    ]
+  },
+  {
+    "uuid": "evt-0003", "published": "2026-01-05T10:02:00.000Z", "eventType": "group.user_membership.remove",
+    "displayMessage": "Remove user from group membership", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000002", "type": "User", "alternateId": "bob@example.com", "displayName": "Bob Brown"},
+      {"id": "00gops000000000002", "type": "UserGroup", "alternateId": "unknown", "displayName": "Security Reviewers"}
+    ]
+  },
+  {
+    "uuid": "evt-0004", "published": "2026-01-05T10:03:00.000Z", "eventType": "application.lifecycle.create",
+    "displayMessage": "Add application instance", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"}]
+  },
+  {
+    "uuid": "evt-0005", "published": "2026-01-05T10:04:00.000Z", "eventType": "application.user_membership.add",
+    "displayMessage": "Add user to application membership", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+      {"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"}
+    ]
+  },
+  {
+    "uuid": "evt-0006", "published": "2026-01-05T10:05:00.000Z", "eventType": "application.user_membership.remove",
+    "displayMessage": "Remove user from application membership", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000002", "type": "User", "alternateId": "bob@example.com", "displayName": "Bob Brown"},
+      {"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"}
+    ]
+  },
+  {
+    "uuid": "evt-0007", "published": "2026-01-05T10:06:00.000Z", "eventType": "group.application_assignment.add",
+    "displayMessage": "Add assignment of application instance to group", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"},
+      {"id": "00gops000000000001", "type": "UserGroup", "alternateId": "unknown", "displayName": "Platform Engineers"}
+    ]
+  },
+  {
+    "uuid": "evt-0008", "published": "2026-01-05T10:07:00.000Z", "eventType": "group.application_assignment.add",
+    "displayMessage": "Add assignment of application instance to group", "severity": "WARN",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "FAILURE", "reason": "insufficient permissions"},
+    "target": [
+      {"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"},
+      {"id": "00gops000000000001", "type": "UserGroup", "alternateId": "unknown", "displayName": "Platform Engineers"}
+    ]
+  }
+]

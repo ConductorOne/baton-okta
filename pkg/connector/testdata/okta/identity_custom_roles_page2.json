@@ -1,0 +1,20 @@
+{
+  "roles": [
+    {
+      "id": "cr0auditor000000000002",
+      "label": "Auditor",
+      "description": "",
+      "created": "2023-03-03T00:00:00.000Z",
+      "lastUpdated": "2023-04-04T00:00:00.000Z",
+      "_links": {
+        "permissions": {
+          "href": "https://example.okta.com/api/v1/iam/roles/cr0auditor000000000002/permissions"
+        },
+        "self": {
+          "href": "https://example.okta.com/api/v1/iam/roles/cr0auditor000000000002"
+        }
+      }
+    }
+  ],
+  "_links": {}
+}

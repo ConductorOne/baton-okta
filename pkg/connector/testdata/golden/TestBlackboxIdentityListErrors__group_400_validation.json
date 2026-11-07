@@ -1,0 +1,29 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "50"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list groups: okta-connectorv2: failed to fetch groups from okta: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: type. Causes: errorSummary: type: The role type is not valid"
+      },
+      "name": "ListResources group page 1"
+    }
+  ]
+}

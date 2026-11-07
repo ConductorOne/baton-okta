@@ -1,0 +1,30 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list users: okta-connectorv2: failed to list users: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-1"
+      },
+      "name": "ListResources user page 1"
+    }
+  ]
+}

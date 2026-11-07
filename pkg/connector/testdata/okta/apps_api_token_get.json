@@ -1,0 +1,24 @@
+{
+  "id": "00Tabcdef0123456789a",
+  "name": "Terraform",
+  "userId": "00u1alice00000001",
+  "tokenWindow": "P30D",
+  "clientName": "Okta API",
+  "network": {
+    "connection": "ANYWHERE"
+  },
+  "created": "2025-01-02T03:04:05.000Z",
+  "lastUpdated": "2025-06-07T08:09:10.000Z",
+  "expiresAt": "2026-12-31T23:59:59.000Z",
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/api-tokens/00Tabcdef0123456789a",
+      "hints": {
+        "allow": [
+          "GET",
+          "DELETE"
+        ]
+      }
+    }
+  }
+}
