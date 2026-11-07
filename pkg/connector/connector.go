@@ -419,7 +419,8 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		return nil, nil, err
 	}
 
-	if _, err := safeCacheInt32(cc.CacheTti); err != nil {
+	cacheTTI, err := safeCacheInt32(cc.CacheTti)
+	if err != nil {
 		return nil, nil, err
 	}
 
@@ -438,6 +439,8 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		HTTPClient:   httpClient,
 		CacheEnabled: cc.Cache,
 		CacheTTL:     time.Duration(cacheTTL) * time.Second,
+		// cache-tti is the cleanup interval for expired entries.
+		CacheCleanupInterval: time.Duration(cacheTTI) * time.Second,
 	}
 
 	switch authMethod {

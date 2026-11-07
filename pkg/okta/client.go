@@ -46,6 +46,9 @@ type Config struct {
 	// CacheTTL is how long a cached GET response is served. Zero or negative
 	// means cached entries do not expire.
 	CacheTTL time.Duration
+	// CacheCleanupInterval is how often expired entries are purged from
+	// memory. Zero or negative disables purging.
+	CacheCleanupInterval time.Duration
 }
 
 // Client calls the Okta Management API.
@@ -82,7 +85,7 @@ func NewClient(cfg Config) (*Client, error) {
 		sleep:      sleepContext,
 	}
 	if cfg.CacheEnabled {
-		c.cache = newResponseCache(cfg.CacheTTL)
+		c.cache = newResponseCache(cfg.CacheTTL, cfg.CacheCleanupInterval)
 	}
 	return c, nil
 }

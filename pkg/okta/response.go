@@ -80,13 +80,17 @@ func (r *Response) bodyBytes() ([]byte, error) {
 	return b, nil
 }
 
-// responseCache holds successful GET responses keyed by full URL.
+// responseCache holds successful GET responses keyed by full URL. Expired
+// entries are purged at most once per cleanup interval, on the next write, so
+// a long sync does not keep every page it has fetched in memory.
 type responseCache struct {
-	ttl time.Duration
-	now func() time.Time
+	ttl     time.Duration
+	cleanup time.Duration
+	now     func() time.Time
 
-	mu      sync.Mutex
-	entries map[string]cachedResponse
+	mu        sync.Mutex
+	entries   map[string]cachedResponse
+	nextSweep time.Time
 }
 
 type cachedResponse struct {
@@ -97,8 +101,8 @@ type cachedResponse struct {
 	expires    time.Time // zero: never
 }
 
-func newResponseCache(ttl time.Duration) *responseCache {
-	return &responseCache{ttl: ttl, now: time.Now, entries: map[string]cachedResponse{}}
+func newResponseCache(ttl, cleanup time.Duration) *responseCache {
+	return &responseCache{ttl: ttl, cleanup: cleanup, now: time.Now, entries: map[string]cachedResponse{}}
 }
 
 func (c *responseCache) get(key string) (cachedResponse, bool) {
@@ -122,12 +126,40 @@ func (c *responseCache) set(key string, resp *http.Response, body []byte) {
 		header:     resp.Header.Clone(),
 		body:       append([]byte(nil), body...),
 	}
+	now := c.now()
 	if c.ttl > 0 {
-		e.expires = c.now().Add(c.ttl)
+		e.expires = now.Add(c.ttl)
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.entries[key] = e
-	c.mu.Unlock()
+	c.sweepLocked(now)
+}
+
+// sweepLocked drops expired entries when the cleanup interval has elapsed.
+func (c *responseCache) sweepLocked(now time.Time) {
+	if c.cleanup <= 0 || c.ttl <= 0 {
+		return
+	}
+	if c.nextSweep.IsZero() {
+		c.nextSweep = now.Add(c.cleanup)
+		return
+	}
+	if now.Before(c.nextSweep) {
+		return
+	}
+	for k, e := range c.entries {
+		if !e.expires.IsZero() && !now.Before(e.expires) {
+			delete(c.entries, k)
+		}
+	}
+	c.nextSweep = now.Add(c.cleanup)
+}
+
+func (c *responseCache) len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.entries)
 }
 
 func (c *responseCache) delete(key string) {

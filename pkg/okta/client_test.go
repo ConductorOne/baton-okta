@@ -636,3 +636,33 @@ func TestDeviceGetters(t *testing.T) {
 	rs.SetId("iam1")
 	require.Equal(t, "iam1", rs.GetId())
 }
+
+func TestResponseCachePurgesExpiredEntries(t *testing.T) {
+	cache := newResponseCache(time.Minute, 30*time.Second)
+	now := time.Unix(1_700_000_000, 0)
+	cache.now = func() time.Time { return now }
+	resp := &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Header: http.Header{}}
+
+	cache.set("a", resp, []byte("a"))
+	cache.set("b", resp, []byte("b"))
+	require.Equal(t, 2, cache.len())
+
+	// Both entries expire, but nothing reads them again.
+	now = now.Add(2 * time.Minute)
+	cache.set("c", resp, []byte("c"))
+	require.Equal(t, 1, cache.len(), "the write after the cleanup interval purges expired entries")
+
+	// The next interval has elapsed too, so c is purged as well.
+	now = now.Add(2 * time.Minute)
+	cache.set("d", resp, []byte("d"))
+	require.Equal(t, 1, cache.len(), "c expired and was purged on this write")
+	_, ok := cache.get("d")
+	require.True(t, ok)
+
+	noCleanup := newResponseCache(time.Minute, 0)
+	noCleanup.now = cache.now
+	noCleanup.set("x", resp, nil)
+	now = now.Add(time.Hour)
+	noCleanup.set("y", resp, nil)
+	require.Equal(t, 2, noCleanup.len(), "a zero cleanup interval never purges")
+}
