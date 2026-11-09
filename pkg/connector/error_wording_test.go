@@ -22,7 +22,7 @@ func TestOperationErrorWording(t *testing.T) {
 	role := &roleResourceType{}
 	principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: "app", Resource: "app1"}}
 	_, err = role.Grant(context.Background(), principal, nil)
-	require.ErrorContains(t, err, "only users can be granted role membership")
+	require.ErrorContains(t, err, "only users or groups can be granted role membership")
 	_, err = role.Revoke(context.Background(), &v2.Grant{Principal: principal})
-	require.ErrorContains(t, err, "okta-connector: only users can have role membership revoked")
+	require.ErrorContains(t, err, "okta-connector: only users or groups can have role membership revoked")
 }

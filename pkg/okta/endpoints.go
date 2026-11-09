@@ -235,9 +235,9 @@ func (c *Client) RemoveUserFromGroup(ctx context.Context, groupID, userID string
 }
 
 // ListGroupRoles reads GET /api/v1/groups/{id}/roles.
-func (c *Client) ListGroupRoles(ctx context.Context, groupID string) ([]*Role, *Response, error) {
+func (c *Client) ListGroupRoles(ctx context.Context, groupID string, opts ...RequestOption) ([]*Role, *Response, error) {
 	var out []*Role
-	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v/roles", PathEscape(groupID)), nil, &out)
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v/roles", PathEscape(groupID)), nil, &out, opts...)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -256,7 +256,16 @@ func (c *Client) AssignRoleToGroup(ctx context.Context, groupID string, body Ass
 
 // RemoveRoleFromGroup sends DELETE /api/v1/groups/{id}/roles/{roleAssignmentId}.
 func (c *Client) RemoveRoleFromGroup(ctx context.Context, groupID, roleID string) (*Response, error) {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v/roles/%v", PathEscape(groupID), PathEscape(roleID)), nil, nil)
+	resp, err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v/roles/%v", PathEscape(groupID), PathEscape(roleID)), nil, nil)
+	// The DELETE targets an assignment URL, but the cached role list has a
+	// different URL and must not replay the pre-delete membership.
+	if c.cache != nil {
+		u, resolveErr := c.resolve(fmt.Sprintf("/api/v1/groups/%v/roles", PathEscape(groupID)), nil)
+		if resolveErr == nil {
+			c.cache.delete(u.String())
+		}
+	}
+	return resp, err
 }
 
 // ---- Apps
