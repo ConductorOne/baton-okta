@@ -222,12 +222,9 @@ func TestLinkPagination(t *testing.T) {
 	require.True(t, resp.HasNextPage())
 	// Scheme and host are dropped; the request's own parameters carry over.
 	require.Equal(t, "/api/v1/users?after=abc&limit=2&search=status+pr", resp.NextPage)
-	require.Equal(t, "/api/v1/users?limit=2&search=status+pr", resp.Self)
-	require.Equal(t, "abc", resp.NextAfter())
 
 	var nilResp *Response
 	require.False(t, nilResp.HasNextPage())
-	require.Empty(t, nilResp.NextAfter())
 }
 
 func TestLastPageHasNoNext(t *testing.T) {
@@ -240,7 +237,7 @@ func TestLastPageHasNoNext(t *testing.T) {
 	_, resp, err := c.ListGroups(context.Background(), nil)
 	require.NoError(t, err)
 	require.False(t, resp.HasNextPage())
-	require.Empty(t, resp.NextAfter())
+	require.Empty(t, resp.NextPage)
 }
 
 func rateLimited(w http.ResponseWriter, resetIn int) {
@@ -443,7 +440,6 @@ func TestGenericErrors(t *testing.T) {
 	var gerr *GenericError
 	require.ErrorAs(t, err, &gerr)
 	require.Equal(t, "403 Forbidden", err.Error())
-	require.Equal(t, "E0000006", gerr.Model.ErrorCode)
 	require.Equal(t, 403, resp.StatusCode)
 
 	_, _, err = c.GetAPIToken(ctx, "badjson")

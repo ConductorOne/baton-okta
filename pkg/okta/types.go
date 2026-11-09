@@ -1,9 +1,6 @@
 package okta
 
-import (
-	"encoding/json"
-	"time"
-)
+import "time"
 
 // The types below carry only the fields the connector reads or sends. JSON
 // tags and omitempty behavior match the Okta API (and the request bodies the
@@ -256,7 +253,3 @@ func (r *ResourceSet) SetId(id string) { r.Id = &id }
 type ResourceSetBinding struct {
 	Id *string `json:"id,omitempty"`
 }
-
-// RawMessage is re-exported so callers decoding loosely typed responses do not
-// need to import encoding/json just for it.
-type RawMessage = json.RawMessage

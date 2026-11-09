@@ -50,7 +50,6 @@ func (e *Error) Error() string {
 type GenericError struct {
 	Message string
 	Body    []byte
-	Model   *Error
 	// cause is the transport error when the request got no response.
 	cause error
 }
@@ -80,7 +79,9 @@ func responseError(style errorStyle, resp *http.Response, body []byte) error {
 }
 
 // CheckResponseForError returns the *Error for a non-2xx/3xx response, or nil.
-// The body stays readable afterwards.
+// The body stays readable afterwards. The connector decodes responses through
+// Client; this is exported for pkg/oktaauth's tests, which check how a
+// rewritten DPoP rejection renders.
 func CheckResponseForError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -257,19 +258,17 @@ func genericResponseError(resp *http.Response, body []byte) error {
 	switch resp.StatusCode {
 	case http.StatusForbidden, http.StatusNotFound, http.StatusTooManyRequests:
 		if len(body) == 0 {
-			gerr.Model = &Error{}
 			return gerr
 		}
 		if !jsonContentType.MatchString(resp.Header.Get("Content-Type")) {
 			gerr.Message = "undefined response type"
 			return gerr
 		}
+		// The error model is decoded only to surface a malformed body.
 		var model Error
 		if err := json.Unmarshal(body, &model); err != nil {
 			gerr.Message = err.Error()
-			return gerr
 		}
-		gerr.Model = &model
 	}
 	return gerr
 }

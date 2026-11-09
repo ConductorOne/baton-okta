@@ -65,7 +65,6 @@ type RoleAssignments struct {
 const (
 	apiPathListIamCustomRoles              = "/api/v1/iam/roles"
 	apiPathListAllUsersWithRoleAssignments = "/api/v1/iam/assignees/users"
-	ContentType                            = "application/json"
 	NF                                     = -1
 )
 

@@ -20,16 +20,29 @@ func WithFreshRead() RequestOption {
 	return func(r *request) { r.fresh = true }
 }
 
+// The device, API token and resource-set lookups have always differed from the
+// rest of the API in three ways, each set by one option. statusLineEndpoint
+// applies all three.
+func statusLineEndpoint(extra ...RequestOption) []RequestOption {
+	return append([]RequestOption{withStatusLineErrors(), withRateLimitWait(), withNo429Retry()}, extra...)
+}
+
 // withStatusLineErrors makes non-2xx responses surface as *GenericError
-// carrying the HTTP status line, waits out an exhausted rate-limit window
-// before sending, and treats a 429 as final. The device, API token and
-// resource-set lookups have always behaved this way.
+// carrying the HTTP status line.
 func withStatusLineErrors() RequestOption {
-	return func(r *request) {
-		r.errorStyle = errorStyleGeneric
-		r.rateLimitPrevention = true
-		r.noRetry = true
-	}
+	return func(r *request) { r.errorStyle = errorStyleGeneric }
+}
+
+// withRateLimitWait waits out an exhausted rate-limit window, observed by an
+// earlier request that also set it, before sending.
+func withRateLimitWait() RequestOption {
+	return func(r *request) { r.rateLimitPrevention = true }
+}
+
+// withNo429Retry makes the first 429 final. Dropped connections are still
+// retried.
+func withNo429Retry() RequestOption {
+	return func(r *request) { r.no429Retry = true }
 }
 
 // withFollowUpPage marks a status-line list request as fetching a page after
@@ -359,7 +372,7 @@ func (c *Client) ListDevices(ctx context.Context, limit int32, nextPage string) 
 		path = fmt.Sprintf("/api/v1/devices?limit=%d", limit)
 	}
 	var out []Device
-	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors(), withFollowUpPage(nextPage != ""))
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, statusLineEndpoint(withFollowUpPage(nextPage != ""))...)
 	return out, resp, err
 }
 
@@ -370,14 +383,14 @@ func (c *Client) ListAPITokens(ctx context.Context, nextPage string) ([]APIToken
 		path = "/api/v1/api-tokens"
 	}
 	var out []APIToken
-	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors(), withFollowUpPage(nextPage != ""))
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, statusLineEndpoint(withFollowUpPage(nextPage != ""))...)
 	return out, resp, err
 }
 
 // GetAPIToken reads GET /api/v1/api-tokens/{id}.
 func (c *Client) GetAPIToken(ctx context.Context, tokenID string) (*APIToken, *Response, error) {
 	var out *APIToken
-	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/api-tokens/"+pathEscape(tokenID), nil, &out, withStatusLineErrors())
+	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/api-tokens/"+pathEscape(tokenID), nil, &out, statusLineEndpoint()...)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -387,7 +400,7 @@ func (c *Client) GetAPIToken(ctx context.Context, tokenID string) (*APIToken, *R
 // GetResourceSet reads GET /api/v1/iam/resource-sets/{id}.
 func (c *Client) GetResourceSet(ctx context.Context, resourceSetID string) (*ResourceSet, *Response, error) {
 	var out *ResourceSet
-	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/iam/resource-sets/"+pathEscape(resourceSetID), nil, &out, withStatusLineErrors())
+	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/iam/resource-sets/"+pathEscape(resourceSetID), nil, &out, statusLineEndpoint()...)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -398,7 +411,7 @@ func (c *Client) GetResourceSet(ctx context.Context, resourceSetID string) (*Res
 func (c *Client) GetResourceSetBinding(ctx context.Context, resourceSetID, roleID string) (*ResourceSetBinding, *Response, error) {
 	var out *ResourceSetBinding
 	resp, err := c.Do(ctx, http.MethodGet,
-		"/api/v1/iam/resource-sets/"+pathEscape(resourceSetID)+"/bindings/"+pathEscape(roleID), nil, &out, withStatusLineErrors())
+		"/api/v1/iam/resource-sets/"+pathEscape(resourceSetID)+"/bindings/"+pathEscape(roleID), nil, &out, statusLineEndpoint()...)
 	if err != nil {
 		return nil, resp, err
 	}

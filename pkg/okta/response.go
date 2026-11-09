@@ -14,27 +14,14 @@ import (
 // readable through Body.
 type Response struct {
 	*http.Response
-	// Self and NextPage are the rel="self" and rel="next" links, reduced to a
-	// path plus query. The request's own query parameters are carried into
-	// them, overridden by those in the link, as Okta's SDKs always have.
-	Self     string
+	// NextPage is the rel="next" link, reduced to a path plus query. The
+	// request's own query parameters are carried into it, overridden by those
+	// in the link, as Okta's SDKs always have.
 	NextPage string
 }
 
 // HasNextPage reports whether the response advertised a next page.
 func (r *Response) HasNextPage() bool { return r != nil && r.NextPage != "" }
-
-// NextAfter returns the "after" cursor of the next page, or "".
-func (r *Response) NextAfter() string {
-	if r == nil || r.NextPage == "" {
-		return ""
-	}
-	u, err := url.Parse(r.NextPage)
-	if err != nil {
-		return ""
-	}
-	return u.Query().Get("after")
-}
 
 func newResponse(r *http.Response) *Response {
 	resp := &Response{Response: r}
@@ -56,9 +43,6 @@ func newResponse(r *http.Response) *Response {
 				q.Set(k, v[0])
 			}
 			u.RawQuery = q.Encode()
-		}
-		if strings.Contains(link, `rel="self"`) {
-			resp.Self = u.String()
 		}
 		if strings.Contains(link, `rel="next"`) {
 			resp.NextPage = u.String()

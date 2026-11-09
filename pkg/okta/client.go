@@ -110,8 +110,8 @@ type request struct {
 	rateLimitPrevention bool
 	// errorStyle selects how a non-2xx response becomes an error.
 	errorStyle errorStyle
-	// noRetry makes the first 429 final.
-	noRetry bool
+	// no429Retry makes the first 429 final.
+	no429Retry bool
 	// followUpPage marks a status-line request for a page after the first,
 	// whose success body is decoded by decodeFollowUpPage.
 	followUpPage bool
@@ -145,7 +145,7 @@ func (c *Client) do(ctx context.Context, req request, v any) (*Response, error) 
 	}
 
 	max429Retries := c.maxRetries
-	if req.noRetry {
+	if req.no429Retry {
 		max429Retries = 0
 	}
 	httpResp, body, err := c.doWithRetries(ctx, httpReq, max429Retries) //nolint:bodyclose // doWithRetries reads and closes the network body
