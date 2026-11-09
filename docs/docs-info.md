@@ -1,6 +1,6 @@
 # Okta Connector Setup Guide
 
-Internal technical notes for maintainers. Customer-facing setup lives in [`docs/connector.mdx`](connector.mdx). This connector is a hand-written Go client on the Okta Management API (okta-sdk-golang v2), not declarative baton-http.
+Internal technical notes for maintainers. Customer-facing setup lives in [`docs/connector.mdx`](connector.mdx). This connector is a hand-written Go connector that calls the Okta Management API directly through a small in-repo client (`pkg/okta`, built on the baton-sdk `uhttp` transport), not declarative baton-http.
 
 ---
 
@@ -73,7 +73,7 @@ Internal technical notes for maintainers. Customer-facing setup lives in [`docs/
 
 The `private-key-group` auth path lives in `pkg/oktaauth` and is wired up by the `cfg.PrivateKeyGroup` branch of `pkg/connector/connector.go`.
 
-**DPoP is supported.** Added in CXH-1522 (PR #172, 2026-06-26). `oktaauth.NewDPoPHTTPClient` builds a DPoP proofer from the RSA key and returns an `*http.Client` whose round tripper handles the `DPoP-Nonce` challenge/retry exchange, with separate nonce stores for the token endpoint and resource endpoints. Both SDK clients (v2 and v5) are then constructed in `Bearer` authorization mode with a sentinel token, so the `oktaauth` transport owns authentication end to end rather than the SDK's native private-key path.
+**DPoP is supported.** Added in CXH-1522 (PR #172, 2026-06-26). `oktaauth.NewDPoPHTTPClient` builds a DPoP proofer from the RSA key and returns an `*http.Client` whose round tripper handles the `DPoP-Nonce` challenge/retry exchange, with separate nonce stores for the token endpoint and resource endpoints. The `pkg/okta` client is then given that `*http.Client` and no API token, so it sends no `Authorization` header of its own and the `oktaauth` transport owns authentication end to end.
 
 Consequences for setup docs:
 
@@ -192,11 +192,11 @@ The two new destructive operations are user-scoped Baton resource actions with a
 | `DEPROVISIONED` | error — reactivation is a separate decision | already disabled, no call | already deactivated, no call | delete |
 | Missing | `NotFound` | `NotFound` | `NotFound` | already deleted, no call |
 
-Okta's DELETE endpoint only permanently deletes a `DEPROVISIONED` user. Calling it on another status merely deactivates the user and requires a second call, and Okta documents `204 No Content` for both outcomes. The status code therefore cannot prove deletion. The shared connector operation bypasses the SDK GET cache, confirms `DEPROVISIONED` immediately before DELETE, and performs a fresh GET afterward. `NotFound` proves success; a surviving `DEPROVISIONED` record gets one second DELETE and another verification; any remaining record returns a retryable error instead of a false success.
+Okta's DELETE endpoint only permanently deletes a `DEPROVISIONED` user. Calling it on another status merely deactivates the user and requires a second call, and Okta documents `204 No Content` for both outcomes. The status code therefore cannot prove deletion. The shared connector operation bypasses the connector's GET response cache, confirms `DEPROVISIONED` immediately before DELETE, and performs a fresh GET afterward. `NotFound` proves success; a surviving `DEPROVISIONED` record gets one second DELETE and another verification; any remaining record returns a retryable error instead of a false success.
 
 Lifecycle races are reconciled using structured state, not vendor error text. After a successful deactivate, the connector performs up to four fresh status reads 500 ms apart so an ordinary asynchronous transition can reach `DEPROVISIONED` in the same invocation; a longer transition returns a retryable error. If deactivation itself is rejected while another actor is changing the same user, one fresh status read converts the error to success only when Okta now reports `DEPROVISIONED`. Absence is success only for a delete operation, and other outcomes preserve the original mutation error. A missing user is idempotent success for delete operations; the deactivate-only action keeps missing as `NotFound` because its requested result is a surviving `DEPROVISIONED` user.
 
-`enable_user` and `disable_user` also read the current status first because `unsuspend` only applies to `SUSPENDED` and `activate` only to `STAGED`. They plan from a single status GET, then trust a successful lifecycle call rather than adding a confirm GET. C1 runs each action in a fresh lambda, so a vendor-SDK cache bypass solely for confirmation is unnecessary.
+`enable_user` and `disable_user` also read the current status first because `unsuspend` only applies to `SUSPENDED` and `activate` only to `STAGED`. They plan from a single status GET, then trust a successful lifecycle call rather than adding a confirm GET. C1 runs each action in a fresh lambda, so a GET-cache bypass solely for confirmation is unnecessary.
 
 **Sync status for `STAGED` (Okta sign-in, not C1).** Sync maps `STAGED` to `RESOURCE_STATUS_DISABLED` alongside `SUSPENDED` and `DEPROVISIONED`. In Okta, staged means the account was created but not activated — nobody can sign in to Okta until `activate`. This is an Okta lifecycle state, not a statement about signing in to ConductorOne.
 
@@ -264,9 +264,9 @@ Added in v0.5.19 (PR #186, CXH-2092). Implemented in `pkg/connector/device.go`; 
 | :--- | :--- | :--- |
 | List devices | `GET /api/v1/devices` | [List Devices](https://developer.okta.com/docs/api/openapi/okta-management/management/tag/Device/#tag/Device/operation/listDevices) |
 
-Called through okta-sdk-golang **v5** (`DeviceAPI.ListDevices`), unlike most of the connector, which is on v2.
+Called through `pkg/okta`'s `ListDevices`. Like the API-token and resource-set lookups, it reports non-2xx responses as the HTTP status line, does not retry a 429, and waits out an exhausted rate-limit window before sending.
 
-**Pagination.** `limit` is clamped to `deviceListLimit = 200`, Okta's enforced maximum for this endpoint; a larger requested page size is silently reduced to 200. Paging follows Okta's Link-header cursor: the first call issues `ListDevices`, and each subsequent page is fetched by deserializing the previous `APIResponse` out of the page-token bag and calling `.Next()`.
+**Pagination.** `limit` is clamped to `deviceListLimit = 200`, Okta's enforced maximum for this endpoint; a larger requested page size is silently reduced to 200. Paging follows Okta's Link-header cursor: the first call issues `ListDevices`, and each subsequent page is fetched by reading the previous response's `Link` header back out of the page-token bag and requesting its `rel="next"` URL.
 
 **Field mapping.** All attributes come from the device's `profile` object. When `profile` is absent, no trait options are set and the resource name falls back to the device ID.
 
@@ -290,6 +290,6 @@ Called through okta-sdk-golang **v5** (`DeviceAPI.ListDevices`), unlike most of 
 ## Additional notes
 
 - Error prefix at the connector layer: `okta-connectorv2:`.
-- Pagination: Okta Link-header cursors via the SDK.
-- Rate limits: handled by Okta SDK / HTTP client retries; respect `X-Rate-Limit-*` / `Retry-After`.
+- Pagination: Okta Link-header cursors, parsed by `pkg/okta`.
+- Rate limits: `pkg/okta` retries a 429 up to twice, waiting until `X-Rate-Limit-Reset` (measured against the response `Date`, plus one second, capped at 30s), except on the device, API-token and resource-set endpoints, which fail on the first 429. `X-Rate-Limit-*` headers are reported to baton-sdk as rate-limit annotations.
 - Group profile `type` is synced for `OKTA_GROUP` / `APP_GROUP` / `BUILT_IN` (see note in `connector.mdx`).
