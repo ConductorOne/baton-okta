@@ -1,0 +1,34 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "email": "new.user@example.com",
+          "firstName": "New",
+          "lastName": "User",
+          "login": "new.user@example.com"
+        },
+        "type": {
+          "created": "<now>",
+          "createdBy": "ConductorOne"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "error: create account failed: okta-connectorv2: failed to create user: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: email. Causes: errorSummary: email: Does not match required pattern"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

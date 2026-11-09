@@ -1,0 +1,108 @@
+[
+  {
+    "uuid": "evt-0101", "published": "2026-01-05T11:00:00.000Z", "eventType": "user.account.privilege.grant",
+    "displayMessage": "Grant user privilege", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+      {"id": "UserAdmin", "type": "ROLE", "alternateId": "assign-1", "displayName": "Group Administrator"},
+      {"id": "ROLE_ASSIGNED", "type": "ROLE_ASSIGNED", "alternateId": "unknown", "displayName": "Role assigned"}
+    ]
+  },
+  {
+    "uuid": "evt-0102", "published": "2026-01-05T11:01:00.000Z", "eventType": "user.account.privilege.grant",
+    "displayMessage": "Grant user privilege", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000002", "type": "User", "alternateId": "bob@example.com", "displayName": "Bob Brown"},
+      {"id": "UserAdmin", "type": "ROLE", "alternateId": "assign-2", "displayName": "Group Administrator"},
+      {"id": "ROLE_UNASSIGNED", "type": "ROLE_UNASSIGNED", "alternateId": "unknown", "displayName": "Role unassigned"}
+    ]
+  },
+  {
+    "uuid": "evt-0103", "published": "2026-01-05T11:02:00.000Z", "eventType": "user.account.privilege.grant",
+    "displayMessage": "Grant user privilege (group role change, no discriminator)", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+      {"id": "UserAdmin", "type": "ROLE", "alternateId": "assign-3", "displayName": "Group Administrator"}
+    ]
+  },
+  {
+    "uuid": "evt-0104", "published": "2026-01-05T11:03:00.000Z", "eventType": "user.account.privilege.grant",
+    "displayMessage": "Grant user privilege (unknown label)", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+      {"id": "Mystery", "type": "ROLE", "alternateId": "assign-4", "displayName": "Mystery Administrator"},
+      {"id": "ROLE_ASSIGNED", "type": "ROLE_ASSIGNED", "alternateId": "unknown", "displayName": "Role assigned"}
+    ]
+  },
+  {
+    "uuid": "evt-0105", "published": "2026-01-05T11:04:00.000Z", "eventType": "user.account.privilege.revoke",
+    "displayMessage": "Revoke user privilege", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000003", "type": "User", "alternateId": "carol@example.com", "displayName": "Carol Chen"},
+      {"id": "HelpDeskAdmin", "type": "ROLE", "alternateId": "assign-5", "displayName": "Help Desk Administrator"}
+    ]
+  },
+  {
+    "uuid": "evt-0106", "published": "2026-01-05T11:05:00.000Z", "eventType": "user.lifecycle.create",
+    "displayMessage": "Create okta user", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "00uops000000000004", "type": "User", "alternateId": "dave@example.com", "displayName": "Dave Diaz"}]
+  },
+  {
+    "uuid": "evt-0107", "published": "2026-01-05T11:06:00.000Z", "eventType": "user.lifecycle.suspend",
+    "displayMessage": "Suspend Okta user", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "00uops000000000004", "type": "User", "alternateId": "dave@example.com", "displayName": "Dave Diaz"}]
+  },
+  {
+    "uuid": "evt-0108", "published": "2026-01-05T11:07:00.000Z", "eventType": "user.account.update_profile",
+    "displayMessage": "Update user profile for Okta", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"}]
+  },
+  {
+    "uuid": "evt-0109", "published": "2026-01-05T11:08:00.000Z", "eventType": "user.authentication.sso",
+    "displayMessage": "User single sign on to app", "severity": "INFO",
+    "actor": {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"}]
+  },
+  {
+    "uuid": "evt-0110", "published": "2026-01-05T11:09:00.000Z", "eventType": "user.session.start",
+    "displayMessage": "User login to Okta", "severity": "INFO",
+    "actor": {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+    "outcome": {"result": "SUCCESS"},
+    "target": []
+  },
+  {
+    "uuid": "evt-0111", "published": "2026-01-05T11:10:00.000Z", "eventType": "group.user_membership.add",
+    "displayMessage": "Add user to group membership (two users: handler error, dropped)", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [
+      {"id": "00uops000000000001", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Anderson"},
+      {"id": "00uops000000000002", "type": "User", "alternateId": "bob@example.com", "displayName": "Bob Brown"},
+      {"id": "00gops000000000002", "type": "UserGroup", "alternateId": "unknown", "displayName": "Security Reviewers"}
+    ]
+  },
+  {
+    "uuid": "evt-0112", "published": "2026-01-05T11:11:00.000Z", "eventType": "application.lifecycle.deactivate",
+    "displayMessage": "Deactivate application", "severity": "INFO",
+    "actor": {"id": "00uadmin0000000001", "type": "User", "alternateId": "admin@example.com", "displayName": "Ada Admin"},
+    "outcome": {"result": "SUCCESS"},
+    "target": [{"id": "0oaops000000000001", "type": "AppInstance", "alternateId": "Salesforce", "displayName": "Salesforce.com"}]
+  }
+]

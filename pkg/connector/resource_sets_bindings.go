@@ -12,9 +12,9 @@ import (
 	sdkEntitlement "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
+
+	"github.com/conductorone/baton-okta/pkg/okta"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,7 +32,6 @@ const (
 type resourceSetsBindingsResourceType struct {
 	resourceType *v2.ResourceType
 	client       *okta.Client
-	clientV5     *oktav5.APIClient
 	domain       string
 }
 
@@ -57,7 +56,7 @@ func resourceSetsBindingsResource(rs *ResourceSets, parentResourceID *v2.Resourc
 	)
 }
 
-func resourceSetBindingsResource(rs *oktav5.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
+func resourceSetBindingsResource(rs *okta.ResourceSet, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":                    rs.GetId(),
 		profileFieldLabel:       rs.GetLabel(),
@@ -189,20 +188,7 @@ func (rsb *resourceSetsBindingsResourceType) createRoleResourceSetBinding(ctx co
 		return nil, err
 	}
 
-	rq := rsb.client.CloneRequestExecutor()
-	req, err := rq.WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodPost, reqUrl.String(), payload)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := rq.Do(ctx, req, nil)
-	if err != nil {
-		return resp, err
-	}
-
-	return resp, nil
+	return rsb.client.Do(ctx, http.MethodPost, reqUrl.String(), payload, nil)
 }
 
 // unassignMemberFromBinding. Unassign a Role Resource Set Bindiing Member
@@ -410,7 +396,7 @@ func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId
 	resourceSetId := resourceIDs[firstItem]
 	customRoleId := resourceIDs[lastItem]
 
-	resp, _, err := rsb.clientV5.ResourceSetAPI.GetBinding(ctx, resourceSetId, customRoleId).Execute()
+	resp, _, err := rsb.client.GetResourceSetBinding(ctx, resourceSetId, customRoleId)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get resource set binding: %w", err)
 	}
@@ -419,7 +405,7 @@ func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId
 		return nil, nil, nil
 	}
 
-	rsResp, _, err := rsb.clientV5.ResourceSetAPI.GetResourceSet(ctx, resourceSetId).Execute()
+	rsResp, _, err := rsb.client.GetResourceSet(ctx, resourceSetId)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get resource set: %w", err)
 	}
@@ -435,11 +421,10 @@ func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId
 	return resource, nil, nil
 }
 
-func resourceSetsBindingsBuilder(domain string, client *okta.Client, clientV5 *oktav5.APIClient) *resourceSetsBindingsResourceType {
+func resourceSetsBindingsBuilder(domain string, client *okta.Client) *resourceSetsBindingsResourceType {
 	return &resourceSetsBindingsResourceType{
 		resourceType: resourceTypeResourceSetsBindings,
 		domain:       domain,
 		client:       client,
-		clientV5:     clientV5,
 	}
 }

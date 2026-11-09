@@ -1,0 +1,56 @@
+[
+  {
+    "id": "00u4dave000000004",
+    "externalId": null,
+    "created": "2025-01-10T12:00:00.000Z",
+    "lastUpdated": "2025-01-10T12:00:00.000Z",
+    "scope": "USER",
+    "status": "ACTIVE",
+    "statusChanged": "2025-01-10T12:00:00.000Z",
+    "passwordChanged": null,
+    "syncState": "DISABLED",
+    "credentials": {
+      "userName": "dave@example.com"
+    },
+    "profile": {
+      "email": "dave@example.com",
+      "firstName": "Test",
+      "lastName": "0004"
+    },
+    "_links": {
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "user": {
+        "href": "https://okta.test/api/v1/users/00u4dave000000004"
+      }
+    }
+  },
+  {
+    "id": "00u6eve000000006",
+    "externalId": null,
+    "created": "2025-01-10T12:00:00.000Z",
+    "lastUpdated": "2025-01-10T12:00:00.000Z",
+    "scope": "USER",
+    "status": "ACTIVE",
+    "statusChanged": "2025-01-10T12:00:00.000Z",
+    "passwordChanged": null,
+    "syncState": "DISABLED",
+    "credentials": {
+      "userName": "eve@partner.org"
+    },
+    "profile": {
+      "email": "eve@partner.org",
+      "firstName": "Test",
+      "lastName": "0006"
+    },
+    "_links": {
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "user": {
+        "href": "https://okta.test/api/v1/users/00u6eve000000006"
+      }
+    }
+  }
+]

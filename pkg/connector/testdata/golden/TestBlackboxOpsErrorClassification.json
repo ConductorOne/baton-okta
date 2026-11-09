@@ -1,0 +1,230 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u500json"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u500text"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u500empty"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u502html"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u503json"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u400"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u400empty"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u401"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u403"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u403empty"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u404"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u404html"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u408"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00u200garbage"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-1"
+      },
+      "name": "GetResource 00u500json"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-2"
+      },
+      "name": "GetResource 00u500text"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-3"
+      },
+      "name": "GetResource 00u500empty"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unavailable desc = 502 Bad Gateway\nthe API returned an unknown error"
+      },
+      "name": "GetResource 00u502html"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unavailable desc = 503 Service Unavailable\nthe API returned an error: Service unavailable"
+      },
+      "name": "GetResource 00u503json"
+    },
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed. Causes: errorSummary: bad"
+      },
+      "name": "GetResource 00u400"
+    },
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an unknown error"
+      },
+      "name": "GetResource 00u400empty"
+    },
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "GetResource 00u401"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "GetResource 00u403"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = PermissionDenied desc = 403 Forbidden\nthe API returned an unknown error"
+      },
+      "name": "GetResource 00u403empty"
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = NotFound desc = Not found: Resource not found: 00u404 (User)\nthe API returned an error: Not found: Resource not found: 00u404 (User)"
+      },
+      "name": "GetResource 00u404"
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = NotFound desc = 404 Not Found\nthe API returned an unknown error"
+      },
+      "name": "GetResource 00u404html"
+    },
+    {
+      "error": {
+        "code": "DeadlineExceeded",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = DeadlineExceeded desc = 408 Request Timeout\nthe API returned an error: timeout"
+      },
+      "name": "GetResource 00u408"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: invalid character 'o' in literal null (expecting 'u')"
+      },
+      "name": "GetResource 00u200garbage"
+    }
+  ]
+}

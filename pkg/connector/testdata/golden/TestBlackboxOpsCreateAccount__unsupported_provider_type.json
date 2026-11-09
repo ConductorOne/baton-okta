@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: unsupported provider_type value \"SOCIAL\" (supported: \"OKTA\", \"FEDERATION\")"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -641,8 +641,8 @@ func TestGetAccountCreationQueryParams(t *testing.T) {
 			// Check Provider query param
 			gotProvider := false
 			if got != nil {
-				if b, ok := got.Provider.(bool); ok {
-					gotProvider = b
+				if got.Provider != nil {
+					gotProvider = *got.Provider
 				}
 			}
 			if gotProvider != tt.wantProvider {

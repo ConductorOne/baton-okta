@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: provider_type must be a string"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

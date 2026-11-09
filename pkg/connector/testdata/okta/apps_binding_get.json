@@ -1,0 +1,13 @@
+{
+  "id": "cr0adminrole00000001",
+  "created": "2024-12-02T08:00:00.000Z",
+  "lastUpdated": "2024-12-02T08:00:00.000Z",
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001"
+    },
+    "members": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    }
+  }
+}

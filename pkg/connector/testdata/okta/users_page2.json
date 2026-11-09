@@ -1,0 +1,31 @@
+[
+  {
+    "id": "00ub0oNGTSWTBKOLGLNT",
+    "status": "DEPROVISIONED",
+    "created": "2016-03-04T05:06:07.000Z",
+    "activated": "2016-03-04T05:06:08.000Z",
+    "statusChanged": "2017-03-04T05:06:07.000Z",
+    "lastLogin": "2017-01-01T00:00:00.000Z",
+    "lastUpdated": "2017-03-04T05:06:07.000Z",
+    "passwordChanged": "2016-03-04T05:06:08.000Z",
+    "type": {"id": "otyfnjfba4ye7pgjB0g4"},
+    "profile": {
+      "firstName": "Robert",
+      "lastName": "Tables",
+      "email": "bobby@example.com",
+      "login": "bobby@example.com",
+      "customAttr": ["a", "b"],
+      "costCenter": 42
+    }
+  },
+  {
+    "id": "00ub0oNGTSWTBKOLGLNU",
+    "status": "STAGED",
+    "created": "2018-03-04T05:06:07.000Z",
+    "type": {"id": "otyfnjfba4ye7pgjB0g4"},
+    "profile": {
+      "login": "staged.user@example.com",
+      "email": "staged.user@example.com"
+    }
+  }
+]

@@ -11,8 +11,8 @@ import (
 	"testing/iotest"
 	"unicode/utf8"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	"github.com/conductorone/dpop/integrations/dpop_oauth2"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
 // Okta's resource server can deliver the DPoP nonce challenge as an HTTP 400
@@ -335,7 +335,7 @@ func TestRoundTripper_DoesNotRetryClockSkewRejection(t *testing.T) {
 	}
 }
 
-// The empty-bodied rejection must come back with a body the Okta SDK can decode,
+// The empty-bodied rejection must come back with a body the Okta client can decode,
 // so the reason reaches the caller instead of "the API returned an unknown error".
 func TestRoundTripper_EmptyDPoPErrorGetsDecodableBody(t *testing.T) {
 	key := generateRSAKey(t)
@@ -402,10 +402,10 @@ func TestRoundTripper_NonEmptyBodyNotOverwritten(t *testing.T) {
 	}
 }
 
-// End of the chain: feed the synthesized response to the real Okta SDK and check
+// End of the chain: feed the synthesized response to the Okta client's error decoder and check
 // it now renders the reason Okta gave. The baseline assertion pins the bug -- the
 // same response without a body yields the ticket's opaque message.
-func TestAnnotateEmptyDPoPError_SDKRendersRealReason(t *testing.T) {
+func TestAnnotateEmptyDPoPError_ClientRendersRealReason(t *testing.T) {
 	header := http.Header{}
 	header.Set(wwwAuthenticateHdr, liveReplayChallenge)
 
@@ -416,7 +416,7 @@ func TestAnnotateEmptyDPoPError_SDKRendersRealReason(t *testing.T) {
 		Body:       http.NoBody,
 	})
 	if baseline == nil || !strings.Contains(baseline.Error(), "the API returned an unknown error") {
-		t.Fatalf("baseline should be the opaque SDK error, got %v", baseline)
+		t.Fatalf("baseline should be the opaque client error, got %v", baseline)
 	}
 
 	resp := &http.Response{
@@ -432,10 +432,10 @@ func TestAnnotateEmptyDPoPError_SDKRendersRealReason(t *testing.T) {
 		t.Fatal("expected an error from the annotated response")
 	}
 	if strings.Contains(fixed.Error(), "unknown error") {
-		t.Errorf("SDK still renders the opaque message: %q", fixed.Error())
+		t.Errorf("client still renders the opaque message: %q", fixed.Error())
 	}
 	if !strings.Contains(fixed.Error(), "already been used") {
-		t.Errorf("SDK error = %q, want Okta's actual reason", fixed.Error())
+		t.Errorf("client error = %q, want Okta's actual reason", fixed.Error())
 	}
 	t.Logf("before: %v", baseline)
 	t.Logf("after:  %v", fixed)

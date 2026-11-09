@@ -1,0 +1,28 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "validate failed: okta-connector: verify returned non-200: '202'"
+      },
+      "name": "Validate"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "okta-connector: verify returned non-200: '202'"
+      },
+      "name": "GetMetadata"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/api-tokens/00Tabcdef0123456789a"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: get resource failed: okta-connector-v5: failed to get api token: undefined response type"
+      },
+      "name": "GetResource api-token"
+    }
+  ]
+}

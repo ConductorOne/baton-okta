@@ -1,0 +1,303 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/logs",
+      "query": {
+        "filter": [
+          "len=1482 groups=11 {actor.type eq \"User\"; eventType eq \"user.authentication.sso\"; target.type eq \"AppInstance\"} | {eventType eq \"group.lifecycle.create\"; target.type eq \"UserGroup\"} | {eventType eq \"application.lifecycle.activate\"; eventType eq \"application.lifecycle.create\"; eventType eq \"application.lifecycle.update\"; target.type eq \"AppInstance\"} | {eventType eq \"application.user_membership.add\"; target.type eq \"AppInstance\"; target.type eq \"User\"} | {eventType eq \"group.application_assignment.add\"; outcome.result eq \"SUCCESS\"; target.type eq \"AppInstance\"; target.type eq \"UserGroup\"} | {eventType eq \"application.user_membership.remove\"; target.type eq \"AppInstance\"; target.type eq \"User\"} | {eventType eq \"user.account.privilege.grant\"; target.type eq \"ROLE\"; target.type eq \"User\"} | {eventType eq \"user.account.privilege.revoke\"; target.type eq \"ROLE\"; target.type eq \"User\"} | {eventType eq \"user.account.update_profile\"; eventType eq \"user.lifecycle.activate\"; eventType eq \"user.lifecycle.create\"; eventType eq \"user.lifecycle.deactivate\"; eventType eq \"user.lifecycle.reactivate\"; eventType eq \"user.lifecycle.suspend\"; eventType eq \"user.lifecycle.unsuspend\"; target.type eq \"User\"} | {eventType eq \"group.user_membership.add\"; target.type eq \"User\"; target.type eq \"UserGroup\"} | {eventType eq \"group.user_membership.remove\"; target.type eq \"User\"; target.type eq \"UserGroup\"}"
+        ],
+        "limit": [
+          "7"
+        ],
+        "since": [
+          "2026-01-05T09:30:15Z"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/logs",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "filter": [
+          "len=1482 groups=11 {actor.type eq \"User\"; eventType eq \"user.authentication.sso\"; target.type eq \"AppInstance\"} | {eventType eq \"group.lifecycle.create\"; target.type eq \"UserGroup\"} | {eventType eq \"application.lifecycle.activate\"; eventType eq \"application.lifecycle.create\"; eventType eq \"application.lifecycle.update\"; target.type eq \"AppInstance\"} | {eventType eq \"application.user_membership.add\"; target.type eq \"AppInstance\"; target.type eq \"User\"} | {eventType eq \"group.application_assignment.add\"; outcome.result eq \"SUCCESS\"; target.type eq \"AppInstance\"; target.type eq \"UserGroup\"} | {eventType eq \"application.user_membership.remove\"; target.type eq \"AppInstance\"; target.type eq \"User\"} | {eventType eq \"user.account.privilege.grant\"; target.type eq \"ROLE\"; target.type eq \"User\"} | {eventType eq \"user.account.privilege.revoke\"; target.type eq \"ROLE\"; target.type eq \"User\"} | {eventType eq \"user.account.update_profile\"; eventType eq \"user.lifecycle.activate\"; eventType eq \"user.lifecycle.create\"; eventType eq \"user.lifecycle.deactivate\"; eventType eq \"user.lifecycle.reactivate\"; eventType eq \"user.lifecycle.suspend\"; eventType eq \"user.lifecycle.unsuspend\"; target.type eq \"User\"} | {eventType eq \"group.user_membership.add\"; target.type eq \"User\"; target.type eq \"UserGroup\"} | {eventType eq \"group.user_membership.remove\"; target.type eq \"User\"; target.type eq \"UserGroup\"}"
+        ],
+        "limit": [
+          "7"
+        ],
+        "since": [
+          "2026-01-05T09:30:15Z"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListEvents with since",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "cursor": "cursor1",
+        "events": [
+          {
+            "id": "evt-0001",
+            "occurred_at": "2026-01-05T10:00:00Z",
+            "resource_change_event": {
+              "resource_id": {
+                "resource": "00gops000000000002",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "create_grant_event": {
+              "entitlement": {
+                "display_name": "member",
+                "id": "group:00gops000000000002:member",
+                "purpose": "PURPOSE_VALUE_ASSIGNMENT",
+                "resource": {
+                  "display_name": "Security Reviewers",
+                  "id": {
+                    "resource": "00gops000000000002",
+                    "resource_type": "group"
+                  }
+                },
+                "slug": "member"
+              },
+              "principal": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                    "account_type": "ACCOUNT_TYPE_HUMAN",
+                    "emails": [
+                      {
+                        "address": "alice@example.com",
+                        "is_primary": true
+                      }
+                    ],
+                    "status": {
+                      "status": "STATUS_ENABLED"
+                    }
+                  }
+                ],
+                "display_name": "Alice Anderson",
+                "id": {
+                  "resource": "00uops000000000001",
+                  "resource_type": "user"
+                }
+              }
+            },
+            "id": "evt-0002",
+            "occurred_at": "2026-01-05T10:01:00Z"
+          },
+          {
+            "create_revoke_event": {
+              "entitlement": {
+                "display_name": "member",
+                "id": "group:00gops000000000002:member",
+                "purpose": "PURPOSE_VALUE_ASSIGNMENT",
+                "resource": {
+                  "display_name": "Security Reviewers",
+                  "id": {
+                    "resource": "00gops000000000002",
+                    "resource_type": "group"
+                  }
+                },
+                "slug": "member"
+              },
+              "principal": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                    "account_type": "ACCOUNT_TYPE_HUMAN",
+                    "emails": [
+                      {
+                        "address": "bob@example.com",
+                        "is_primary": true
+                      }
+                    ],
+                    "status": {
+                      "status": "STATUS_ENABLED"
+                    }
+                  }
+                ],
+                "display_name": "Bob Brown",
+                "id": {
+                  "resource": "00uops000000000002",
+                  "resource_type": "user"
+                }
+              }
+            },
+            "id": "evt-0003",
+            "occurred_at": "2026-01-05T10:02:00Z"
+          },
+          {
+            "id": "evt-0004",
+            "occurred_at": "2026-01-05T10:03:00Z",
+            "resource_change_event": {
+              "resource_id": {
+                "resource": "0oaops000000000001",
+                "resource_type": "app"
+              }
+            }
+          },
+          {
+            "create_grant_event": {
+              "entitlement": {
+                "display_name": "access",
+                "id": "app:0oaops000000000001:access",
+                "purpose": "PURPOSE_VALUE_ASSIGNMENT",
+                "resource": {
+                  "display_name": "Salesforce.com",
+                  "id": {
+                    "resource": "0oaops000000000001",
+                    "resource_type": "app"
+                  }
+                },
+                "slug": "access"
+              },
+              "principal": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                    "account_type": "ACCOUNT_TYPE_HUMAN",
+                    "emails": [
+                      {
+                        "address": "alice@example.com",
+                        "is_primary": true
+                      }
+                    ],
+                    "status": {
+                      "status": "STATUS_ENABLED"
+                    }
+                  }
+                ],
+                "display_name": "Alice Anderson",
+                "id": {
+                  "resource": "00uops000000000001",
+                  "resource_type": "user"
+                }
+              }
+            },
+            "id": "evt-0005",
+            "occurred_at": "2026-01-05T10:04:00Z"
+          },
+          {
+            "create_revoke_event": {
+              "entitlement": {
+                "display_name": "access",
+                "id": "app:0oaops000000000001:access",
+                "purpose": "PURPOSE_VALUE_ASSIGNMENT",
+                "resource": {
+                  "display_name": "Salesforce.com",
+                  "id": {
+                    "resource": "0oaops000000000001",
+                    "resource_type": "app"
+                  }
+                },
+                "slug": "access"
+              },
+              "principal": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                    "account_type": "ACCOUNT_TYPE_HUMAN",
+                    "emails": [
+                      {
+                        "address": "bob@example.com",
+                        "is_primary": true
+                      }
+                    ],
+                    "status": {
+                      "status": "STATUS_ENABLED"
+                    }
+                  }
+                ],
+                "display_name": "Bob Brown",
+                "id": {
+                  "resource": "00uops000000000002",
+                  "resource_type": "user"
+                }
+              }
+            },
+            "id": "evt-0006",
+            "occurred_at": "2026-01-05T10:05:00Z"
+          },
+          {
+            "create_grant_event": {
+              "annotations": [
+                {
+                  "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                  "entitlement_ids": [
+                    "group:00gops000000000001:member"
+                  ],
+                  "shallow": true
+                }
+              ],
+              "entitlement": {
+                "display_name": "access",
+                "id": "app:0oaops000000000001:access",
+                "purpose": "PURPOSE_VALUE_ASSIGNMENT",
+                "resource": {
+                  "display_name": "Salesforce.com",
+                  "id": {
+                    "resource": "0oaops000000000001",
+                    "resource_type": "app"
+                  }
+                },
+                "slug": "access"
+              },
+              "principal": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.GroupTrait"
+                  }
+                ],
+                "display_name": "Platform Engineers",
+                "id": {
+                  "resource": "00gops000000000001",
+                  "resource_type": "group"
+                }
+              }
+            },
+            "id": "evt-0007",
+            "occurred_at": "2026-01-05T10:06:00Z"
+          }
+        ],
+        "has_more": true
+      }
+    },
+    {
+      "name": "ListEvents second page",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    }
+  ]
+}

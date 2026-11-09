@@ -1,0 +1,29 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps",
+      "query": {
+        "filter": [
+          "status eq \"ACTIVE\""
+        ],
+        "limit": [
+          "1000"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list users: okta-connectorv2: failed to fetch apps from okta: rpc error: code = NotFound desc = Not found: Resource not found: x (Application)\nthe API returned an error: Not found: Resource not found: x (Application)"
+      },
+      "name": "ListResources app page 1"
+    }
+  ]
+}

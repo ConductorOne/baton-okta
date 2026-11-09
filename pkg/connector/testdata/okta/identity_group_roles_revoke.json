@@ -1,0 +1,30 @@
+[
+  {
+    "id": "irb7777777777777777",
+    "label": "Group Administrator",
+    "type": "USER_ADMIN",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  },
+  {
+    "id": "irb8888888888888888",
+    "label": "Application Administrator",
+    "type": "APP_ADMIN",
+    "status": "INACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  }
+]

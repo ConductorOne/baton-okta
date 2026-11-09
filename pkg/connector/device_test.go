@@ -3,23 +3,23 @@ package connector
 import (
 	"testing"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 )
 
 func TestDeviceResource_WithProfile(t *testing.T) {
-	device := &oktav5.DeviceList{
-		Id: oktav5.PtrString("guo1a2b3c4d5e6f7g8h9"),
-		Profile: &oktav5.DeviceProfile{
+	device := &okta.Device{
+		Id: devStrPtr("guo1a2b3c4d5e6f7g8h9"),
+		Profile: &okta.DeviceProfile{
 			DisplayName:  "Ada's MacBook Pro",
-			SerialNumber: oktav5.PtrString("C02ABC123DEF"),
-			Udid:         oktav5.PtrString("00001234-0011AABB2233CCDD"),
-			Model:        oktav5.PtrString("MacBookPro18,3"),
-			Manufacturer: oktav5.PtrString("Apple Inc."),
+			SerialNumber: devStrPtr("C02ABC123DEF"),
+			Udid:         devStrPtr("00001234-0011AABB2233CCDD"),
+			Model:        devStrPtr("MacBookPro18,3"),
+			Manufacturer: devStrPtr("Apple Inc."),
 			Platform:     "MACOS",
-			OsVersion:    oktav5.PtrString("14.5.0"),
-			Registered:   true,
+			OsVersion:    devStrPtr("14.5.0"),
 		},
 	}
 
@@ -88,8 +88,8 @@ func TestDevicePlatformOSType(t *testing.T) {
 }
 
 func TestDeviceResource_NoProfile(t *testing.T) {
-	device := &oktav5.DeviceList{
-		Id: oktav5.PtrString("guo1a2b3c4d5e6f7g8h9"),
+	device := &okta.Device{
+		Id: devStrPtr("guo1a2b3c4d5e6f7g8h9"),
 	}
 
 	rv, err := deviceResource(device)
@@ -114,3 +114,5 @@ func TestDeviceResource_NoProfile(t *testing.T) {
 		t.Errorf("Serial = %q, want empty when profile is absent", trait.GetSerial())
 	}
 }
+
+func devStrPtr(s string) *string { return &s }

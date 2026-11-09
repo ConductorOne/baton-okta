@@ -1,0 +1,85 @@
+[
+  {
+    "id": "00uaa3333333333333a3",
+    "status": "STAGED",
+    "created": "2019-03-11T18:02:41.000Z",
+    "activated": "2019-03-11T18:03:00.000Z",
+    "statusChanged": "2020-01-05T09:00:00.000Z",
+    "lastLogin": null,
+    "lastUpdated": "2024-05-02T14:11:09.000Z",
+    "passwordChanged": "2023-01-05T09:00:00.000Z",
+    "type": {
+      "id": "otyfnjfba4ye7pgjB0g4"
+    },
+    "profile": {
+      "firstName": "Carol",
+      "lastName": "Chen",
+      "email": "carol@other.org",
+      "login": "carol@other.org",
+      "secondEmail": "carol@acme.com"
+    },
+    "_links": {
+      "self": {
+        "href": "https://example.okta.com/api/v1/users/00uaa3333333333333a3"
+      }
+    }
+  },
+  {
+    "id": "00uaa4444444444444a4",
+    "status": "LOCKED_OUT",
+    "created": "2019-03-11T18:02:41.000Z",
+    "activated": "2019-03-11T18:03:00.000Z",
+    "statusChanged": "2020-01-05T09:00:00.000Z",
+    "lastLogin": "2024-05-02T14:11:09.000Z",
+    "lastUpdated": "2024-05-02T14:11:09.000Z",
+    "passwordChanged": "2023-01-05T09:00:00.000Z",
+    "type": {
+      "id": "otyfnjfba4ye7pgjB0g4"
+    },
+    "profile": {
+      "firstName": "Dave",
+      "lastName": "Diaz",
+      "email": "dave@ACME.com",
+      "login": "dave@other.org"
+    },
+    "_links": {
+      "self": {
+        "href": "https://example.okta.com/api/v1/users/00uaa4444444444444a4"
+      }
+    }
+  },
+  {
+    "id": "00uaa5555555555555a5",
+    "status": "DEPROVISIONED",
+    "created": "2019-03-11T18:02:41.000Z",
+    "activated": "2019-03-11T18:03:00.000Z",
+    "statusChanged": "2020-01-05T09:00:00.000Z",
+    "lastLogin": "2024-05-02T14:11:09.000Z",
+    "lastUpdated": "2024-05-02T14:11:09.000Z",
+    "passwordChanged": "2023-01-05T09:00:00.000Z",
+    "type": {
+      "id": "otyfnjfba4ye7pgjB0g4"
+    },
+    "profile": {
+      "firstName": "Erin",
+      "lastName": "Evans",
+      "email": "erin@other.org",
+      "login": "erin@other.org"
+    },
+    "_links": {
+      "self": {
+        "href": "https://example.okta.com/api/v1/users/00uaa5555555555555a5"
+      }
+    }
+  },
+  {
+    "id": "00uaa6666666666666a6",
+    "status": "RECOVERY",
+    "created": "2021-06-01T00:00:00.000Z",
+    "lastUpdated": "2021-06-01T00:00:00.000Z",
+    "profile": {
+      "email": "nameless@acme.com",
+      "login": "nameless@acme.com"
+    }
+  }
+]

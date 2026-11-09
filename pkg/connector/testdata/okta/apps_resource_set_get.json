@@ -1,0 +1,18 @@
+{
+  "id": "iam1abcdefghijklmn01",
+  "label": "Engineering Apps",
+  "description": "Apps owned by engineering",
+  "created": "2024-12-01T08:00:00.000Z",
+  "lastUpdated": "2025-01-15T08:00:00.000Z",
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01"
+    },
+    "bindings": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    "resources": {
+      "href": "https://okta.test/api/v1/iam/resource-sets/iam1abcdefghijklmn01/resources"
+    }
+  }
+}

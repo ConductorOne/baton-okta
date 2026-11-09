@@ -5,8 +5,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 )
 
 func TestGroupResource_TypeProfileKey(t *testing.T) {

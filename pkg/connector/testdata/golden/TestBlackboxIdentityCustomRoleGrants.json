@@ -1,0 +1,254 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa1111111111111a1/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa2222222222222a2/roles"
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources custom-role page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:cr0support000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Support Triage",
+            "id": {
+              "resource": "cr0support000000000001",
+              "resource_type": "custom-role"
+            },
+            "profile": {
+              "id": "cr0support000000000001",
+              "label": "Support Triage",
+              "type": ""
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"custom-role\"}}"
+      }
+    },
+    {
+      "name": "ListResources custom-role page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:cr0auditor000000000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Auditor",
+            "id": {
+              "resource": "cr0auditor000000000002",
+              "resource_type": "custom-role"
+            },
+            "profile": {
+              "id": "cr0auditor000000000002",
+              "label": "Auditor",
+              "type": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListGrants custom-role/cr0support000000000001 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:cr0support000000000001:00uaa1111111111111a1"
+              }
+            ],
+            "entitlement": {
+              "id": "custom-role:cr0support000000000001:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:cr0support000000000001"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Support Triage",
+                "id": {
+                  "resource": "cr0support000000000001",
+                  "resource_type": "custom-role"
+                },
+                "profile": {
+                  "id": "cr0support000000000001",
+                  "label": "Support Triage",
+                  "type": ""
+                }
+              }
+            },
+            "id": "custom-role:cr0support000000000001:assigned:user:00uaa1111111111111a1",
+            "principal": {
+              "id": {
+                "resource": "00uaa1111111111111a1",
+                "resource_type": "user"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"custom-role\"}}"
+      }
+    },
+    {
+      "name": "ListGrants custom-role/cr0support000000000001 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListGrants custom-role/cr0auditor000000000002 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"custom-role\"}}"
+      }
+    },
+    {
+      "name": "ListGrants custom-role/cr0auditor000000000002 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "50"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "X-Okta-Retry-Count": "1",
+        "X-Okta-Retry-For": "req-1"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "50"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources group page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gbuiltin00000000g1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.EntitlementImmutable"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "built_in",
+                "raw_group_source_type": "BUILT_IN"
+              }
+            ],
+            "description": "All users in your organization",
+            "display_name": "Everyone",
+            "id": {
+              "resource": "00gbuiltin00000000g1",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 3,
+              "description": "All users in your organization",
+              "name": "Everyone",
+              "type": "BUILT_IN",
+              "users_count": 120
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "group_source_type": "native",
+                "raw_group_source_type": "OKTA_GROUP"
+              }
+            ],
+            "display_name": "Engineering",
+            "id": {
+              "resource": "00geng0000000000000g2",
+              "resource_type": "group"
+            },
+            "profile": {
+              "apps_count": 0,
+              "description": "",
+              "name": "Engineering",
+              "type": "OKTA_GROUP",
+              "users_count": 0
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

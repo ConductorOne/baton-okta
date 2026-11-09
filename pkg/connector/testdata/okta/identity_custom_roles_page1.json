@@ -1,0 +1,24 @@
+{
+  "roles": [
+    {
+      "id": "cr0support000000000001",
+      "label": "Support Triage",
+      "description": "Triage support users",
+      "created": "2023-03-03T00:00:00.000Z",
+      "lastUpdated": "2023-04-04T00:00:00.000Z",
+      "_links": {
+        "permissions": {
+          "href": "https://example.okta.com/api/v1/iam/roles/cr0support000000000001/permissions"
+        },
+        "self": {
+          "href": "https://example.okta.com/api/v1/iam/roles/cr0support000000000001"
+        }
+      }
+    }
+  ],
+  "_links": {
+    "next": {
+      "href": "x"
+    }
+  }
+}

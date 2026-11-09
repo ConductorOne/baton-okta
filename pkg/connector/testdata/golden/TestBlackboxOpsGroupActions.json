@@ -1,0 +1,477 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "description": "Reviews security changes",
+          "name": "Security Reviewers"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/groups"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "",
+          "name": "Security Reviewers"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/groups"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gops000000000002/users/00uops000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gops000000000002/users/00uops000000000002"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "",
+          "name": "Security Reviewers"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/groups"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gops000000000002/users/00uops000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gops000000000002/users/00umissing"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "",
+          "name": "Taken"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/groups"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "",
+          "name": "Nope"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/groups"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gops000000000001"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "Platform engineering team",
+          "name": "Platform Engineering"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gops000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gops000000000001"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "New description",
+          "name": "Platform Engineers"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gops000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00ggone"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gupdbad"
+    },
+    {
+      "body": {
+        "profile": {
+          "description": "Platform engineering team",
+          "name": "Taken"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "PUT",
+      "path": "/api/v1/groups/00gupdbad"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00gdel"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00ggone"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00gforbid"
+    }
+  ],
+  "steps": [
+    {
+      "name": "create group",
+      "response": {
+        "name": "create",
+        "response": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gops000000000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gops000000000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "groupSourceType": "native",
+                "rawGroupSourceType": "OKTA_GROUP"
+              }
+            ],
+            "description": "Reviews security changes",
+            "displayName": "Security Reviewers",
+            "resourceId": {
+              "resourceId": "00gops000000000002",
+              "resourceTypeId": "group"
+            }
+          },
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "create group with members",
+      "response": {
+        "name": "create",
+        "response": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gops000000000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gops000000000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "groupSourceType": "native",
+                "rawGroupSourceType": "OKTA_GROUP"
+              }
+            ],
+            "description": "Reviews security changes",
+            "displayName": "Security Reviewers",
+            "resourceId": {
+              "resourceId": "00gops000000000002",
+              "resourceTypeId": "group"
+            }
+          },
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "create group member add fails",
+      "response": {
+        "name": "create",
+        "response": {
+          "error": "okta-connectorv2: group 00gops000000000002 created but failed to add member 00umissing: rpc error: code = NotFound desc = Not found: Resource not found: 00umissing (User)\nthe API returned an error: Not found: Resource not found: 00umissing (User)"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "create group missing name",
+      "response": {
+        "name": "create",
+        "response": {
+          "error": "required argument name is missing or invalid"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "create group 400",
+      "response": {
+        "name": "create",
+        "response": {
+          "error": "okta-connectorv2: failed to create group: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: name. Causes: errorSummary: name: A group with name 'Taken' already exists"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "create group 403",
+      "response": {
+        "name": "create",
+        "response": {
+          "error": "okta-connectorv2: failed to create group: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "modify group name",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gops000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gops000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "groupSourceType": "native",
+                "rawGroupSourceType": "OKTA_GROUP"
+              }
+            ],
+            "description": "Platform engineering team",
+            "displayName": "Platform Engineering",
+            "resourceId": {
+              "resourceId": "00gops000000000001",
+              "resourceTypeId": "group"
+            }
+          },
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "modify group no change is idempotent",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gops000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gops000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "groupSourceType": "native",
+                "rawGroupSourceType": "OKTA_GROUP"
+              }
+            ],
+            "description": "Platform engineering team",
+            "displayName": "Platform Engineers",
+            "resourceId": {
+              "resourceId": "00gops000000000001",
+              "resourceTypeId": "group"
+            }
+          },
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "modify group description only",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "resource": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00gops000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00gops000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GroupTrait",
+                "groupSourceType": "native",
+                "rawGroupSourceType": "OKTA_GROUP"
+              }
+            ],
+            "description": "Platform engineering team",
+            "displayName": "Platform Engineering",
+            "resourceId": {
+              "resourceId": "00gops000000000001",
+              "resourceTypeId": "group"
+            }
+          },
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "modify group nothing provided",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "error": "okta-connectorv2: at least one of name or description must be provided"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "modify group missing id",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "error": "required argument group_id is missing or invalid"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "modify group 404",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "error": "okta-connectorv2: failed to get group 00ggone: rpc error: code = NotFound desc = Not found: Resource not found: 00ggone (UserGroup)\nthe API returned an error: Not found: Resource not found: 00ggone (UserGroup)"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "modify group update 400",
+      "response": {
+        "name": "modify_group",
+        "response": {
+          "error": "okta-connectorv2: failed to update group: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: name. Causes: errorSummary: name: A group with name 'Taken' already exists"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "delete group",
+      "response": {}
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: delete resource failed: rpc error: code = NotFound desc = Not found: Resource not found: 00ggone (UserGroup)\nthe API returned an error: Not found: Resource not found: 00ggone (UserGroup)"
+      },
+      "name": "delete group 404"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: delete resource failed: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "delete group 403"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -14,7 +15,6 @@ import (
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 )
 
@@ -291,17 +291,8 @@ func getOktaIamCustomRole(
 
 	url.Path = path.Join(url.Path, roleId)
 
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(ContentType).
-		NewRequest(http.MethodGet, url.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	var role *okta.Role
-	resp, err := rq.Do(ctx, req, &role)
+	resp, err := client.Do(ctx, http.MethodGet, url.String(), nil, &role)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get custom role: %w", handleOktaResponseError(resp, err))
 	}

@@ -1,0 +1,29 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "50"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list groups: okta-connectorv2: failed to fetch groups from okta: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-1"
+      },
+      "name": "ListResources group page 1"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "id": "0oa1gjh63g214q0Hq0g4",
+  "name": "salesforce",
+  "label": "Salesforce Sandbox",
+  "status": "ACTIVE",
+  "lastUpdated": "2025-03-11T18:21:05.000Z",
+  "created": "2024-11-02T09:14:33.000Z",
+  "accessibility": {
+    "selfService": false,
+    "errorRedirectUrl": null,
+    "loginRedirectUrl": null
+  },
+  "visibility": {
+    "autoSubmitToolbar": false,
+    "hide": {
+      "iOS": false,
+      "web": false
+    },
+    "appLinks": {
+      "login": true
+    }
+  },
+  "features": [],
+  "signOnMode": "SAML_2_0",
+  "credentials": {
+    "userNameTemplate": {
+      "template": "${source.login}",
+      "type": "BUILT_IN"
+    },
+    "signing": {}
+  },
+  "settings": {
+    "app": {
+      "instanceType": "SANDBOX",
+      "logoutUrl": null
+    },
+    "signOn": {
+      "defaultRelayState": "",
+      "ssoAcsUrlOverride": null,
+      "audienceOverride": null,
+      "recipientOverride": null,
+      "destinationOverride": null,
+      "attributeStatements": []
+    }
+  },
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+    },
+    "appLinks": [
+      {
+        "name": "login",
+        "href": "https://okta.test/home/salesforce/0oa1gjh63g214q0Hq0g4/aln5z7uhkbM6y7bMy5d6",
+        "type": "text/html"
+      }
+    ],
+    "groups": {
+      "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups"
+    },
+    "users": {
+      "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4/users"
+    },
+    "deactivate": {
+      "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4/lifecycle/deactivate"
+    }
+  }
+}

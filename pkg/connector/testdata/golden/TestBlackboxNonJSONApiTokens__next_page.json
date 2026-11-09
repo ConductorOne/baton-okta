@@ -1,0 +1,101 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/api-tokens"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/api-tokens",
+      "query": {
+        "after": [
+          "cursor1"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources api-token page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.SecretTrait",
+                "created_by_id": {
+                  "resource": "00u1alice00000001",
+                  "resource_type": "user"
+                },
+                "credential_detail": "okta.api_token",
+                "credential_type": "CREDENTIAL_TYPE_STATIC_SECRET",
+                "expires_at": "2026-12-31T23:59:59Z",
+                "identity_id": {
+                  "resource": "00u1alice00000001",
+                  "resource_type": "user"
+                },
+                "last_used_at": "2025-06-07T08:09:10Z"
+              }
+            ],
+            "created_at": "2025-01-02T03:04:05Z",
+            "display_name": "Terraform",
+            "id": {
+              "resource": "00Tabcdef0123456789a",
+              "resource_type": "api-token"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.SecretTrait",
+                "created_by_id": {
+                  "resource": "00u3carol00000003",
+                  "resource_type": "user"
+                },
+                "credential_detail": "okta.api_token",
+                "credential_type": "CREDENTIAL_TYPE_STATIC_SECRET",
+                "expires_at": "2026-12-31T23:59:59Z",
+                "identity_id": {
+                  "resource": "00u3carol00000003",
+                  "resource_type": "user"
+                },
+                "last_used_at": "2025-06-07T08:09:10Z"
+              }
+            ],
+            "created_at": "2025-01-02T03:04:05Z",
+            "display_name": "Baton Connector",
+            "id": {
+              "resource": "00Tabcdef0123456789b",
+              "resource_type": "api-token"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"{\\\"Link\\\":[\\\"\\\\u003chttps://okta.test/api/v1/api-tokens?after=cursor1\\\\u003e; rel=\\\\\\\"next\\\\\\\"\\\"],\\\"Url\\\":\\\"https://example.com/api/v1/api-tokens\\\"}\",\"type\":\"api-token\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: listing resources failed: could not build a response for type: text/plain"
+      },
+      "name": "ListResources api-token page 2"
+    }
+  ]
+}

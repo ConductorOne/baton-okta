@@ -1,0 +1,21 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to get application: okta-connectorv2: failed to fetch app from okta: rpc error: code = NotFound desc = Not found: Resource not found: x (Application)\nthe API returned an error: Not found: Resource not found: x (Application)"
+      },
+      "name": "GetResource app"
+    }
+  ]
+}

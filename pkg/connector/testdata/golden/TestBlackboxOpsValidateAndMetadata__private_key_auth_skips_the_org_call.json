@@ -1,0 +1,368 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "name": "Validate",
+      "response": {}
+    },
+    {
+      "name": "GetMetadata",
+      "response": {
+        "metadata": {
+          "account_creation_schema": {
+            "field_map": {
+              "additionalAttributes": {
+                "description": "Extra Okta profile attributes (standard or custom schema) to set on the user. Keys must be valid Okta profile field names.",
+                "display_name": "Additional Attributes",
+                "map_field": {},
+                "order": 9
+              },
+              "create_inactive": {
+                "description": "When set to 'true', the user is created in a staged (inactive) state without activation.",
+                "display_name": "Create Inactive",
+                "order": 6,
+                "placeholder": "True/False",
+                "string_field": {}
+              },
+              "email": {
+                "description": "This will be the email of the user. If login is unset this is also the login.",
+                "display_name": "Email",
+                "order": 3,
+                "placeholder": "Email",
+                "required": true,
+                "string_field": {}
+              },
+              "first_name": {
+                "description": "This first name will be used for the user.",
+                "display_name": "First Name",
+                "order": 1,
+                "placeholder": "First name",
+                "required": true,
+                "string_field": {}
+              },
+              "last_name": {
+                "description": "This last name will be used for the user.",
+                "display_name": "Last Name",
+                "order": 2,
+                "placeholder": "Last name",
+                "required": true,
+                "string_field": {}
+              },
+              "login": {
+                "description": "This login will be used as the login for the user. Email will be used if login is not present.",
+                "display_name": "Login",
+                "order": 4,
+                "placeholder": "Login",
+                "string_field": {}
+              },
+              "password_change_on_login_required": {
+                "description": "When creating accounts with a random password setting this to 'true' will require the user to change their password on first login.",
+                "display_name": "Password Change Required on Login",
+                "order": 5,
+                "placeholder": "True/False",
+                "string_field": {}
+              },
+              "provider_type": {
+                "description": "The authentication provider type for the user. Set to 'FEDERATION' to create a federated user (no Okta password). Defaults to 'OKTA'.",
+                "display_name": "Provider Type",
+                "order": 8,
+                "placeholder": "OKTA",
+                "string_field": {}
+              },
+              "send_activation_email": {
+                "description": "When set to 'false', the Okta activation email is suppressed by creating the user staged and activating without sending an email. Defaults to 'true'.",
+                "display_name": "Send Activation Email",
+                "order": 7,
+                "placeholder": "True/False",
+                "string_field": {
+                  "default_value": "true"
+                }
+              }
+            }
+          },
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.ExternalLink",
+              "url": "https://okta.test"
+            }
+          ],
+          "capabilities": {
+            "connector_capabilities": [
+              "CAPABILITY_PROVISION",
+              "CAPABILITY_SYNC",
+              "CAPABILITY_ACCOUNT_PROVISIONING",
+              "CAPABILITY_RESOURCE_DELETE",
+              "CAPABILITY_ACTIONS",
+              "CAPABILITY_TARGETED_SYNC",
+              "CAPABILITY_EVENT_FEED_V2",
+              "CAPABILITY_SERVICE_MODE_TARGETED_SYNC"
+            ],
+            "credential_details": {
+              "capability_account_provisioning": {
+                "preferred_credential_option": "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD",
+                "supported_credential_options": [
+                  "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD",
+                  "CAPABILITY_DETAIL_CREDENTIAL_OPTION_RANDOM_PASSWORD"
+                ]
+              }
+            },
+            "resource_type_capabilities": [
+              {
+                "capabilities": [
+                  "CAPABILITY_SYNC",
+                  "CAPABILITY_TARGETED_SYNC"
+                ],
+                "opt_in_required": true,
+                "permissions": {
+                  "permissions": [
+                    {
+                      "permission": "okta.apiTokens.read"
+                    }
+                  ]
+                },
+                "resource_type": {
+                  "annotations": [
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                      "id": "api-token"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                      "permissions": [
+                        {
+                          "permission": "okta.apiTokens.read"
+                        }
+                      ]
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
+                    }
+                  ],
+                  "display_name": "API Token",
+                  "id": "api-token",
+                  "traits": [
+                    "TRAIT_SECRET"
+                  ]
+                }
+              },
+              {
+                "capabilities": [
+                  "CAPABILITY_SYNC",
+                  "CAPABILITY_TARGETED_SYNC",
+                  "CAPABILITY_PROVISION"
+                ],
+                "permissions": {
+                  "permissions": [
+                    {
+                      "permission": "okta.apps.read"
+                    },
+                    {
+                      "permission": "okta.apps.manage"
+                    }
+                  ]
+                },
+                "resource_type": {
+                  "annotations": [
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                      "id": "app"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                      "permissions": [
+                        {
+                          "permission": "okta.apps.read"
+                        },
+                        {
+                          "permission": "okta.apps.manage"
+                        }
+                      ]
+                    }
+                  ],
+                  "display_name": "App",
+                  "id": "app",
+                  "traits": [
+                    "TRAIT_APP"
+                  ]
+                }
+              },
+              {
+                "capabilities": [
+                  "CAPABILITY_SYNC"
+                ],
+                "opt_in_required": true,
+                "permissions": {
+                  "permissions": [
+                    {
+                      "permission": "okta.devices.read"
+                    }
+                  ]
+                },
+                "resource_type": {
+                  "annotations": [
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                      "id": "device"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                      "permissions": [
+                        {
+                          "permission": "okta.devices.read"
+                        }
+                      ]
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
+                    }
+                  ],
+                  "display_name": "Device",
+                  "id": "device",
+                  "traits": [
+                    "TRAIT_MANAGED_DEVICE"
+                  ]
+                }
+              },
+              {
+                "capabilities": [
+                  "CAPABILITY_SYNC",
+                  "CAPABILITY_TARGETED_SYNC",
+                  "CAPABILITY_PROVISION",
+                  "CAPABILITY_RESOURCE_DELETE"
+                ],
+                "permissions": {
+                  "permissions": [
+                    {
+                      "permission": "okta.groups.read"
+                    },
+                    {
+                      "permission": "okta.groups.manage"
+                    }
+                  ]
+                },
+                "resource_type": {
+                  "annotations": [
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                      "id": "group"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                      "permissions": [
+                        {
+                          "permission": "okta.groups.read"
+                        },
+                        {
+                          "permission": "okta.groups.manage"
+                        }
+                      ]
+                    }
+                  ],
+                  "display_name": "Group",
+                  "id": "group",
+                  "traits": [
+                    "TRAIT_GROUP"
+                  ]
+                }
+              },
+              {
+                "capabilities": [
+                  "CAPABILITY_SYNC",
+                  "CAPABILITY_TARGETED_SYNC",
+                  "CAPABILITY_PROVISION"
+                ],
+                "permissions": {
+                  "permissions": [
+                    {
+                      "permission": "okta.roles.read"
+                    },
+                    {
+                      "permission": "okta.roles.manage"
+                    }
+                  ]
+                },
+                "resource_type": {
+                  "annotations": [
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                      "id": "role"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                      "permissions": [
+                        {
+                          "permission": "okta.roles.read"
+                        },
+                        {
+                          "permission": "okta.roles.manage"
+                        }
+                      ]
+                    }
+                  ],
+                  "display_name": "Role",
+                  "id": "role",
+                  "traits": [
+                    "TRAIT_ROLE"
+                  ]
+                }
+              },
+              {
+                "capabilities": [
+                  "CAPABILITY_SYNC",
+                  "CAPABILITY_TARGETED_SYNC",
+                  "CAPABILITY_ACCOUNT_PROVISIONING",
+                  "CAPABILITY_RESOURCE_DELETE"
+                ],
+                "permissions": {
+                  "permissions": [
+                    {
+                      "permission": "okta.users.read"
+                    },
+                    {
+                      "permission": "okta.users.manage"
+                    }
+                  ]
+                },
+                "resource_type": {
+                  "annotations": [
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                      "id": "user"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+                    },
+                    {
+                      "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                      "permissions": [
+                        {
+                          "permission": "okta.users.read"
+                        },
+                        {
+                          "permission": "okta.users.manage"
+                        }
+                      ]
+                    }
+                  ],
+                  "display_name": "User",
+                  "id": "user",
+                  "traits": [
+                    "TRAIT_USER"
+                  ]
+                }
+              }
+            ]
+          },
+          "description": "The Okta connector syncs user, group, role, and app data from Okta",
+          "display_name": "Okta"
+        }
+      }
+    }
+  ]
+}

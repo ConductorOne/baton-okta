@@ -1,0 +1,215 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "X-Okta-Retry-Count": "1",
+        "X-Okta-Retry-For": "req-1"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/roles"
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListGrants group/00geng0000000000000g2 page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:00geng0000000000000g2:00uaa1111111111111a1"
+              }
+            ],
+            "entitlement": {
+              "id": "group:00geng0000000000000g2:member",
+              "resource": {
+                "id": {
+                  "resource": "00geng0000000000000g2",
+                  "resource_type": "group"
+                }
+              }
+            },
+            "id": "group:00geng0000000000000g2:member:user:00uaa1111111111111a1",
+            "principal": {
+              "id": {
+                "resource": "00uaa1111111111111a1",
+                "resource_type": "user"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:00geng0000000000000g2:00uaa2222222222222a2"
+              }
+            ],
+            "entitlement": {
+              "id": "group:00geng0000000000000g2:member",
+              "resource": {
+                "id": {
+                  "resource": "00geng0000000000000g2",
+                  "resource_type": "group"
+                }
+              }
+            },
+            "id": "group:00geng0000000000000g2:member:user:00uaa2222222222222a2",
+            "principal": {
+              "id": {
+                "resource": "00uaa2222222222222a2",
+                "resource_type": "user"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":[],\"current_state\":{\"type\":\"role\"}}"
+      }
+    },
+    {
+      "name": "ListGrants group/00geng0000000000000g2 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:USER_ADMIN:00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00geng0000000000000g2:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "role:USER_ADMIN:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:USER_ADMIN"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Group Administrator",
+                "id": {
+                  "resource": "USER_ADMIN",
+                  "resource_type": "role"
+                },
+                "profile": {
+                  "id": "",
+                  "label": "Group Administrator",
+                  "type": "USER_ADMIN"
+                }
+              }
+            },
+            "id": "role:USER_ADMIN:assigned:group:00geng0000000000000g2",
+            "principal": {
+              "id": {
+                "resource": "00geng0000000000000g2",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:role:ORG_ADMIN:00geng0000000000000g2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00geng0000000000000g2:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "role:ORG_ADMIN:assigned",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "role:ORG_ADMIN"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+                  }
+                ],
+                "display_name": "Organizational Administrator",
+                "id": {
+                  "resource": "ORG_ADMIN",
+                  "resource_type": "role"
+                },
+                "profile": {
+                  "id": "",
+                  "label": "Organizational Administrator",
+                  "type": "ORG_ADMIN"
+                }
+              }
+            },
+            "id": "role:ORG_ADMIN:assigned:group:00geng0000000000000g2",
+            "principal": {
+              "id": {
+                "resource": "00geng0000000000000g2",
+                "resource_type": "group"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "validate failed: okta-connector: verify failed to fetch org: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Validate"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "okta-connector: verify failed to fetch org: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "GetMetadata"
+    }
+  ]
+}

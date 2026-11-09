@@ -1,0 +1,29 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/logs",
+      "query": {
+        "filter": [
+          "len=1482 groups=11 {actor.type eq \"User\"; eventType eq \"user.authentication.sso\"; target.type eq \"AppInstance\"} | {eventType eq \"group.lifecycle.create\"; target.type eq \"UserGroup\"} | {eventType eq \"application.lifecycle.activate\"; eventType eq \"application.lifecycle.create\"; eventType eq \"application.lifecycle.update\"; target.type eq \"AppInstance\"} | {eventType eq \"application.user_membership.add\"; target.type eq \"AppInstance\"; target.type eq \"User\"} | {eventType eq \"group.application_assignment.add\"; outcome.result eq \"SUCCESS\"; target.type eq \"AppInstance\"; target.type eq \"UserGroup\"} | {eventType eq \"application.user_membership.remove\"; target.type eq \"AppInstance\"; target.type eq \"User\"} | {eventType eq \"user.account.privilege.grant\"; target.type eq \"ROLE\"; target.type eq \"User\"} | {eventType eq \"user.account.privilege.revoke\"; target.type eq \"ROLE\"; target.type eq \"User\"} | {eventType eq \"user.account.update_profile\"; eventType eq \"user.lifecycle.activate\"; eventType eq \"user.lifecycle.create\"; eventType eq \"user.lifecycle.deactivate\"; eventType eq \"user.lifecycle.reactivate\"; eventType eq \"user.lifecycle.suspend\"; eventType eq \"user.lifecycle.unsuspend\"; target.type eq \"User\"} | {eventType eq \"group.user_membership.add\"; target.type eq \"User\"; target.type eq \"UserGroup\"} | {eventType eq \"group.user_membership.remove\"; target.type eq \"User\"; target.type eq \"UserGroup\"}"
+        ],
+        "limit": [
+          "10"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: listing events failed: okta-connectorv2: failed to list system log events: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-1"
+      },
+      "name": "ListEvents error"
+    }
+  ]
+}

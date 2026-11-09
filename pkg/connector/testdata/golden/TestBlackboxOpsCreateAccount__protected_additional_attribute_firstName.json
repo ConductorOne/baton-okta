@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: additionalAttributes cannot override protected field \"firstName\""
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups",
+      "query": {
+        "limit": [
+          "1000"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/users",
+      "query": {
+        "limit": [
+          "1000"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 1",
+      "response": {
+        "next_page_token": "{\"states\":null,\"current_state\":{\"type\":\"app\",\"id\":\"group\"}}"
+      }
+    },
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00g1engineering01"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00g1engineering01:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:group:00g1engineering01",
+            "principal": {
+              "id": {
+                "resource": "00g1engineering01",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:0oa1gjh63g214q0Hq0g4:00g2sales0000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.GrantExpandable",
+                "entitlement_ids": [
+                  "group:00g2sales0000002:member"
+                ],
+                "shallow": true
+              }
+            ],
+            "entitlement": {
+              "id": "app:0oa1gjh63g214q0Hq0g4:access",
+              "resource": {
+                "display_name": "Salesforce Sandbox",
+                "id": {
+                  "resource": "0oa1gjh63g214q0Hq0g4",
+                  "resource_type": "app"
+                }
+              }
+            },
+            "id": "app:0oa1gjh63g214q0Hq0g4:access:group:00g2sales0000002",
+            "principal": {
+              "id": {
+                "resource": "00g2sales0000002",
+                "resource_type": "group"
+              }
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"type\":\"app\",\"id\":\"user\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "error: listing grants for resource app/0oa1gjh63g214q0Hq0g4 failed: okta-connectorv2: failed to fetch app users from okta: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 3"
+    }
+  ]
+}

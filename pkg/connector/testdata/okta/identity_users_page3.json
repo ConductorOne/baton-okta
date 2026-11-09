@@ -1,0 +1,50 @@
+[
+  {
+    "id": "00uaa7777777777777a7",
+    "status": "SUSPENDED",
+    "created": "2019-03-11T18:02:41.000Z",
+    "activated": "2019-03-11T18:03:00.000Z",
+    "statusChanged": "2020-01-05T09:00:00.000Z",
+    "lastLogin": "2024-05-02T14:11:09.000Z",
+    "lastUpdated": "2024-05-02T14:11:09.000Z",
+    "passwordChanged": "2023-01-05T09:00:00.000Z",
+    "type": {
+      "id": "otyfnjfba4ye7pgjB0g4"
+    },
+    "profile": {
+      "firstName": "Gus",
+      "lastName": "Garcia",
+      "email": "gus@acme.com",
+      "login": "gus@acme.com"
+    },
+    "_links": {
+      "self": {
+        "href": "https://example.okta.com/api/v1/users/00uaa7777777777777a7"
+      }
+    }
+  },
+  {
+    "id": "00uaa8888888888888a8",
+    "status": "PASSWORD_EXPIRED",
+    "created": "2019-03-11T18:02:41.000Z",
+    "activated": "2019-03-11T18:03:00.000Z",
+    "statusChanged": "2020-01-05T09:00:00.000Z",
+    "lastLogin": "2024-05-02T14:11:09.000Z",
+    "lastUpdated": "2024-05-02T14:11:09.000Z",
+    "passwordChanged": "2023-01-05T09:00:00.000Z",
+    "type": {
+      "id": "otyfnjfba4ye7pgjB0g4"
+    },
+    "profile": {
+      "firstName": "Hana",
+      "lastName": "Ito",
+      "email": "hana@acme.com",
+      "login": "hana@acme.com"
+    },
+    "_links": {
+      "self": {
+        "href": "https://example.okta.com/api/v1/users/00uaa8888888888888a8"
+      }
+    }
+  }
+]

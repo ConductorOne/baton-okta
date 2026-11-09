@@ -238,13 +238,13 @@ func isResourceNonceChallenge(resp *http.Response, body []byte) bool {
 	return jsonErrorCode(body) == useDPoPNonceErrorCode
 }
 
-// annotateEmptyDPoPError gives an empty-bodied DPoP rejection a body the Okta SDK
-// can decode. Okta answers a bad proof with a 400, an empty body, and the reason
-// in a DPoP-scheme WWW-Authenticate; the SDK's CheckResponseForError reads that
+// annotateEmptyDPoPError gives an empty-bodied DPoP rejection a body the Okta
+// client can decode. Okta answers a bad proof with a 400, an empty body, and the
+// reason in a DPoP-scheme WWW-Authenticate; okta.CheckResponseForError reads that
 // header only for 401/403 responses whose scheme is Bearer, then discards the
 // decode failure on the empty body and yields a zero-valued error rendering as
-// "the API returned an unknown error". Restating the header as the JSON the SDK
-// expects turns that back into the reason Okta actually gave.
+// "the API returned an unknown error". Restating the header as the JSON the
+// client expects turns that back into the reason Okta actually gave.
 func annotateEmptyDPoPError(resp *http.Response, body []byte) {
 	// Guard the status range here rather than relying on the caller: body is only
 	// populated for client errors, so outside that range an empty body argument
@@ -282,7 +282,7 @@ func annotateEmptyDPoPError(resp *http.Response, body []byte) {
 }
 
 // logDPoPFailure reports a DPoP-related client error while the detail is still
-// visible, since the SDK is about to discard the WWW-Authenticate header. Warn per
+// visible, since the Okta client is about to discard the WWW-Authenticate header. Warn per
 // the upstream-4xx convention, but logarithmically sampled: a generic
 // invalid_dpop_proof is deliberately not retried, so a skewed clock would
 // otherwise emit one line per request for a whole sync.

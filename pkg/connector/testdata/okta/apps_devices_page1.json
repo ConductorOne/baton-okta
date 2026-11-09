@@ -1,0 +1,77 @@
+[
+  {
+    "id": "guo1macbook0000001",
+    "status": "ACTIVE",
+    "created": "2025-02-01T00:00:00.000Z",
+    "lastUpdated": "2025-04-01T00:00:00.000Z",
+    "profile": {
+      "displayName": "Alice's MacBook Pro",
+      "platform": "MACOS",
+      "manufacturer": "Apple",
+      "model": "MacBook Pro 16",
+      "osVersion": "14.5",
+      "registered": true,
+      "secureHardwarePresent": true,
+      "diskEncryptionType": "ALL_INTERNAL_VOLUMES",
+      "serialNumber": "C02XYZ123ABC",
+      "udid": "A1B2C3D4-0000-1111-2222-333344445555"
+    },
+    "resourceType": "UDDevice",
+    "resourceDisplayName": {
+      "value": "Alice's MacBook Pro",
+      "sensitive": false
+    },
+    "resourceAlternateId": null,
+    "resourceId": "guo1macbook0000001",
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/devices/guo1macbook0000001",
+        "hints": {
+          "allow": [
+            "GET"
+          ]
+        }
+      },
+      "users": {
+        "href": "https://okta.test/api/v1/devices/guo1macbook0000001/users"
+      }
+    }
+  },
+  {
+    "id": "guo2thinkpad0000002",
+    "status": "ACTIVE",
+    "created": "2025-02-01T00:00:00.000Z",
+    "lastUpdated": "2025-04-01T00:00:00.000Z",
+    "profile": {
+      "displayName": "BOB-THINKPAD",
+      "platform": "WINDOWS",
+      "manufacturer": "Generic",
+      "model": "ThinkPad X1",
+      "osVersion": "11.0.22631",
+      "registered": true,
+      "secureHardwarePresent": true,
+      "diskEncryptionType": "ALL_INTERNAL_VOLUMES",
+      "serialNumber": "PF3ABC12"
+    },
+    "resourceType": "UDDevice",
+    "resourceDisplayName": {
+      "value": "BOB-THINKPAD",
+      "sensitive": false
+    },
+    "resourceAlternateId": null,
+    "resourceId": "guo2thinkpad0000002",
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/devices/guo2thinkpad0000002",
+        "hints": {
+          "allow": [
+            "GET"
+          ]
+        }
+      },
+      "users": {
+        "href": "https://okta.test/api/v1/devices/guo2thinkpad0000002/users"
+      }
+    }
+  }
+]

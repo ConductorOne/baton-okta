@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: invalid value for create_inactive: strconv.ParseBool: parsing \"maybe\": invalid syntax"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

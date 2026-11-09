@@ -1,0 +1,9 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "name": "ListResources api-token page 1",
+      "response": {}
+    }
+  ]
+}

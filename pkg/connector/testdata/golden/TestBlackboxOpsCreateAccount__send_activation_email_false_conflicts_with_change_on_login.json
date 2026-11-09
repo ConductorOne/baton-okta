@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: create account failed: okta-connectorv2: send_activation_email=false cannot be combined with password_change_on_login_required=true"
+      },
+      "name": "CreateAccount"
+    }
+  ]
+}

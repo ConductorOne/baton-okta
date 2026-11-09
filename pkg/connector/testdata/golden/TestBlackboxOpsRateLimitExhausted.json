@@ -1,0 +1,44 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00url"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\"",
+        "X-Okta-Retry-Count": "1",
+        "X-Okta-Retry-For": "req-1"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00url"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\"",
+        "X-Okta-Retry-Count": "1",
+        "X-Okta-Retry-For": "req-1"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00url"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "error: get resource failed: okta-connectorv2: failed to find user: okta-connectorv2: failed to get user: rpc error: code = Unavailable desc = 429 Too Many Requests\ntoo many requests"
+      },
+      "name": "GetResource with endless 429s"
+    }
+  ]
+}

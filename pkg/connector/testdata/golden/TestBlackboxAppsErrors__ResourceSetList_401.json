@@ -1,0 +1,26 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "limit": [
+          "1000"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unauthenticated",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list resource-sets: okta-connectorv2: request failed: rpc error: code = Unauthenticated desc = Invalid token provided\nthe API returned an error: Invalid token provided"
+      },
+      "name": "ListResources resource-set page 1"
+    }
+  ]
+}

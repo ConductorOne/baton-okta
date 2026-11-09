@@ -1,0 +1,36 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "validate failed: okta-connector: verify failed to fetch org: rpc error: code = NotFound desc = Not found: Resource not found: org (Org)\nthe API returned an error: Not found: Resource not found: org (Org)"
+      },
+      "name": "Validate"
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "okta-connector: verify failed to fetch org: rpc error: code = NotFound desc = Not found: Resource not found: org (Org)\nthe API returned an error: Not found: Resource not found: org (Org)"
+      },
+      "name": "GetMetadata"
+    }
+  ]
+}

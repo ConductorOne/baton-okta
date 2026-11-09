@@ -1,0 +1,27 @@
+{
+  "id": "00uaa1111111111111a1",
+  "status": "ACTIVE",
+  "created": "2019-03-11T18:02:41.000Z",
+  "activated": "2019-03-11T18:03:00.000Z",
+  "statusChanged": "2020-01-05T09:00:00.000Z",
+  "lastLogin": "2024-05-02T14:11:09.000Z",
+  "lastUpdated": "2024-05-02T14:11:09.000Z",
+  "passwordChanged": "2023-01-05T09:00:00.000Z",
+  "type": {
+    "id": "otyfnjfba4ye7pgjB0g4"
+  },
+  "profile": {
+    "firstName": "Alice",
+    "lastName": "Anderson",
+    "email": "alice@acme.com",
+    "login": "alice@acme.com",
+    "secondEmail": "alice.a@gmail.com",
+    "employeeNumber": "E-1001",
+    "displayName": "Alice Anderson (Eng)"
+  },
+  "_links": {
+    "self": {
+      "href": "https://example.okta.com/api/v1/users/00uaa1111111111111a1"
+    }
+  }
+}

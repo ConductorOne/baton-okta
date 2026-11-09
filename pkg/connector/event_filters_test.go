@@ -4,16 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
+	oktaSDK "github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
-	oktaSDK "github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -21,7 +22,7 @@ import (
 func logEvent(eventType string, targets ...*oktaSDK.LogTarget) *oktaSDK.LogEvent {
 	published := time.Date(2026, time.August, 25, 12, 0, 0, 0, time.UTC)
 	return &oktaSDK.LogEvent{
-		Uuid:      "00000000-0000-4000-8000-000000000001",
+		UUID:      "00000000-0000-4000-8000-000000000001",
 		EventType: eventType,
 		Published: &published,
 		Actor:     &oktaSDK.LogActor{Type: oktaLogTargetTypeUser, Id: "actor1"},
@@ -85,7 +86,7 @@ func TestRevokeFilters(t *testing.T) {
 
 			rv, err := tt.filter.Handle(zap.NewNop(), tt.event)
 			require.NoError(t, err)
-			require.Equal(t, tt.event.Uuid, rv.Id)
+			require.Equal(t, tt.event.UUID, rv.Id)
 
 			revoke := rv.GetCreateRevokeEvent()
 			require.NotNil(t, revoke, "must be a revoke event, not a resource change")
@@ -176,7 +177,7 @@ func TestApplicationLifecycleFilterEventTypes(t *testing.T) {
 	}
 
 	require.False(t, types.Contains("app.lifecycle.create"), "app.lifecycle.* is not a real Okta namespace")
-	// Both leave the targeted sync with no resource to write, so the SDK records a
+	// Both leave the targeted sync with no resource to write, so baton-sdk records a
 	// task failure and the stale resource survives regardless.
 	require.False(t, types.Contains("application.lifecycle.delete"))
 	require.False(t, types.Contains("application.lifecycle.deactivate"))
@@ -225,7 +226,7 @@ func TestApplicationMembershipRevokeFilterAppUserTarget(t *testing.T) {
 
 		rv, err := ApplicationMembershipRevokeFilter.Handle(zap.NewNop(), event)
 		require.NoError(t, err)
-		require.Equal(t, event.Uuid, rv.Id)
+		require.Equal(t, event.UUID, rv.Id)
 
 		revoke := rv.GetCreateRevokeEvent()
 		require.NotNil(t, revoke)
@@ -307,7 +308,7 @@ func TestRoleMembershipFilterDiscriminatesAssignment(t *testing.T) {
 
 		rv, err := RoleMembershipFilter.Handle(zap.NewNop(), event)
 		require.NoError(t, err, "event %d", i)
-		require.Equal(t, event.Uuid, rv.Id)
+		require.Equal(t, event.UUID, rv.Id)
 
 		if want[i].isGrant {
 			grant := rv.GetCreateGrantEvent()
@@ -496,13 +497,13 @@ func listEventsCapturingFilter(t *testing.T, c *Okta, body string) ([]*v2.Event,
 		writeOktaTestResponse(w, http.StatusOK, body)
 	}))
 	t.Cleanup(server.Close)
-	_, client, err := oktaSDK.NewClient(t.Context(),
-		oktaSDK.WithOrgUrl(server.URL),
-		oktaSDK.WithToken("test-token"),
-		oktaSDK.WithHttpClientPtr(server.Client()),
-		oktaSDK.WithTestingDisableHttpsCheck(true),
-		oktaSDK.WithCache(false),
-	)
+	orgURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
+	client, err := oktaSDK.NewClient(oktaSDK.Config{
+		OrgURL:     orgURL,
+		APIToken:   "test-token",
+		HTTPClient: server.Client(),
+	})
 	require.NoError(t, err)
 	c.client = client
 	events, _, _, err := c.ListEvents(t.Context(), nil, &pagination.StreamToken{Size: 100})

@@ -1,0 +1,500 @@
+{
+  "requests": [
+    {
+      "body": {
+        "profile": {
+          "costCenter": null,
+          "department": "Platform",
+          "flag": true,
+          "level": 3,
+          "tags": [
+            "a",
+            "b"
+          ],
+          "title": "Staff Engineer"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uone"
+    },
+    {
+      "body": {
+        "profile": {
+          "city": "Denver"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uone"
+    },
+    {
+      "body": {
+        "profile": {
+          "title": "x"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ugone"
+    },
+    {
+      "body": {
+        "profile": {
+          "login": "dup@example.com"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ubad"
+    },
+    {
+      "body": {
+        "profile": {
+          "title": "x"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uforbid"
+    },
+    {
+      "body": {
+        "profile": {
+          "firstName": "Grace",
+          "lastName": "Hopper",
+          "managerId": "00uboss",
+          "title": "Rear Admiral"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uone"
+    },
+    {
+      "body": {
+        "profile": {
+          "middleName": ""
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uone"
+    },
+    {
+      "body": {
+        "profile": {
+          "badge": 7,
+          "nickName": "Gracie",
+          "roles": [
+            "x",
+            "y"
+          ]
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uone"
+    },
+    {
+      "body": {
+        "profile": {
+          "title": "x"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ugone"
+    },
+    {
+      "body": {
+        "profile": {
+          "login": "dup@example.com"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ubad"
+    },
+    {
+      "body": {
+        "profile": {
+          "title": "x"
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uforbid"
+    }
+  ],
+  "steps": [
+    {
+      "name": "update_user JSON string profile",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "success": true,
+          "updated_fields": "costCenter, department, flag, level, tags, title"
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "update_user struct profile",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "success": true,
+          "updated_fields": "city"
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "update_user invalid JSON",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user: invalid user_profile JSON: invalid character 'n' looking for beginning of object key string"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user empty profile",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user: no profile fields provided to update"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user nested object rejected",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: profile field \"address\" has unsupported type map[string]interface {}"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user mixed array rejected",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: profile field \"tags\" array elements must be strings, got float64"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user missing profile",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user: user_profile is required"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user missing user_id",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user: required argument user_id is missing or invalid"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user 404",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "okta-connectorv2: failed to update user profile: rpc error: code = NotFound desc = Not found: Resource not found: 00ugone (User)\nthe API returned an error: Not found: Resource not found: 00ugone (User)"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user 400 E0000001",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "okta-connectorv2: failed to update user profile: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: login. Causes: errorSummary: login: An object with this field already exists in the current organization"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_user 403",
+      "response": {
+        "name": "update_user",
+        "response": {
+          "error": "okta-connectorv2: failed to update user profile: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile named fields",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "success": true,
+          "updated_user": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uone"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uone"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "accountType": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "00uone@example.com",
+                    "isPrimary": true
+                  }
+                ],
+                "login": "00uone@example.com",
+                "loginAliases": [
+                  "00uone"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "displayName": "Ops User",
+            "resourceId": {
+              "resourceId": "00uone",
+              "resourceTypeId": "user"
+            }
+          }
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "update_profile empty string is forwarded",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "success": true,
+          "updated_user": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uone"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uone"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "accountType": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "00uone@example.com",
+                    "isPrimary": true
+                  }
+                ],
+                "login": "00uone@example.com",
+                "loginAliases": [
+                  "00uone"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "displayName": "Ops User",
+            "resourceId": {
+              "resourceId": "00uone",
+              "resourceTypeId": "user"
+            }
+          }
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "update_profile additionalAttributes",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "success": true,
+          "updated_user": {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uone"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uone"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "accountType": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "00uone@example.com",
+                    "isPrimary": true
+                  }
+                ],
+                "login": "00uone@example.com",
+                "loginAliases": [
+                  "00uone"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "displayName": "Ops User",
+            "resourceId": {
+              "resourceId": "00uone",
+              "resourceTypeId": "user"
+            }
+          }
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "update_profile additionalAttributes cannot override named",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user-profile: additionalAttributes cannot override named field \"firstName\""
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile additionalAttributes nested rejected",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: profile field \"bad\" has unsupported type map[string]interface {}"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile non-string named field",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user-profile: title must be a string, got float64"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile no fields",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: update-user-profile: no profile fields provided to update"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile wrong resource type",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: expected resource type \"user\", got \"group\""
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile 404",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "okta-connectorv2: failed to update user profile: rpc error: code = NotFound desc = Not found: Resource not found: 00ugone (User)\nthe API returned an error: Not found: Resource not found: 00ugone (User)"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile 400 E0000001",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "okta-connectorv2: failed to update user profile: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: login. Causes: errorSummary: login: An object with this field already exists in the current organization"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "update_profile 403",
+      "response": {
+        "name": "update_profile",
+        "response": {
+          "error": "okta-connectorv2: failed to update user profile: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    }
+  ]
+}

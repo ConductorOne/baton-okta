@@ -1,0 +1,308 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "limit": [
+          "2"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "2"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "after": [
+          "cursor2"
+        ],
+        "limit": [
+          "2"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources user page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uaa1111111111111a1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uaa1111111111111a1"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "alice@acme.com",
+                    "is_primary": true
+                  },
+                  {
+                    "address": "alice.a@gmail.com"
+                  }
+                ],
+                "employee_ids": [
+                  "E-1001"
+                ],
+                "last_login": "2024-05-02T14:11:09Z",
+                "login": "alice@acme.com",
+                "login_aliases": [
+                  "alice"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2019-03-11T18:02:41Z",
+            "display_name": "Alice Anderson (Eng)",
+            "id": {
+              "resource": "00uaa1111111111111a1",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "ACTIVE",
+              "displayName": "Alice Anderson (Eng)",
+              "email": "alice@acme.com",
+              "employeeNumber": "E-1001",
+              "firstName": "Alice",
+              "lastName": "Anderson",
+              "login": "alice@acme.com",
+              "secondEmail": "alice.a@gmail.com"
+            },
+            "status": {
+              "details": "ACTIVE",
+              "status": "RESOURCE_STATUS_ENABLED"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uaa2222222222222a2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uaa2222222222222a2"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "bob@acme.com",
+                    "is_primary": true
+                  }
+                ],
+                "employee_ids": [
+                  "E-1002"
+                ],
+                "login": "bbaker",
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2019-03-11T18:02:41Z",
+            "display_name": "Bob Baker",
+            "id": {
+              "resource": "00uaa2222222222222a2",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "PROVISIONED",
+              "email": "bob@acme.com",
+              "employeeId": "E-1002",
+              "firstName": "Bob",
+              "lastName": "Baker",
+              "login": "bbaker"
+            },
+            "status": {
+              "details": "PROVISIONED",
+              "status": "RESOURCE_STATUS_ENABLED"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"user\"}}"
+      }
+    },
+    {
+      "name": "ListResources user page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor2\",\"type\":\"user\"}}"
+      }
+    },
+    {
+      "name": "ListResources user page 3",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uaa7777777777777a7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uaa7777777777777a7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "gus@acme.com",
+                    "is_primary": true
+                  }
+                ],
+                "last_login": "2024-05-02T14:11:09Z",
+                "login": "gus@acme.com",
+                "login_aliases": [
+                  "gus"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2019-03-11T18:02:41Z",
+            "display_name": "Gus Garcia",
+            "id": {
+              "resource": "00uaa7777777777777a7",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "SUSPENDED",
+              "email": "gus@acme.com",
+              "firstName": "Gus",
+              "lastName": "Garcia",
+              "login": "gus@acme.com"
+            },
+            "status": {
+              "details": "SUSPENDED",
+              "status": "RESOURCE_STATUS_DISABLED"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "00uaa8888888888888a8"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "00uaa8888888888888a8"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.UserTrait",
+                "account_type": "ACCOUNT_TYPE_HUMAN",
+                "emails": [
+                  {
+                    "address": "hana@acme.com",
+                    "is_primary": true
+                  }
+                ],
+                "last_login": "2024-05-02T14:11:09Z",
+                "login": "hana@acme.com",
+                "login_aliases": [
+                  "hana"
+                ],
+                "status": {
+                  "status": "STATUS_ENABLED"
+                }
+              }
+            ],
+            "created_at": "2019-03-11T18:02:41Z",
+            "display_name": "Hana Ito",
+            "id": {
+              "resource": "00uaa8888888888888a8",
+              "resource_type": "user"
+            },
+            "profile": {
+              "c1_okta_raw_user_status": "PASSWORD_EXPIRED",
+              "email": "hana@acme.com",
+              "firstName": "Hana",
+              "lastName": "Ito",
+              "login": "hana@acme.com"
+            },
+            "status": {
+              "details": "PASSWORD_EXPIRED",
+              "status": "RESOURCE_STATUS_ENABLED"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

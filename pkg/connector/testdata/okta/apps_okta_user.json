@@ -1,0 +1,32 @@
+{
+  "id": "00u5erin000000005",
+  "status": "ACTIVE",
+  "created": "2025-01-01T00:00:00.000Z",
+  "activated": null,
+  "statusChanged": null,
+  "lastLogin": null,
+  "lastUpdated": "2025-01-01T00:00:00.000Z",
+  "passwordChanged": null,
+  "type": {
+    "id": "oty1abc"
+  },
+  "profile": {
+    "firstName": "Erin",
+    "lastName": "Park",
+    "email": "erin@example.com",
+    "login": "erin@example.com",
+    "mobilePhone": null,
+    "secondEmail": null
+  },
+  "credentials": {
+    "provider": {
+      "type": "OKTA",
+      "name": "OKTA"
+    }
+  },
+  "_links": {
+    "self": {
+      "href": "https://okta.test/api/v1/users/00u5erin000000005"
+    }
+  }
+}

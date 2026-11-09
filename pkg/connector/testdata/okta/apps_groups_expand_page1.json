@@ -1,0 +1,78 @@
+[
+  {
+    "id": "00g1engineering01",
+    "lastUpdated": "2025-02-01T10:00:00.000Z",
+    "priority": 0,
+    "profile": {},
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups/00g1engineering01"
+      },
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "group": {
+        "href": "https://okta.test/api/v1/groups/00g1engineering01"
+      }
+    },
+    "_embedded": {
+      "group": {
+        "id": "00g1engineering01",
+        "created": "2024-10-01T00:00:00.000Z",
+        "lastUpdated": "2024-10-01T00:00:00.000Z",
+        "lastMembershipUpdated": "2025-01-05T00:00:00.000Z",
+        "objectClass": [
+          "okta:user_group"
+        ],
+        "type": "OKTA_GROUP",
+        "profile": {
+          "name": "Engineering",
+          "description": ""
+        },
+        "_links": {
+          "self": {
+            "href": "https://okta.test/api/v1/groups/00g1engineering01"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "00g9appgrp000009",
+    "lastUpdated": "2025-02-01T10:00:00.000Z",
+    "priority": 1,
+    "profile": {},
+    "_links": {
+      "self": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups/00g9appgrp000009"
+      },
+      "app": {
+        "href": "https://okta.test/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+      },
+      "group": {
+        "href": "https://okta.test/api/v1/groups/00g9appgrp000009"
+      }
+    },
+    "_embedded": {
+      "group": {
+        "id": "00g9appgrp000009",
+        "created": "2024-10-01T00:00:00.000Z",
+        "lastUpdated": "2024-10-01T00:00:00.000Z",
+        "lastMembershipUpdated": "2025-01-05T00:00:00.000Z",
+        "objectClass": [
+          "okta:user_group"
+        ],
+        "type": "APP_GROUP",
+        "profile": {
+          "name": "Salesforce Sandbox Admins",
+          "description": ""
+        },
+        "_links": {
+          "self": {
+            "href": "https://okta.test/api/v1/groups/00g9appgrp000009"
+          }
+        }
+      }
+    }
+  }
+]

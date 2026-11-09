@@ -1,0 +1,19 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unimplemented",
+        "message": "rpc error: code = Unimplemented desc = resource type custom-role does not have provisioner configured"
+      },
+      "name": "Grant custom role user"
+    },
+    {
+      "error": {
+        "code": "Unimplemented",
+        "message": "rpc error: code = Unimplemented desc = resource type custom-role does not have provisioner configured"
+      },
+      "name": "Revoke custom role user"
+    }
+  ]
+}

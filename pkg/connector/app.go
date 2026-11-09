@@ -2,12 +2,12 @@ package connector
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -15,8 +15,6 @@ import (
 	sdkGrant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 )
 
@@ -405,12 +403,12 @@ func (o *appResourceType) listAppUsersGrants(
 	return rv, annos, bag, nil
 }
 
-func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, token *pagination.Token, qp *query.Params) ([]*okta.Application, *responseContext, error) {
+func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, token *pagination.Token, qp *okta.QueryParams) ([]*okta.Application, *responseContext, error) {
 	if !syncInactiveApps {
 		qp.Filter = "status eq \"ACTIVE\""
 	}
 
-	apps, resp, err := client.Application.ListApplications(ctx, qp)
+	apps, resp, err := client.ListApplications(ctx, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch apps from okta: %w", handleOktaResponseError(resp, err))
 	}
@@ -420,16 +418,17 @@ func listApps(ctx context.Context, client *okta.Client, syncInactiveApps bool, t
 		return nil, nil, err
 	}
 
-	applications, err := oktaAppsToOktaApplications(apps)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta apps to applications: %w", err)
-	}
-
-	return applications, reqCtx, nil
+	return apps, reqCtx, nil
 }
 
-func listApplicationGroupAssignments(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *query.Params) ([]*okta.ApplicationGroupAssignment, *responseContext, error) {
-	applicationGroupAssignments, resp, err := client.Application.ListApplicationGroupAssignments(ctx, appID, qp)
+func listApplicationGroupAssignments(
+	ctx context.Context,
+	client *okta.Client,
+	appID string,
+	token *pagination.Token,
+	qp *okta.QueryParams,
+) ([]*okta.ApplicationGroupAssignment, *responseContext, error) {
+	applicationGroupAssignments, resp, err := client.ListApplicationGroupAssignments(ctx, appID, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app group assignments from okta: %w", handleOktaResponseError(resp, err))
 	}
@@ -442,8 +441,8 @@ func listApplicationGroupAssignments(ctx context.Context, client *okta.Client, a
 	return applicationGroupAssignments, reqCtx, nil
 }
 
-func listApplicationUsers(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *query.Params) ([]*okta.AppUser, *responseContext, error) {
-	applicationUsers, resp, err := client.Application.ListApplicationUsers(ctx, appID, qp)
+func listApplicationUsers(ctx context.Context, client *okta.Client, appID string, token *pagination.Token, qp *okta.QueryParams) ([]*okta.AppUser, *responseContext, error) {
+	applicationUsers, resp, err := client.ListApplicationUsers(ctx, appID, qp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app users from okta: %w", handleOktaResponseError(resp, err))
 	}
@@ -456,45 +455,10 @@ func listApplicationUsers(ctx context.Context, client *okta.Client, appID string
 	return applicationUsers, reqCtx, nil
 }
 
-func oktaAppsToOktaApplications(apps []okta.App) ([]*okta.Application, error) {
-	var applications []*okta.Application
-	for _, iapp := range apps {
-		var oktaApp okta.Application
-
-		b, err := json.Marshal(iapp)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: error marshalling okta app: %w", err)
-		}
-		err = json.Unmarshal(b, &oktaApp)
-		if err != nil {
-			return nil, fmt.Errorf("okta-connectorv2: error unmarshalling okta app: %w", err)
-		}
-
-		applications = append(applications, &oktaApp)
-	}
-
-	return applications, nil
-}
-
-func oktaAppToOktaApplication(app okta.App) (*okta.Application, error) {
-	var oktaApp okta.Application
-	b, err := json.Marshal(app)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: error marshalling okta app: %w", err)
-	}
-	err = json.Unmarshal(b, &oktaApp)
-	if err != nil {
-		return nil, fmt.Errorf("okta-connectorv2: error unmarshalling okta app: %w", err)
-	}
-	return &oktaApp, nil
-}
-
 // nhiExcludedSignOnModes are the Okta app sign-on modes that are not non-human
 // identity app-registrations: BOOKMARK apps are link launchers and the SWA
 // family are human-facing password-fill apps, neither of which holds machine
-// credentials. Values match the okta-sdk-golang/v2 app constructors
-// (bookmarkApplication.go, swaApplication.go, autoLoginApplication.go,
-// basicAuthApplication.go, securePasswordStoreApplication.go).
+// credentials. Values are Okta's signOnMode for those app types.
 var nhiExcludedSignOnModes = map[string]struct{}{
 	"BOOKMARK":              {},
 	"BROWSER_PLUGIN":        {},
@@ -550,7 +514,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
-		appUser, response, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		appUser, response, err := g.client.GetApplicationUser(ctx, appID, userID)
 		if err != nil {
 			if response == nil {
 				l.Warn("okta-connector: failed to fetch application user, nil response",
@@ -588,7 +552,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			return annos, nil
 		}
 
-		user, userResp, err := g.client.User.GetUser(ctx, userID)
+		user, userResp, err := g.client.GetUser(ctx, userID)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: failed to get user: %w", handleOktaResponseError(userResp, err))
 		}
@@ -607,7 +571,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 			Id:    userID,
 			Scope: strings.ToUpper(principal.Id.ResourceType),
 		}
-		assignedUser, assignResp, err := g.client.Application.AssignUserToApplication(ctx, appID, payload)
+		assignedUser, assignResp, err := g.client.AssignUserToApplication(ctx, appID, payload)
 		if err != nil {
 			l.Warn(
 				"okta-connector: The app specified cannot be assigned to the user",
@@ -626,7 +590,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		return rateLimitAnnotations(assignResp), nil
 	case resourceTypeGroup.Id:
 		groupID := principal.Id.Resource
-		appGroup, response, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		appGroup, response, err := g.client.GetApplicationGroupAssignment(ctx, appID, groupID)
 		if err != nil {
 			if response == nil {
 				l.Warn("okta-connector: failed to fetch application group assignment, nil response",
@@ -665,7 +629,7 @@ func (g *appResourceType) Grant(ctx context.Context, principal *v2.Resource, ent
 		}
 
 		payload := okta.ApplicationGroupAssignment{}
-		assignedGroup, createResp, err := g.client.Application.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
+		assignedGroup, createResp, err := g.client.CreateApplicationGroupAssignment(ctx, appID, groupID, payload)
 		if err != nil {
 			return nil, fmt.Errorf("okta-connector: the app specified cannot be assigned to the group: %w", handleOktaResponseError(createResp, err))
 		}
@@ -697,14 +661,14 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 	switch principal.Id.ResourceType {
 	case resourceTypeUser.Id:
 		userID := principal.Id.Resource
-		_, resp, err := g.client.Application.GetApplicationUser(ctx, appID, userID, nil)
+		_, resp, err := g.client.GetApplicationUser(ctx, appID, userID)
 		if err != nil {
 			return revokeNotFoundOrError(ctx, principal, resp, err,
 				"okta-connector: revoke: user does not have app membership",
 				"failed to look up user app membership")
 		}
 
-		response, err := g.client.Application.DeleteApplicationUser(ctx, appID, userID, nil)
+		response, err := g.client.DeleteApplicationUser(ctx, appID, userID)
 		if err != nil {
 			return revokeNotFoundOrError(ctx, principal, response, err,
 				"okta-connector: revoke: user app membership already removed",
@@ -719,14 +683,14 @@ func (g *appResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotati
 		return rateLimitAnnotations(response), nil
 	case resourceTypeGroup.Id:
 		groupID := principal.Id.Resource
-		_, groupResp, err := g.client.Application.GetApplicationGroupAssignment(ctx, appID, groupID, nil)
+		_, groupResp, err := g.client.GetApplicationGroupAssignment(ctx, appID, groupID)
 		if err != nil {
 			return revokeNotFoundOrError(ctx, principal, groupResp, err,
 				"okta-connector: revoke: group does not have app membership",
 				"failed to look up group app membership")
 		}
 
-		response, err := g.client.Application.DeleteApplicationGroupAssignment(ctx, appID, groupID)
+		response, err := g.client.DeleteApplicationGroupAssignment(ctx, appID, groupID)
 		if err != nil {
 			return revokeNotFoundOrError(ctx, principal, response, err,
 				"okta-connector: revoke: group app membership already removed",
@@ -773,17 +737,15 @@ func (o *appResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, pa
 }
 
 func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Application, *responseContext, error) {
-	app, resp, err := client.Application.GetApplication(ctx, appID, okta.NewApplication(), nil)
+	app, resp, err := client.GetApplication(ctx, appID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseError(resp, err))
 	}
-
-	reqCtx := &responseContext{OktaResponse: resp}
-
-	oktaApp, err := oktaAppToOktaApplication(app)
-	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: error converting okta app to application: %w", err)
+	if app == nil {
+		// A 200 with an empty or null body has always produced an empty
+		// application here rather than a nil one.
+		app = &okta.Application{}
 	}
 
-	return oktaApp, reqCtx, nil
+	return app, &responseContext{OktaResponse: resp}, nil
 }

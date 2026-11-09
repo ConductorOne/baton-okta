@@ -1,0 +1,21 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/api-tokens"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: listing resources failed: okta-connector-v5: failed to list api tokens: 500 Internal Server Error"
+      },
+      "name": "ListResources api-token page 1"
+    }
+  ]
+}

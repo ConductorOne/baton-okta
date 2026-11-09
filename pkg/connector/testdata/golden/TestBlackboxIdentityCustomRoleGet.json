@@ -1,0 +1,64 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles/cr0support000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles/cr0missing"
+    }
+  ],
+  "steps": [
+    {
+      "name": "GetResource custom-role/cr0support000000000001",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+              "id": "role:cr0support000000000001"
+            },
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+            }
+          ],
+          "display_name": "Support Triage",
+          "id": {
+            "resource": "cr0support000000000001",
+            "resource_type": "custom-role"
+          },
+          "profile": {
+            "id": "cr0support000000000001",
+            "label": "Support Triage",
+            "type": ""
+          }
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "error: get resource failed: okta-connectorv2: failed to get custom role: rpc error: code = NotFound desc = Not found: Resource not found: /api/v1/iam/roles/cr0missing (GET)\nthe API returned an error: Not found: Resource not found: /api/v1/iam/roles/cr0missing (GET)"
+      },
+      "name": "GetResource custom-role/cr0missing"
+    }
+  ]
+}

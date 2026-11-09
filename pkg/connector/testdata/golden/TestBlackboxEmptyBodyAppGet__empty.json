@@ -1,0 +1,21 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "rpc error: code = NotFound desc = error: get resource returned nil"
+      },
+      "name": "GetResource app"
+    }
+  ]
+}

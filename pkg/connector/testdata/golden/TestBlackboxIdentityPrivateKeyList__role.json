@@ -1,0 +1,222 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "name": "ListResources role page 1",
+      "response": {
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:API_ACCESS_MANAGEMENT_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "API Access Management Administrator",
+            "id": {
+              "resource": "API_ACCESS_MANAGEMENT_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "API Access Management Administrator",
+              "type": "API_ACCESS_MANAGEMENT_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:MOBILE_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Mobile Administrator",
+            "id": {
+              "resource": "MOBILE_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Mobile Administrator",
+              "type": "MOBILE_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:ORG_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Organizational Administrator",
+            "id": {
+              "resource": "ORG_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Organizational Administrator",
+              "type": "ORG_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:READ_ONLY_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Read-Only Administrator",
+            "id": {
+              "resource": "READ_ONLY_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Read-Only Administrator",
+              "type": "READ_ONLY_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:REPORT_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Report Administrator",
+            "id": {
+              "resource": "REPORT_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Report Administrator",
+              "type": "REPORT_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:SUPER_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Super Administrator",
+            "id": {
+              "resource": "SUPER_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Super Administrator",
+              "type": "SUPER_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:USER_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Group Administrator",
+            "id": {
+              "resource": "USER_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Group Administrator",
+              "type": "USER_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:HELP_DESK_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Help Desk Administrator",
+            "id": {
+              "resource": "HELP_DESK_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Help Desk Administrator",
+              "type": "HELP_DESK_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:APP_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Application Administrator",
+            "id": {
+              "resource": "APP_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Application Administrator",
+              "type": "APP_ADMIN"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:GROUP_MEMBERSHIP_ADMIN"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Group Membership Administrator",
+            "id": {
+              "resource": "GROUP_MEMBERSHIP_ADMIN",
+              "resource_type": "role"
+            },
+            "profile": {
+              "id": "",
+              "label": "Group Membership Administrator",
+              "type": "GROUP_MEMBERSHIP_ADMIN"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

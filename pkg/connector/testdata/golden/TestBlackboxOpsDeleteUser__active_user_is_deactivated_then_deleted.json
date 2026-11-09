@@ -1,0 +1,58 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uactive/lifecycle/deactivate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00uactive"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive"
+    }
+  ],
+  "steps": [
+    {
+      "name": "delete active",
+      "response": {}
+    }
+  ]
+}

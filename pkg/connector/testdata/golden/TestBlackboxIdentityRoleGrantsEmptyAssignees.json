@@ -1,0 +1,33 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListGrants role/SUPER_ADMIN page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    }
+  ]
+}

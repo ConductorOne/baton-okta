@@ -1,0 +1,137 @@
+{
+  "requests": [
+    {
+      "body": {
+        "type": "HELP_DESK_ADMIN"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uaa1111111111111a1/roles"
+    },
+    {
+      "body": {
+        "type": "HELP_DESK_ADMIN"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uaa2222222222222a2/roles"
+    },
+    {
+      "body": {
+        "type": "HELP_DESK_ADMIN"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00u400/roles"
+    },
+    {
+      "body": {
+        "type": "HELP_DESK_ADMIN"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00u403/roles"
+    },
+    {
+      "body": {
+        "type": "HELP_DESK_ADMIN"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00u500/roles"
+    },
+    {
+      "body": {
+        "type": "HELP_DESK_ADMIN"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00u500e/roles"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Grant 00uaa1111111111111a1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grant 00uaa2222222222222a2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyExists"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "grant failed: okta-connector: failed to assign role to user: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: type. Causes: errorSummary: type: The role type is not valid\nthe API returned an error: Api validation failed: type. Causes: errorSummary: type: The role type is not valid"
+      },
+      "name": "Grant 00u400"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "grant failed: okta-connector: failed to assign role to user: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Grant 00u403"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "grant failed: okta-connector: failed to assign role to user: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-5"
+      },
+      "name": "Grant 00u500"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "grant failed: okta-connector: failed to assign role to user: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-6\nrpc error: code = Unavailable desc = okta-connectorv2: 500 Internal Server Error: unparseable error body \"\"\nunexpected end of JSON input"
+      },
+      "name": "Grant 00u500e"
+    }
+  ]
+}

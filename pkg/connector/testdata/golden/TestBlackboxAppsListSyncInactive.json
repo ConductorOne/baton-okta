@@ -1,0 +1,198 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps",
+      "query": {
+        "limit": [
+          "3"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "3"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources app page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "0oa1gjh63g214q0Hq0g4"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "0oa1gjh63g214q0Hq0g4"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.NonHumanIdentityTrait",
+                "nhi_detail": "okta.app.saml_2_0",
+                "nhi_type": "NHI_TYPE_APP_REGISTRATION"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Salesforce Sandbox",
+            "id": {
+              "resource": "0oa1gjh63g214q0Hq0g4",
+              "resource_type": "app"
+            },
+            "profile": {
+              "status": "ACTIVE"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "0oa2bkm8dQz5hT1xA5d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "0oa2bkm8dQz5hT1xA5d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Company Wiki",
+            "id": {
+              "resource": "0oa2bkm8dQz5hT1xA5d7",
+              "resource_type": "app"
+            },
+            "profile": {
+              "status": "ACTIVE"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "0oa3ina2kLm9nP4rS5d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "0oa3ina2kLm9nP4rS5d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.NonHumanIdentityTrait",
+                "nhi_detail": "okta.app.saml_2_0",
+                "nhi_type": "NHI_TYPE_APP_REGISTRATION"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Legacy HR Portal",
+            "id": {
+              "resource": "0oa3ina2kLm9nP4rS5d7",
+              "resource_type": "app"
+            },
+            "profile": {
+              "status": "INACTIVE"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"user\"}}"
+      }
+    },
+    {
+      "name": "ListResources app page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "0oa4oid7wXy1zA3bC5d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "0oa4oid7wXy1zA3bC5d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.NonHumanIdentityTrait",
+                "nhi_detail": "okta.app.openid_connect",
+                "nhi_type": "NHI_TYPE_APP_REGISTRATION"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Internal Admin Console",
+            "id": {
+              "resource": "0oa4oid7wXy1zA3bC5d7",
+              "resource_type": "app"
+            },
+            "profile": {
+              "status": "ACTIVE"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "0oa5swa4Hj6Kl8Mn0d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RawId",
+                "id": "0oa5swa4Hj6Kl8Mn0d7"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Old Intranet SWA",
+            "id": {
+              "resource": "0oa5swa4Hj6Kl8Mn0d7",
+              "resource_type": "app"
+            },
+            "profile": {
+              "status": "INACTIVE"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

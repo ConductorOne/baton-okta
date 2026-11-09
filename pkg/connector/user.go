@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
@@ -19,8 +20,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
-	"github.com/okta/okta-sdk-golang/v2/okta/query"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -245,7 +244,7 @@ func userName(user *okta.User) (string, string) {
 	return firstName, lastName
 }
 
-func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *query.Params) ([]*okta.User, *responseContext, error) {
+func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token, qp *okta.QueryParams) ([]*okta.User, *responseContext, error) {
 	if qp.Search == "" {
 		qp.Search = "status pr" // ListUsers doesn't get deactivated users by default. this should fetch them all
 	}
@@ -264,19 +263,7 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
 	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
 	oktaUsers := make([]*okta.User, 0)
-	rq := client.CloneRequestExecutor()
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
-	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
-
-	resp, err := rq.Do(ctx, req, &oktaUsers)
+	resp, err := client.Do(ctx, http.MethodGet, reqUrl.String(), nil, &oktaUsers, okta.WithContentType(okta.OmitCredentialsContentType))
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", handleOktaResponseError(resp, err))
 	}
@@ -438,7 +425,7 @@ func (r *userResourceType) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	user, response, err := r.connector.client.User.CreateUser(ctx, okta.CreateUserRequest{
+	user, response, err := r.connector.client.CreateUser(ctx, okta.CreateUserRequest{
 		Profile: userProfile,
 		Type: &okta.UserType{
 			Created:   ToPtr(time.Now()),
@@ -462,7 +449,7 @@ func (r *userResourceType) CreateAccount(
 			l.Debug("okta-connectorv2: login already exists but is unusable for lookup")
 			return &v2.CreateAccountResponse_AlreadyExistsResult{}, nil, nil, nil
 		}
-		existing, _, getErr := r.connector.client.User.GetUser(ctx, login)
+		existing, _, getErr := r.connector.client.GetUser(ctx, login)
 		if getErr != nil {
 			l.Debug("okta-connectorv2: login already exists but fetch failed",
 				zap.String("login", login),
@@ -504,7 +491,7 @@ func (r *userResourceType) CreateAccount(
 	// Only a user this call just created reaches this point, and a suppressed create
 	// always staged it, so no status check is needed.
 	if suppressActivationEmail {
-		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
+		activateResp, err := r.connector.client.ActivateUser(ctx, user.Id, &okta.QueryParams{SendEmail: okta.Bool(false)})
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, handleOktaResponseError(activateResp, err))
 		}
@@ -514,7 +501,7 @@ func (r *userResourceType) CreateAccount(
 		// ActivateUser returns a token, not the user. The account is fully provisioned
 		// by now and this read only refreshes Status, so a failure here keeps the
 		// create payload rather than discarding a successful provision.
-		activated, _, err := r.connector.client.User.GetUser(ctx, user.Id)
+		activated, _, err := r.connector.client.GetUser(ctx, user.Id)
 		if err != nil {
 			ctxzap.Extract(ctx).Debug("okta-connectorv2: activated user could not be re-read; returning the created user",
 				zap.String("user_id", user.Id),
@@ -629,13 +616,13 @@ func getUserProfile(accountInfo *v2.AccountInfo) (*okta.UserProfile, error) {
 
 // getAccountCreationQueryParams builds Create User query params and whether a
 // follow-up ActivateUser(sendEmail=false) is required.
-func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions, providerType string) (*query.Params, bool, error) {
+func getAccountCreationQueryParams(accountInfo *v2.AccountInfo, credentialOptions *v2.LocalCredentialOptions, providerType string) (*okta.QueryParams, bool, error) {
 	pMap := accountInfo.Profile.AsMap()
-	params := &query.Params{}
+	params := &okta.QueryParams{}
 
 	// Without provider=true Okta ignores credentials.provider.
 	if providerType == providerTypeFederation {
-		params.Provider = true
+		params.Provider = okta.Bool(true)
 	}
 
 	// create_inactive applies regardless of credential type
@@ -777,14 +764,14 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	return resource, annos, nil
 }
 
-// getUser retrieves the Okta user with the specified ID (and may use the SDK
+// getUser retrieves the Okta user with the specified ID (and may use the client
 // GET cache). The request omits credentials and related fields to reduce the
 // payload.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
 	return getUserWithCachePolicy(ctx, client, oktaUserID, false)
 }
 
-// getUserFresh bypasses the SDK GET cache for lifecycle reconciliation after
+// getUserFresh bypasses the client's GET cache for lifecycle reconciliation after
 // a failed mutation.
 func getUserFresh(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
 	return getUserWithCachePolicy(ctx, client, oktaUserID, true)
@@ -802,22 +789,11 @@ func getUserWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID
 	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
 	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
 	oktaUsers := &okta.User{}
-	rq := client.CloneRequestExecutor()
+	opts := []okta.RequestOption{okta.WithContentType(okta.OmitCredentialsContentType)}
 	if fresh {
-		rq.RefreshNext()
+		opts = append(opts, okta.WithFreshRead())
 	}
-	req, err := rq.
-		WithAccept(ContentType).
-		WithContentType(`application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`).
-		NewRequest(http.MethodGet, reqUrl.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Need to set content type here because the response was still including the credentials when setting it with WithContentType above
-	req.Header.Set("Content-Type", `application/json; okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus"`)
-
-	resp, err := rq.Do(ctx, req, &oktaUsers)
+	resp, err := client.Do(ctx, http.MethodGet, reqUrl.String(), nil, &oktaUsers, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get user: %w", handleOktaResponseError(resp, err))
 	}
@@ -864,7 +840,7 @@ func oktaUserIDFromResourceID(resourceID *v2.ResourceId) (string, error) {
 }
 
 // ensureUserDeactivated transitions an existing user to DEPROVISIONED. It
-// bypasses the SDK GET cache because a stale DEPROVISIONED status could turn
+// bypasses the client's GET cache because a stale DEPROVISIONED status could turn
 // Okta's first DELETE call into deactivation while the connector reports a
 // permanent deletion. The booleans report whether this call changed the status
 // and whether the user is already absent; callers decide whether absence
@@ -1029,7 +1005,7 @@ func deactivateUser(ctx context.Context, client *okta.Client, oktaUserID string)
 		return status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
 	}
 
-	resp, err := client.User.DeactivateUser(ctx, oktaUserID, query.NewQueryParams(query.WithSendEmail(false)))
+	resp, err := client.DeactivateUser(ctx, oktaUserID, &okta.QueryParams{SendEmail: okta.Bool(false)})
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -1046,7 +1022,7 @@ func deleteUser(ctx context.Context, client *okta.Client, oktaUserID string) err
 		return status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
 	}
 
-	resp, err := client.User.DeactivateOrDeleteUser(ctx, oktaUserID, nil)
+	resp, err := client.DeleteUser(ctx, oktaUserID)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
@@ -1079,7 +1055,7 @@ func suspendUser(ctx context.Context, client *okta.Client, oktaUserID string) er
 		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
 	}
 
-	resp, err := client.User.SuspendUser(ctx, oktaUserID)
+	resp, err := client.SuspendUser(ctx, oktaUserID)
 	if err != nil {
 		return fmt.Errorf("okta-connectorv2: failed to suspend user: %w", handleOktaResponseError(resp, err))
 	}
@@ -1103,7 +1079,7 @@ func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) 
 		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
 	}
 
-	resp, err := client.User.UnsuspendUser(ctx, oktaUserID)
+	resp, err := client.UnsuspendUser(ctx, oktaUserID)
 	if err != nil {
 		return fmt.Errorf("okta-connectorv2: failed to unsuspend user: %w", handleOktaResponseError(resp, err))
 	}
@@ -1125,7 +1101,7 @@ func activateUser(ctx context.Context, client *okta.Client, oktaUserID string) e
 		return fmt.Errorf("okta-connectorv2: user ID cannot be empty")
 	}
 
-	_, resp, err := client.User.ActivateUser(ctx, oktaUserID, query.NewQueryParams(query.WithSendEmail(false)))
+	resp, err := client.ActivateUser(ctx, oktaUserID, &okta.QueryParams{SendEmail: okta.Bool(false)})
 	if err != nil {
 		return fmt.Errorf("okta-connectorv2: failed to activate user: %w", handleOktaResponseError(resp, err))
 	}

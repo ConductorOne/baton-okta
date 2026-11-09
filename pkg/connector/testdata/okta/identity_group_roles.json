@@ -1,0 +1,74 @@
+[
+  {
+    "id": "irb1111111111111111",
+    "label": "Group Administrator",
+    "type": "USER_ADMIN",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  },
+  {
+    "id": "irb2222222222222222",
+    "label": "Help Desk Administrator",
+    "type": "HELP_DESK_ADMIN",
+    "status": "INACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  },
+  {
+    "id": "irb3333333333333333",
+    "label": "Read-Only Administrator",
+    "type": "READ_ONLY_ADMIN",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "USER",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  },
+  {
+    "id": "irb4444444444444444",
+    "label": "Support Triage",
+    "type": "CUSTOM",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    },
+    "role": "cr0support000000000001",
+    "resource-set": "iam5555555555555555"
+  },
+  {
+    "id": "irb5555555555555555",
+    "label": "Organizational Administrator",
+    "type": "ORG_ADMIN",
+    "status": "ACTIVE",
+    "created": "2022-01-01T00:00:00.000Z",
+    "lastUpdated": "2022-01-01T00:00:00.000Z",
+    "assignmentType": "GROUP",
+    "_links": {
+      "assignee": {
+        "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2"
+      }
+    }
+  }
+]

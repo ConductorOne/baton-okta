@@ -1,0 +1,325 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uactive/lifecycle/deactivate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uactive"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00udeprov"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00unobody"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uforbid"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uforbid/lifecycle/deactivate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uforbid"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ubye"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00ubye/lifecycle/deactivate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ubye"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00ubye"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ubye"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00udeprov2"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/users/00udeprov2"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00udeprov2"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00ubye"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uforbid"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "POST",
+      "path": "/api/v1/users/00uforbid/lifecycle/deactivate",
+      "query": {
+        "sendEmail": [
+          "false"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uforbid"
+    }
+  ],
+  "steps": [
+    {
+      "name": "deactivate ACTIVE",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "message": "Account 00uactive has been successfully deactivated",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "deactivate DEPROVISIONED is a no-op",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "message": "Account 00udeprov was already deactivated",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "deactivate unknown user",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "error": "rpc error: code = NotFound desc = okta-connectorv2: user 00unobody not found"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "deactivate wrong resource type",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: expected resource type \"user\", got \"group\""
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "deactivate missing arg",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: required argument user_id is missing or invalid"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "deactivate plain string arg is rejected",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: required argument user_id is missing or invalid"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "deactivate 403",
+      "response": {
+        "name": "deactivate_user",
+        "response": {
+          "error": "okta-connectorv2: failed to deactivate user: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "delete ACTIVE deactivates then deletes",
+      "response": {
+        "name": "delete_user",
+        "response": {
+          "message": "Account 00ubye has been permanently deleted",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "delete DEPROVISIONED deletes",
+      "response": {
+        "name": "delete_user",
+        "response": {
+          "message": "Account 00udeprov2 has been permanently deleted",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "delete already gone",
+      "response": {
+        "name": "delete_user",
+        "response": {
+          "message": "Account 00ubye was already deleted",
+          "success": true
+        },
+        "status": "BATON_ACTION_STATUS_COMPLETE"
+      }
+    },
+    {
+      "name": "delete wrong resource type",
+      "response": {
+        "name": "delete_user",
+        "response": {
+          "error": "rpc error: code = InvalidArgument desc = okta-connectorv2: expected resource type \"user\", got \"app\""
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    },
+    {
+      "name": "delete deactivate 403",
+      "response": {
+        "name": "delete_user",
+        "response": {
+          "error": "okta-connectorv2: failed to deactivate user: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        },
+        "status": "BATON_ACTION_STATUS_FAILED"
+      }
+    }
+  ]
+}

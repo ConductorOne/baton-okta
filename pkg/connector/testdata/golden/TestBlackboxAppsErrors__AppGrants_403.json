@@ -1,0 +1,32 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/apps/0oa1gjh63g214q0Hq0g4/groups",
+      "query": {
+        "limit": [
+          "1000"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 1",
+      "response": {
+        "next_page_token": "{\"states\":null,\"current_state\":{\"type\":\"app\",\"id\":\"group\"}}"
+      }
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: listing grants for resource app/0oa1gjh63g214q0Hq0g4 failed: okta-connectorv2: failed to fetch app group assignments from okta: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "ListGrants app/0oa1gjh63g214q0Hq0g4 page 2"
+    }
+  ]
+}

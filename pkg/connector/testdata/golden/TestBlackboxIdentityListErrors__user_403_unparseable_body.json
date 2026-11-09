@@ -1,0 +1,30 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "limit": [
+          "50"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "error: listing resources failed: okta-connectorv2: failed to list users: okta-connectorv2: failed to list users: rpc error: code = PermissionDenied desc = 403 Forbidden\nthe API returned an unknown error"
+      },
+      "name": "ListResources user page 1"
+    }
+  ]
+}

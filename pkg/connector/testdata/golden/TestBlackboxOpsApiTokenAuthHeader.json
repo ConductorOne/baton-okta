@@ -1,0 +1,18 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/org"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Validate",
+      "response": {}
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "id": "00geng0000000000000g2",
+  "created": "2018-01-01T00:00:00.000Z",
+  "lastUpdated": "2023-02-02T00:00:00.000Z",
+  "lastMembershipUpdated": "2024-04-04T00:00:00.000Z",
+  "objectClass": [
+    "okta:user_group"
+  ],
+  "type": "OKTA_GROUP",
+  "profile": {
+    "name": "Engineering",
+    "description": "Product engineering"
+  },
+  "_links": {
+    "logo": [
+      {
+        "name": "medium",
+        "href": "https://ok1static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+        "type": "image/png"
+      }
+    ],
+    "users": {
+      "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2/users"
+    },
+    "apps": {
+      "href": "https://example.okta.com/api/v1/groups/00geng0000000000000g2/apps"
+    }
+  },
+  "_embedded": {
+    "stats": {
+      "usersCount": 42,
+      "appsCount": 2
+    }
+  }
+}

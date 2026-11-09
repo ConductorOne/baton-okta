@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -253,7 +253,7 @@ var updateUserProfileSchema = &v2.BatonActionSchema{
 }
 
 // updateUserProfile handles the update_profile action. It sends a single
-// partial-update POST to Okta (client.User.PartialUpdateUser), which merges
+// partial-update POST to Okta (client.PartialUpdateUser), which merges
 // only the profile keys present in the request — untouched fields are left
 // alone by Okta itself, so no read-modify-write is needed here.
 func (o *userResourceType) updateUserProfile(ctx context.Context, args *structpb.Struct) (*structpb.Struct, annotations.Annotations, error) {
@@ -304,7 +304,7 @@ func partialUpdateUserProfile(ctx context.Context, client *okta.Client, userID s
 		return nil, status.Errorf(codes.InvalidArgument, "okta-connectorv2: update-user-profile: user_id cannot be empty")
 	}
 
-	updatedUser, resp, err := client.User.PartialUpdateUser(ctx, userID, okta.User{Profile: &profile}, nil)
+	updatedUser, resp, err := client.PartialUpdateUser(ctx, userID, okta.User{Profile: &profile})
 	if err != nil {
 		return nil, fmt.Errorf("okta-connectorv2: failed to update user profile: %w", handleOktaResponseError(resp, err))
 	}

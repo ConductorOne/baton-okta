@@ -1,0 +1,21 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001"
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "NotFound",
+        "message": "rpc error: code = NotFound desc = error: get resource returned nil"
+      },
+      "name": "GetResource resourceset-binding"
+    }
+  ]
+}

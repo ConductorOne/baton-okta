@@ -1,0 +1,26 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/devices",
+      "query": {
+        "limit": [
+          "200"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "error: listing resources failed: okta-connector-v5: failed to list devices: 403 Forbidden"
+      },
+      "name": "ListResources device page 1"
+    }
+  ]
+}

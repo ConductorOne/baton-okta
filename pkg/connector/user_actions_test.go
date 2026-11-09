@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
-	"github.com/okta/okta-sdk-golang/v2/okta"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"

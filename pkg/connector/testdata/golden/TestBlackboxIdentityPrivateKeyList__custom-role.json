@@ -1,0 +1,112 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles",
+      "query": {
+        "limit": [
+          "100"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "DPoP dpop-access-token",
+        "DPoP": "<proof>"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/roles",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "100"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources custom-role page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:cr0support000000000001"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Support Triage",
+            "id": {
+              "resource": "cr0support000000000001",
+              "resource_type": "custom-role"
+            },
+            "profile": {
+              "id": "cr0support000000000001",
+              "label": "Support Triage",
+              "type": ""
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"custom-role\"}}"
+      }
+    },
+    {
+      "name": "ListResources custom-role page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "role:cr0auditor000000000002"
+              },
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.RoleTrait"
+              }
+            ],
+            "display_name": "Auditor",
+            "id": {
+              "resource": "cr0auditor000000000002",
+              "resource_type": "custom-role"
+            },
+            "profile": {
+              "id": "cr0auditor000000000002",
+              "label": "Auditor",
+              "type": ""
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

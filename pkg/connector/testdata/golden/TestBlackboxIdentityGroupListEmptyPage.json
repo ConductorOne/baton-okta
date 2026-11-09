@@ -1,0 +1,36 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups",
+      "query": {
+        "expand": [
+          "stats"
+        ],
+        "limit": [
+          "50"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources group page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    }
+  ]
+}

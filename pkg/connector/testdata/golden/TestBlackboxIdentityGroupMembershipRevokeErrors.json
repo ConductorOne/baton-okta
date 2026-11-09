@@ -1,0 +1,91 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00g404/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00g400/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00g403/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00g500/users/00uaa1111111111111a1"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00g500e/users/00uaa1111111111111a1"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Revoke 00g404",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "revoke failed: okta-connector: failed to remove user from group: rpc error: code = InvalidArgument desc = 400 Bad Request\nthe API returned an error: Api validation failed: type. Causes: errorSummary: type: The role type is not valid"
+      },
+      "name": "Revoke 00g400"
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "revoke failed: okta-connector: failed to remove user from group: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Revoke 00g403"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "revoke failed: okta-connector: failed to remove user from group: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: Internal Server Error, x-okta-request-id=req-4"
+      },
+      "name": "Revoke 00g500"
+    },
+    {
+      "error": {
+        "code": "Unavailable",
+        "message": "revoke failed: okta-connector: failed to remove user from group: rpc error: code = Unavailable desc = 500 Internal Server Error\nthe API returned an error: , x-okta-request-id=req-5"
+      },
+      "name": "Revoke 00g500e"
+    }
+  ]
+}

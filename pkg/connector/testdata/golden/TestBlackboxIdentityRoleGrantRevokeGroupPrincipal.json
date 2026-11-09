@@ -1,0 +1,19 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "grant failed: okta-connector: only users or groups can be granted repo membership"
+      },
+      "name": "Grant group principal"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "revoke failed: okta-connector:only users or groups can have role membership revoked"
+      },
+      "name": "Revoke group principal"
+    }
+  ]
+}

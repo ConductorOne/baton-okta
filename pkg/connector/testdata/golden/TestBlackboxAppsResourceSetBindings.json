@@ -1,0 +1,615 @@
+{
+  "requests": [
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "limit": [
+          "2"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam2abcdefghijklmn02/bindings"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "2"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam3abcdefghijklmn03/bindings"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01"
+    },
+    {
+      "body": {
+        "members": [
+          "https://example.com/api/v1/users/00u1alice00000001"
+        ],
+        "role": "cr0adminrole00000001"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    {
+      "body": {
+        "members": [
+          "https://example.com/api/v1/groups/00g1engineering01"
+        ],
+        "role": "cr0adminrole00000001"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    {
+      "body": {
+        "members": [
+          "https://example.com/api/v1/users/00u1alice00000001"
+        ],
+        "role": "cr0adminrole00000001"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    {
+      "body": {
+        "members": [
+          "https://example.com/api/v1/users/00u1alice00000001"
+        ],
+        "role": "cr0adminrole00000001"
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members/irb1member00000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members/irb2member00000002"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members/irb1member00000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/resource-sets/iam1abcdefghijklmn01/bindings/cr0adminrole00000001/members"
+    }
+  ],
+  "steps": [
+    {
+      "name": "ListResources resourceset-binding page 1",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ],
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Engineering Apps",
+            "id": {
+              "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+              "resource_type": "resourceset-binding"
+            },
+            "profile": {
+              "description": "Apps owned by engineering",
+              "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+              "label": "Engineering Apps"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Engineering Apps",
+            "id": {
+              "resource": "iam1abcdefghijklmn01:cr0auditrole00000002",
+              "resource_type": "resourceset-binding"
+            },
+            "profile": {
+              "description": "Apps owned by engineering",
+              "id": "iam1abcdefghijklmn01:cr0auditrole00000002",
+              "label": "Engineering Apps"
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+              }
+            ],
+            "display_name": "Finance Users",
+            "id": {
+              "resource": "iam2abcdefghijklmn02:cr0adminrole00000001",
+              "resource_type": "resourceset-binding"
+            },
+            "profile": {
+              "description": "Finance department users",
+              "id": "iam2abcdefghijklmn02:cr0adminrole00000001",
+              "label": "Finance Users"
+            }
+          }
+        ],
+        "next_page_token": "{\"states\":null,\"current_state\":{\"token\":\"cursor1\",\"type\":\"resource-set\"}}"
+      }
+    },
+    {
+      "name": "ListResources resourceset-binding page 2",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListEntitlements resourceset-binding/iam1abcdefghijklmn01:cr0adminrole00000001 page 1",
+      "response": {
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "membership:iam1abcdefghijklmn01:cr0adminrole00000001"
+              }
+            ],
+            "description": "Member of Engineering Apps resource-set-binding member in Okta",
+            "display_name": "Engineering Apps Resource Set Binding Member",
+            "grantable_to": [
+              {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                    "id": "resource-set"
+                  },
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+                    "permissions": [
+                      {
+                        "permission": "okta.roles.read"
+                      },
+                      {
+                        "permission": "okta.roles.manage"
+                      }
+                    ]
+                  }
+                ],
+                "display_name": "Resource Set",
+                "id": "resource-set"
+              }
+            ],
+            "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member",
+            "purpose": "PURPOSE_VALUE_ASSIGNMENT",
+            "resource": {
+              "annotations": [
+                {
+                  "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+                }
+              ],
+              "display_name": "Engineering Apps",
+              "id": {
+                "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                "resource_type": "resourceset-binding"
+              },
+              "profile": {
+                "description": "Apps owned by engineering",
+                "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                "label": "Engineering Apps"
+              }
+            },
+            "slug": "member"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListGrants resourceset-binding/iam1abcdefghijklmn01:cr0adminrole00000001 page 1",
+      "response": {
+        "list": [
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:iam1abcdefghijklmn01:cr0adminrole00000001:iam1abcdefghijklmn01:cr0adminrole00000001"
+              }
+            ],
+            "entitlement": {
+              "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+                  }
+                ],
+                "display_name": "Engineering Apps",
+                "id": {
+                  "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                  "resource_type": "resourceset-binding"
+                },
+                "profile": {
+                  "description": "Apps owned by engineering",
+                  "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                  "label": "Engineering Apps"
+                }
+              }
+            },
+            "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member:user:00u1alice00000001",
+            "principal": {
+              "id": {
+                "resource": "00u1alice00000001",
+                "resource_type": "user"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:iam1abcdefghijklmn01:cr0adminrole00000001:iam1abcdefghijklmn01:cr0adminrole00000001"
+              }
+            ],
+            "entitlement": {
+              "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+                  }
+                ],
+                "display_name": "Engineering Apps",
+                "id": {
+                  "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                  "resource_type": "resourceset-binding"
+                },
+                "profile": {
+                  "description": "Apps owned by engineering",
+                  "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                  "label": "Engineering Apps"
+                }
+              }
+            },
+            "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member:group:00g1engineering01",
+            "principal": {
+              "id": {
+                "resource": "00g1engineering01",
+                "resource_type": "group"
+              }
+            }
+          },
+          {
+            "annotations": [
+              {
+                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
+                "id": "grant:membership:iam1abcdefghijklmn01:cr0adminrole00000001:iam1abcdefghijklmn01:cr0adminrole00000001"
+              }
+            ],
+            "entitlement": {
+              "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member",
+              "resource": {
+                "annotations": [
+                  {
+                    "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+                  }
+                ],
+                "display_name": "Engineering Apps",
+                "id": {
+                  "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                  "resource_type": "resourceset-binding"
+                },
+                "profile": {
+                  "description": "Apps owned by engineering",
+                  "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+                  "label": "Engineering Apps"
+                }
+              }
+            },
+            "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member:group:00g1engineering01",
+            "principal": {
+              "id": {
+                "resource": "00g1engineering01",
+                "resource_type": "group"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GetResource resourceset-binding",
+      "response": {
+        "resource": {
+          "annotations": [
+            {
+              "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
+            }
+          ],
+          "display_name": "Engineering Apps",
+          "id": {
+            "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
+            "resource_type": "resourceset-binding"
+          },
+          "profile": {
+            "description": "Apps owned by engineering",
+            "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
+            "label": "Engineering Apps"
+          }
+        }
+      }
+    },
+    {
+      "name": "Grant binding member user",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grant binding member group",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Grant binding member already exists (409)",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyExists"
+          }
+        ]
+      }
+    },
+    {
+      "error": {
+        "code": "PermissionDenied",
+        "message": "grant failed: okta-connector: failed to assign roles: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+      },
+      "name": "Grant binding member forbidden"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "grant failed: okta-connector: only users or groups can be granted resource-sets membership"
+      },
+      "name": "Grant binding unsupported principal"
+    },
+    {
+      "error": {
+        "code": "Unknown",
+        "message": "grant failed: okta-connector: invalid resourceset-binding-id"
+      },
+      "name": "Grant binding malformed entitlement resource"
+    },
+    {
+      "name": "Revoke binding member user",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke binding member group",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke binding member not in binding",
+      "response": {}
+    },
+    {
+      "name": "Revoke binding member delete not found",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke binding members list not found",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.GrantAlreadyRevoked"
+          }
+        ]
+      }
+    }
+  ]
+}

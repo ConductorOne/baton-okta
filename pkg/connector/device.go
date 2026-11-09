@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	oktav5 "github.com/conductorone/okta-sdk-golang/v5/okta"
 )
 
 // deviceListLimit is Okta's enforced maximum for the devices list endpoint's `limit` param.
@@ -14,13 +14,13 @@ const deviceListLimit = 200
 
 type deviceResourceType struct {
 	resourceType *v2.ResourceType
-	clientV5     *oktav5.APIClient
+	client       *okta.Client
 }
 
-func deviceBuilder(clientV5 *oktav5.APIClient) *deviceResourceType {
+func deviceBuilder(client *okta.Client) *deviceResourceType {
 	return &deviceResourceType{
 		resourceType: resourceTypeDevice,
-		clientV5:     clientV5,
+		client:       client,
 	}
 }
 
@@ -47,34 +47,33 @@ func (o *deviceResourceType) List(
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to parse page token: %w", err)
 	}
 
-	var devices []oktav5.DeviceList
-	var resp *oktav5.APIResponse
+	var devices []okta.Device
+	var resp *okta.Response
 
 	if prevSerializedResp == "" {
 		limit := token.Size
 		if limit <= 0 || limit > deviceListLimit {
 			limit = deviceListLimit
 		}
-		devices, resp, err = o.clientV5.DeviceAPI.ListDevices(ctx).Limit(int32(limit)).Execute()
+		devices, resp, err = o.client.ListDevices(ctx, int32(limit), "")
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to list devices: %w", err)
 		}
 	} else {
-		prevResp, err := deserializeOktaResponseV5(prevSerializedResp)
+		next, err := nextPageFromLinkToken(prevSerializedResp)
 		if err != nil {
 			return nil, nil, fmt.Errorf("okta-connector-v5: failed to deserialize page token: %w", err)
 		}
 
-		localOktaAPIResponse := oktav5.NewAPIResponse(prevResp.Response, o.clientV5, nil)
-		if localOktaAPIResponse.HasNextPage() {
-			resp, err = localOktaAPIResponse.Next(&devices)
+		if next != "" {
+			devices, resp, err = o.client.ListDevices(ctx, 0, next)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 	}
 
-	nextPage, annos, err := parseRespV5(resp)
+	nextPage, annos, err := parseRespLinkToken(resp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connector-v5: failed to parse response: %w", err)
 	}
@@ -119,7 +118,7 @@ func devicePlatformOSType(platform string) v2.DeviceOS_OsType {
 	}
 }
 
-func deviceResource(device *oktav5.DeviceList) (*v2.Resource, error) {
+func deviceResource(device *okta.Device) (*v2.Resource, error) {
 	deviceID := device.GetId()
 
 	name := deviceID

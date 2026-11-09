@@ -1,0 +1,12 @@
+{
+  "requests": null,
+  "steps": [
+    {
+      "error": {
+        "code": "InvalidArgument",
+        "message": "error: delete resource failed: rpc error: code = InvalidArgument desc = okta-connectorv2: user ID cannot be empty"
+      },
+      "name": "empty user id"
+    }
+  ]
+}

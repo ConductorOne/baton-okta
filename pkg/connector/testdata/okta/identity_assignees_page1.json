@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "00uaa1111111111111a1",
+      "orn": "orn:okta:directory:00oorg:users:00uaa1111111111111a1",
+      "_links": {
+        "assignee": {
+          "href": "https://example.okta.com/api/v1/users/00uaa1111111111111a1"
+        }
+      }
+    }
+  ],
+  "_links": {
+    "self": {
+      "href": "https://example.okta.com/api/v1/iam/assignees/users"
+    }
+  }
+}

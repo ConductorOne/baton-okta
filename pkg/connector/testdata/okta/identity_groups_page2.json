@@ -1,0 +1,170 @@
+[
+  {
+    "id": "00gapp0000000000000g3",
+    "created": "2018-01-01T00:00:00.000Z",
+    "lastUpdated": "2023-02-02T00:00:00.000Z",
+    "lastMembershipUpdated": "2024-04-04T00:00:00.000Z",
+    "objectClass": [
+      "okta:user_group"
+    ],
+    "type": "APP_GROUP",
+    "profile": {
+      "name": "Okta_Sync Admins",
+      "description": "Imported from Active Directory"
+    },
+    "_links": {
+      "logo": [
+        {
+          "name": "medium",
+          "href": "https://ok1static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+          "type": "image/png"
+        }
+      ],
+      "users": {
+        "href": "https://example.okta.com/api/v1/groups/00gapp0000000000000g3/users"
+      },
+      "apps": {
+        "href": "https://example.okta.com/api/v1/groups/00gapp0000000000000g3/apps"
+      }
+    }
+  },
+  {
+    "id": "00gzeroapps000000000g4",
+    "created": "2018-01-01T00:00:00.000Z",
+    "lastUpdated": "2023-02-02T00:00:00.000Z",
+    "lastMembershipUpdated": "2024-04-04T00:00:00.000Z",
+    "objectClass": [
+      "okta:user_group"
+    ],
+    "type": "OKTA_GROUP",
+    "profile": {
+      "name": "Zero Users",
+      "description": "Count lags behind"
+    },
+    "_links": {
+      "logo": [
+        {
+          "name": "medium",
+          "href": "https://ok1static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+          "type": "image/png"
+        }
+      ],
+      "users": {
+        "href": "https://example.okta.com/api/v1/groups/00gzeroapps000000000g4/users"
+      },
+      "apps": {
+        "href": "https://example.okta.com/api/v1/groups/00gzeroapps000000000g4/apps"
+      }
+    },
+    "_embedded": {
+      "stats": {
+        "usersCount": 0
+      }
+    }
+  },
+  {
+    "id": "00glong0000000000000g5",
+    "created": "2018-01-01T00:00:00.000Z",
+    "lastUpdated": "2023-02-02T00:00:00.000Z",
+    "lastMembershipUpdated": "2024-04-04T00:00:00.000Z",
+    "objectClass": [
+      "okta:user_group"
+    ],
+    "type": "OKTA_GROUP",
+    "profile": {
+      "name": "Long Description",
+      "description": "ÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆÆ tail"
+    },
+    "_links": {
+      "logo": [
+        {
+          "name": "medium",
+          "href": "https://ok1static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+          "type": "image/png"
+        }
+      ],
+      "users": {
+        "href": "https://example.okta.com/api/v1/groups/00glong0000000000000g5/users"
+      },
+      "apps": {
+        "href": "https://example.okta.com/api/v1/groups/00glong0000000000000g5/apps"
+      }
+    },
+    "_embedded": {
+      "stats": {
+        "usersCount": 2,
+        "appsCount": 0
+      }
+    }
+  },
+  {
+    "id": "00gspace000000000000g6",
+    "created": "2018-01-01T00:00:00.000Z",
+    "lastUpdated": "2023-02-02T00:00:00.000Z",
+    "lastMembershipUpdated": "2024-04-04T00:00:00.000Z",
+    "objectClass": [
+      "okta:user_group"
+    ],
+    "type": "OKTA_GROUP",
+    "profile": {
+      "name": "Whitespace Description",
+      "description": "   \n\t "
+    },
+    "_links": {
+      "logo": [
+        {
+          "name": "medium",
+          "href": "https://ok1static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+          "type": "image/png"
+        }
+      ],
+      "users": {
+        "href": "https://example.okta.com/api/v1/groups/00gspace000000000000g6/users"
+      },
+      "apps": {
+        "href": "https://example.okta.com/api/v1/groups/00gspace000000000000g6/apps"
+      }
+    },
+    "_embedded": {
+      "stats": {
+        "usersCount": 7,
+        "appsCount": 1
+      }
+    }
+  },
+  {
+    "id": "00gunknown00000000000g7",
+    "created": "2018-01-01T00:00:00.000Z",
+    "lastUpdated": "2023-02-02T00:00:00.000Z",
+    "lastMembershipUpdated": "2024-04-04T00:00:00.000Z",
+    "objectClass": [
+      "okta:user_group"
+    ],
+    "type": "DYNAMIC_GROUP",
+    "profile": {
+      "name": "Unknown Type",
+      "description": "Some future group type"
+    },
+    "_links": {
+      "logo": [
+        {
+          "name": "medium",
+          "href": "https://ok1static.oktacdn.com/assets/img/logos/groups/odyssey/okta-medium.png",
+          "type": "image/png"
+        }
+      ],
+      "users": {
+        "href": "https://example.okta.com/api/v1/groups/00gunknown00000000000g7/users"
+      },
+      "apps": {
+        "href": "https://example.okta.com/api/v1/groups/00gunknown00000000000g7/apps"
+      }
+    },
+    "_embedded": {
+      "stats": {
+        "usersCount": 1,
+        "appsCount": 0
+      }
+    }
+  }
+]
