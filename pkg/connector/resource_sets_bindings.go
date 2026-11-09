@@ -148,7 +148,7 @@ func (rsb *resourceSetsBindingsResourceType) listMembersOfBinding(
 	client *okta.Client,
 	resourceSetId, customRoleId string,
 ) ([]MembersDetails, *okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members")
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, escapePathID(resourceSetId), "bindings", escapePathID(customRoleId), "members")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,7 +178,7 @@ func (rsb *resourceSetsBindingsResourceType) createRoleResourceSetBinding(ctx co
 		Members: []string{memberId},
 	}
 
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, escapePathID(resourceSetId), "bindings")
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (rsb *resourceSetsBindingsResourceType) createRoleResourceSetBinding(ctx co
 // unassignMemberFromBinding. Unassign a Role Resource Set Bindiing Member
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBindingMember/#tag/RoleDResourceSetBindingMember/operation/unassignMemberFromBinding
 func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx context.Context, resourceSetId, customRoleId, memberId string) (*okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", customRoleId, "members", memberId)
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, escapePathID(resourceSetId), "bindings", escapePathID(customRoleId), "members", escapePathID(memberId))
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,10 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 		var principal *v2.Resource
 		memberHref := strings.Split(member.Links.Self.Href, "/")
 		resourceType := memberHref[len(memberHref)-resourceMaxLength]
-		resourceId := memberHref[len(memberHref)-lastItem]
+		resourceId, err := url.PathUnescape(memberHref[len(memberHref)-lastItem])
+		if err != nil {
+			return nil, nil, fmt.Errorf("okta-connector: invalid binding member path: %w", err)
+		}
 		switch resourceType {
 		case resourceUsers:
 			principal = &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: resourceId}}
@@ -290,7 +293,7 @@ func (rs *resourceSetsBindingsResourceType) Grant(ctx context.Context, principal
 		apiUrl = groupsUrl
 	}
 
-	memberUrl, err := url.JoinPath(defaultProtocol, rs.domain, apiUrl, resourceId)
+	memberUrl, err := url.JoinPath(defaultProtocol, rs.domain, apiUrl, escapePathID(resourceId))
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +362,10 @@ func (rsb *resourceSetsBindingsResourceType) Revoke(ctx context.Context, grant *
 
 	for _, member := range members {
 		memberHref := strings.Split(member.Links.Self.Href, "/")
-		resourceId := memberHref[len(memberHref)-1]
+		resourceId, err := url.PathUnescape(memberHref[len(memberHref)-1])
+		if err != nil {
+			return nil, fmt.Errorf("okta-connector: invalid binding member path: %w", err)
+		}
 		if principal.Id.Resource == resourceId {
 			memberId = member.ID
 			break

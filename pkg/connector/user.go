@@ -791,7 +791,7 @@ func getUserWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID
 		return nil, nil, err
 	}
 
-	reqUrl = reqUrl.JoinPath(oktaUserID)
+	reqUrl = reqUrl.JoinPath(escapePathID(oktaUserID))
 
 	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
 	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.

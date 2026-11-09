@@ -35,6 +35,14 @@ type responseContext struct {
 	OktaResponse *okta.Response
 }
 
+// escapePathID treats an identifier as a single URL path segment.
+func escapePathID(id string) string {
+	if id == "." || id == ".." {
+		return strings.Repeat("%2E", len(id))
+	}
+	return url.PathEscape(id)
+}
+
 func V1MembershipEntitlementID(resourceID string) string {
 	return fmt.Sprintf(V1MembershipEntitlementIDTemplate, resourceID)
 }

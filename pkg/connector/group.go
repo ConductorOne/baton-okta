@@ -325,7 +325,7 @@ func (o *groupResourceType) GetGroupWithParams(
 	ctx context.Context,
 	groupID string,
 ) (*okta.Group, *okta.Response, error) {
-	reqUrl, err := url.Parse(fmt.Sprintf(apiPathGetGroupFmt, groupID))
+	reqUrl, err := url.Parse(fmt.Sprintf(apiPathGetGroupFmt, escapePathID(groupID)))
 	if err != nil {
 		return nil, nil, err
 	}
