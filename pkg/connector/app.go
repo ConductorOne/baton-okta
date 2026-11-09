@@ -741,6 +741,11 @@ func getApp(ctx context.Context, client *okta.Client, appID string) (*okta.Appli
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to fetch app from okta: %w", handleOktaResponseError(resp, err))
 	}
+	if app == nil {
+		// A 200 with an empty or null body has always produced an empty
+		// application here rather than a nil one.
+		app = &okta.Application{}
+	}
 
 	return app, &responseContext{OktaResponse: resp}, nil
 }

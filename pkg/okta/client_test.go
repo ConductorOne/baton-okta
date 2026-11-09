@@ -666,3 +666,38 @@ func TestResponseCachePurgesExpiredEntries(t *testing.T) {
 	noCleanup.set("y", resp, nil)
 	require.Equal(t, 2, noCleanup.len(), "a zero cleanup interval never purges")
 }
+
+// A single-object lookup answered with 200 and an empty or null body returns a
+// nil object and no error, so callers can tell "nothing there" from a record.
+func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
+	ctx := context.Background()
+	getters := map[string]func(c *Client) (bool, error){
+		"GetOrgSettings": func(c *Client) (bool, error) { v, _, err := c.GetOrgSettings(ctx); return v == nil, err },
+		"GetUser":        func(c *Client) (bool, error) { v, _, err := c.GetUser(ctx, "u1"); return v == nil, err },
+		"GetGroup":       func(c *Client) (bool, error) { v, _, err := c.GetGroup(ctx, "g1", nil); return v == nil, err },
+		"GetApplication": func(c *Client) (bool, error) { v, _, err := c.GetApplication(ctx, "a1"); return v == nil, err },
+		"GetApplicationUser": func(c *Client) (bool, error) {
+			v, _, err := c.GetApplicationUser(ctx, "a1", "u1")
+			return v == nil, err
+		},
+		"GetApplicationGroupAssignment": func(c *Client) (bool, error) {
+			v, _, err := c.GetApplicationGroupAssignment(ctx, "a1", "g1")
+			return v == nil, err
+		},
+		"GetAPIToken":    func(c *Client) (bool, error) { v, _, err := c.GetAPIToken(ctx, "t1"); return v == nil, err },
+		"GetResourceSet": func(c *Client) (bool, error) { v, _, err := c.GetResourceSet(ctx, "rs1"); return v == nil, err },
+		"GetResourceSetBinding": func(c *Client) (bool, error) {
+			v, _, err := c.GetResourceSetBinding(ctx, "rs1", "r1")
+			return v == nil, err
+		},
+	}
+	for _, body := range []string{"", "null"} {
+		ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, body) })
+		c, _ := newTestClient(t, ts, func(cfg *Config) { cfg.CacheEnabled = false })
+		for name, get := range getters {
+			isNil, err := get(c)
+			require.NoError(t, err, "%s body=%q", name, body)
+			require.True(t, isNil, "%s body=%q returned a non-nil object", name, body)
+		}
+	}
+}

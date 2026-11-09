@@ -370,33 +370,33 @@ func (c *Client) ListAPITokens(ctx context.Context, nextPage string) ([]APIToken
 
 // GetAPIToken reads GET /api/v1/api-tokens/{id}.
 func (c *Client) GetAPIToken(ctx context.Context, tokenID string) (*APIToken, *Response, error) {
-	var out APIToken
+	var out *APIToken
 	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/api-tokens/"+pathEscape(tokenID), nil, &out, withStatusLineErrors())
 	if err != nil {
 		return nil, resp, err
 	}
-	return &out, resp, nil
+	return out, resp, nil
 }
 
 // GetResourceSet reads GET /api/v1/iam/resource-sets/{id}.
 func (c *Client) GetResourceSet(ctx context.Context, resourceSetID string) (*ResourceSet, *Response, error) {
-	var out ResourceSet
+	var out *ResourceSet
 	resp, err := c.Do(ctx, http.MethodGet, "/api/v1/iam/resource-sets/"+pathEscape(resourceSetID), nil, &out, withStatusLineErrors())
 	if err != nil {
 		return nil, resp, err
 	}
-	return &out, resp, nil
+	return out, resp, nil
 }
 
 // GetResourceSetBinding reads GET /api/v1/iam/resource-sets/{id}/bindings/{roleId}.
 func (c *Client) GetResourceSetBinding(ctx context.Context, resourceSetID, roleID string) (*ResourceSetBinding, *Response, error) {
-	var out ResourceSetBinding
+	var out *ResourceSetBinding
 	resp, err := c.Do(ctx, http.MethodGet,
 		"/api/v1/iam/resource-sets/"+pathEscape(resourceSetID)+"/bindings/"+pathEscape(roleID), nil, &out, withStatusLineErrors())
 	if err != nil {
 		return nil, resp, err
 	}
-	return &out, resp, nil
+	return out, resp, nil
 }
 
 func pathEscape(s string) string { return url.PathEscape(s) }
