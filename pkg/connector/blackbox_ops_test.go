@@ -1193,3 +1193,39 @@ func TestBlackboxOpsResponseCacheSemantics(t *testing.T) {
 		g.Check()
 	})
 }
+
+// Every Okta request, including the OAuth token exchange in private-key mode,
+// identifies the connector in its User-Agent.
+func TestBlackboxOpsUserAgent(t *testing.T) {
+	run := func(t *testing.T, privateKey bool) {
+		f := newFakeOkta(t)
+		newOpsOrg(f, map[string]string{"00uagent": "ACTIVE"})
+		var opts []connOpt
+		if privateKey {
+			opts = append(opts, privateKeyConn(t, f))
+		}
+		var mu sync.Mutex
+		agents := map[string]string{}
+		skip := f.skipRecord
+		f.skipRecord = func(r *http.Request) bool {
+			mu.Lock()
+			agents[r.Method+" "+r.URL.Path] = r.UserAgent()
+			mu.Unlock()
+			return skip != nil && skip(r)
+		}
+		srv := newServer(t, f, opts...)
+		g := newGolden(t, f)
+		opsGetUser(t, g, srv, "GetResource", "00uagent")
+		mu.Lock()
+		defer mu.Unlock()
+		require.Contains(t, agents, "GET /api/v1/users/00uagent")
+		if privateKey {
+			require.Contains(t, agents, "POST /oauth2/v1/token")
+		}
+		for req, ua := range agents {
+			require.Regexp(t, `^baton-okta baton-sdk/\S+$`, ua, req)
+		}
+	}
+	t.Run("api token", func(t *testing.T) { run(t, false) })
+	t.Run("private key", func(t *testing.T) { run(t, true) })
+}

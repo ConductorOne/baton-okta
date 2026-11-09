@@ -406,6 +406,10 @@ func parseOktaOrgURL(raw string) (*url.URL, error) {
 	return &url.URL{Scheme: oktaURLScheme, Host: parsed.Host}, nil
 }
 
+// userAgent identifies the connector on every Okta API request. uhttp appends
+// " baton-sdk/<version>".
+const userAgent = "baton-okta"
+
 func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
 	orgURL, err := parseOktaOrgURL(cc.Domain)
 	if err != nil {
@@ -414,7 +418,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 	// Host keeps an explicit port when present (Hostname() would drop it).
 	domain := orgURL.Host
 
-	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
+	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil), uhttp.WithUserAgent(userAgent))
 	if err != nil {
 		return nil, nil, err
 	}
