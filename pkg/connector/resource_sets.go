@@ -301,6 +301,9 @@ func (rs *resourceSetsResourceType) Get(ctx context.Context, resourceId *v2.Reso
 	if err != nil {
 		return nil, nil, err
 	}
+	if resourceSet == nil || resourceSet.Id == nil {
+		return nil, nil, fmt.Errorf("okta-connector: resource-set response missing id")
+	}
 
 	resource, err := resourceSetResource(resourceSet, parentResourceId)
 	if err != nil {

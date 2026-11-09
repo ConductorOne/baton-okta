@@ -7,6 +7,8 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestResourceSetGetEmptyResponse(t *testing.T) {
@@ -15,7 +17,8 @@ func TestResourceSetGetEmptyResponse(t *testing.T) {
 		statusCode: http.StatusOK,
 	})
 	builder := resourceSetsBuilder("example.com", client)
-	require.Panics(t, func() {
-		_, _, _ = builder.Get(context.Background(), &v2.ResourceId{Resource: "rs1"}, nil)
-	})
+	resource, _, err := builder.Get(context.Background(), &v2.ResourceId{Resource: "rs1"}, nil)
+	require.Nil(t, resource)
+	require.Error(t, err)
+	require.Equal(t, codes.Unknown, status.Code(err))
 }
