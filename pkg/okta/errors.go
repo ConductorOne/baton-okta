@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -193,10 +192,10 @@ func tomlString(s string) (string, string, bool) {
 // tomlBasic decodes a basic string body up to the closing delimiter, applying
 // TOML's escapes.
 func tomlBasic(s, closing string) (string, string, bool) {
-	var b strings.Builder
+	var b []byte
 	for i := 0; i < len(s); {
 		if strings.HasPrefix(s[i:], closing) {
-			return b.String(), s[i+len(closing):], true
+			return string(b), s[i+len(closing):], true
 		}
 		c := s[i]
 		switch {
@@ -207,19 +206,19 @@ func tomlBasic(s, closing string) (string, string, bool) {
 			n := 2
 			switch s[i+1] {
 			case 'b':
-				b.WriteByte('\b')
+				b = append(b, '\b')
 			case 't':
-				b.WriteByte('\t')
+				b = append(b, '\t')
 			case 'n':
-				b.WriteByte('\n')
+				b = append(b, '\n')
 			case 'f':
-				b.WriteByte('\f')
+				b = append(b, '\f')
 			case 'r':
-				b.WriteByte('\r')
+				b = append(b, '\r')
 			case '"':
-				b.WriteByte('"')
+				b = append(b, '"')
 			case '\\':
-				b.WriteByte('\\')
+				b = append(b, '\\')
 			case 'u', 'U':
 				digits := 4
 				if s[i+1] == 'U' {
@@ -228,11 +227,11 @@ func tomlBasic(s, closing string) (string, string, bool) {
 				if i+2+digits > len(s) {
 					return "", "", false
 				}
-				r, err := strconv.ParseUint(s[i+2:i+2+digits], 16, 32)
-				if err != nil || !utf8.ValidRune(rune(r)) {
+				r, ok := hexRune(s[i+2 : i+2+digits])
+				if !ok {
 					return "", "", false
 				}
-				b.WriteRune(rune(r))
+				b = utf8.AppendRune(b, r)
 				n += digits
 			default:
 				return "", "", false
@@ -241,11 +240,34 @@ func tomlBasic(s, closing string) (string, string, bool) {
 		case (c < 0x20 && c != '\t') || c == 0x7f:
 			return "", "", false
 		default:
-			b.WriteByte(c)
+			b = append(b, c)
 			i++
 		}
 	}
 	return "", "", false
+}
+
+// hexRune parses hex digits as a Unicode scalar value.
+func hexRune(digits string) (rune, bool) {
+	var r rune
+	for _, d := range digits {
+		var v rune
+		switch {
+		case d >= '0' && d <= '9':
+			v = d - '0'
+		case d >= 'a' && d <= 'f':
+			v = d - 'a' + 10
+		case d >= 'A' && d <= 'F':
+			v = d - 'A' + 10
+		default:
+			return 0, false
+		}
+		if r > (utf8.MaxRune-v)/16 {
+			return 0, false
+		}
+		r = r*16 + v
+	}
+	return r, utf8.ValidRune(r)
 }
 
 var jsonContentType = regexp.MustCompile(`(?i:(?:application|text)/(?:vnd\.[^;]+\+)?json)`)

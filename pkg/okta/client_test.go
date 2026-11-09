@@ -727,7 +727,11 @@ func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
 // client, which decoded the matching WWW-Authenticate fragment as TOML.
 func TestWWWAuthenticateErrorDescription(t *testing.T) {
 	for _, tc := range []struct{ header, summary string }{
-		{"Bearer authorization_uri=\"http://x\", realm=\"x\", error=\"insufficient_scope\", error_description=\"The access token provided does not contain the required scopes.\"", "The access token provided does not contain the required scopes."},
+		{
+			"Bearer authorization_uri=\"http://x\", realm=\"x\", error=\"insufficient_scope\", " +
+				"error_description=\"The access token provided does not contain the required scopes.\"",
+			"The access token provided does not contain the required scopes.",
+		},
 		{"Bearer realm=\"x\" error_description=\"scope missing\"", "unauthorized"},
 		{"Bearer realm=\"x\", error=\"invalid_token\" error_description=\"scope missing\"", "unauthorized"},
 		{"Bearer realm=\"x\", error_description=\"scope missing\" error=\"invalid_token\"", "unauthorized"},
