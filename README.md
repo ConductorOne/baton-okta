@@ -194,6 +194,10 @@ See [CONTRIBUTING.md](https://github.com/ConductorOne/baton/blob/main/CONTRIBUTI
 
 # `baton-okta` Command Line Usage
 
+The legacy `--cache`, `--cache-ttl`, and `--cache-tti` flags remain accepted
+for compatibility but have no effect. Okta responses are not cached by the
+connector, regardless of the flag descriptions shown in the generated help.
+
 ```
 baton-okta
 

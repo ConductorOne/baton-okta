@@ -17,6 +17,15 @@
       },
       "method": "GET",
       "path": "/api/v1/users/00uflaky"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uflaky"
     }
   ],
   "steps": [
@@ -88,7 +97,7 @@
       }
     },
     {
-      "name": "GetResource cached 200",
+      "name": "GetResource second 200",
       "response": {
         "annotations": [
           {

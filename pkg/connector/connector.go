@@ -443,7 +443,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		HTTPClient:   httpClient,
 		CacheEnabled: cc.Cache,
 		CacheTTL:     time.Duration(cacheTTL) * time.Second,
-		// cache-tti is the cleanup interval for expired entries.
+		// Retained for compatibility; response cache settings are no-ops.
 		CacheCleanupInterval: time.Duration(cacheTTI) * time.Second,
 	}
 

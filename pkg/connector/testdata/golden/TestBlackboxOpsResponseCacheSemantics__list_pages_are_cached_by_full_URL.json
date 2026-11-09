@@ -47,6 +47,43 @@
       "path": "/api/v1/users",
       "query": {
         "limit": [
+          "1"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "1"
+        ],
+        "search": [
+          "status pr"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users",
+      "query": {
+        "limit": [
           "2"
         ],
         "search": [

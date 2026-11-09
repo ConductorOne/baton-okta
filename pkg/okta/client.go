@@ -45,13 +45,10 @@ type Config struct {
 	// APIToken, when set, is sent as "Authorization: SSWS <token>". When empty
 	// the transport is responsible for authorization (OAuth/DPoP mode).
 	APIToken string
-	// CacheEnabled turns on the GET response cache.
-	CacheEnabled bool
-	// CacheTTL is how long a cached GET response is served. Zero or negative
-	// means cached entries do not expire.
-	CacheTTL time.Duration
-	// CacheCleanupInterval is how often expired entries are purged from
-	// memory. Zero or negative disables purging.
+	// CacheEnabled, CacheTTL and CacheCleanupInterval are retained for
+	// compatibility. Responses are no longer cached.
+	CacheEnabled         bool
+	CacheTTL             time.Duration
 	CacheCleanupInterval time.Duration
 }
 
@@ -60,7 +57,6 @@ type Client struct {
 	orgURL     *url.URL
 	httpClient *http.Client
 	apiToken   string
-	cache      *responseCache
 
 	maxRetries int
 	maxBackoff time.Duration
@@ -88,9 +84,6 @@ func NewClient(cfg Config) (*Client, error) {
 		maxBackoff: defaultMaxBackoff,
 		sleep:      sleepContext,
 	}
-	if cfg.CacheEnabled {
-		c.cache = newResponseCache(cfg.CacheTTL, cfg.CacheCleanupInterval)
-	}
 	return c, nil
 }
 
@@ -103,8 +96,6 @@ type request struct {
 	query       url.Values
 	body        any
 	contentType string
-	// fresh skips the cache for this GET (the response still refreshes it).
-	fresh bool
 	// rateLimitPrevention waits out an exhausted rate-limit window observed by
 	// an earlier request that also set it, before sending.
 	rateLimitPrevention bool
@@ -127,17 +118,6 @@ func (c *Client) do(ctx context.Context, req request, v any) (*Response, error) 
 		return nil, err
 	}
 
-	cacheKey := httpReq.URL.String()
-	if c.cache != nil {
-		if req.method != http.MethodGet {
-			c.cache.delete(cacheKey)
-		} else if req.fresh {
-			c.cache.delete(cacheKey)
-		} else if cached, ok := c.cache.get(cacheKey); ok {
-			return c.buildResponse(cached.toHTTP(httpReq), req, v) //nolint:bodyclose // the replayed body is an in-memory buffer
-		}
-	}
-
 	if req.rateLimitPrevention {
 		if err := c.waitForRateLimitWindow(ctx); err != nil {
 			return nil, err
@@ -148,7 +128,7 @@ func (c *Client) do(ctx context.Context, req request, v any) (*Response, error) 
 	if req.no429Retry {
 		max429Retries = 0
 	}
-	httpResp, body, err := c.doWithRetries(ctx, httpReq, max429Retries) //nolint:bodyclose // doWithRetries reads and closes the network body
+	httpResp, _, err := c.doWithRetries(ctx, httpReq, max429Retries) //nolint:bodyclose // doWithRetries reads and closes the network body
 	if err != nil {
 		if req.errorStyle == errorStyleGeneric {
 			return nil, &GenericError{Message: err.Error(), cause: err}
@@ -159,9 +139,6 @@ func (c *Client) do(ctx context.Context, req request, v any) (*Response, error) 
 	if httpResp.StatusCode >= 200 && httpResp.StatusCode <= 299 && req.method == http.MethodGet {
 		if req.rateLimitPrevention {
 			c.recordRateLimitWindow(httpResp)
-		}
-		if c.cache != nil {
-			c.cache.set(cacheKey, httpResp, body)
 		}
 	}
 
