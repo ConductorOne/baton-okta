@@ -51,9 +51,13 @@ type GenericError struct {
 	Message string
 	Body    []byte
 	Model   *Error
+	// cause is the transport error when the request got no response.
+	cause error
 }
 
 func (e *GenericError) Error() string { return e.Message }
+
+func (e *GenericError) Unwrap() error { return e.cause }
 
 type errorStyle int
 

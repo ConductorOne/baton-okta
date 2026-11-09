@@ -13,6 +13,8 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ---------------------------------------------------------------------------
@@ -802,4 +804,31 @@ func TestBlackboxIdentityPrivateKeyList(t *testing.T) {
 			g.Check()
 		})
 	}
+}
+
+// A membership grant whose connection keeps dropping mid-response is sent
+// three times and then fails as Unavailable, so the provisioner retries it.
+func TestBlackboxIdentityGroupGrantDroppedConnection(t *testing.T) {
+	f := idnFake(t)
+	f.Handle(http.MethodPut, `/api/v1/groups/`+idnGroupEng+`/users/`+idnUserAlice, func(w http.ResponseWriter, r *http.Request, _ []string) {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		require.NoError(t, err)
+		_ = conn.Close()
+	})
+	srv := newServer(t, f)
+	ctx, cancel := idnProvisionCtx()
+	defer cancel()
+	_, err := srv.Grant(ctx, &v2.GrantManagerServiceGrantRequest{
+		Entitlement: idnEnt(idnRes("group", idnGroupEng), "member"),
+		Principal:   idnRes("user", idnUserAlice),
+	})
+	require.Equal(t, codes.Unavailable, status.Code(err), "%v", err)
+	require.ErrorContains(t, err, "network error")
+	n := 0
+	for _, r := range f.Requests() {
+		if r.Method == http.MethodPut {
+			n++
+		}
+	}
+	require.Equal(t, 3, n)
 }

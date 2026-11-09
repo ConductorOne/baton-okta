@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type seenRequest struct {
@@ -582,23 +584,45 @@ func (e *eofOnce) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func TestTransportErrors(t *testing.T) {
-	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, `{}`) })
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/api-tokens" {
+			writeJSON(w, 200, `[]`)
+			return
+		}
+		writeJSON(w, 200, `{}`)
+	})
 	c, _ := newTestClient(t, ts)
-	rt := &eofOnce{fails: 1, next: ts.Client().Transport}
+	rt := &eofOnce{next: ts.Client().Transport}
 	c.httpClient = &http.Client{Transport: rt}
 
-	_, _, err := c.GetOrgSettings(context.Background())
-	require.NoError(t, err, "a dropped connection is retried")
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "okta errors", call: func() error { _, _, err := c.GetOrgSettings(context.Background()); return err }},
+		{name: "status-line errors", call: func() error { _, _, err := c.ListAPITokens(context.Background(), ""); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rt.fails = 2
+			require.NoError(t, tc.call(), "two dropped connections are retried")
+			require.Zero(t, rt.fails)
 
-	rt.fails = 10
-	_, _, err = c.GetOrgSettings(context.Background())
-	require.ErrorIs(t, err, io.EOF)
-	require.ErrorContains(t, err, "network error")
+			rt.fails = 3
+			err := tc.call()
+			require.Zero(t, rt.fails, "a request is sent at most three times")
+			require.ErrorIs(t, err, io.EOF)
+			require.ErrorContains(t, err, "network error")
+			var terr *TransportError
+			require.ErrorAs(t, err, &terr)
+			require.Equal(t, codes.Unavailable, status.Code(err))
+			require.Equal(t, codes.Unavailable, status.Code(fmt.Errorf("wrapped: %w", err)))
+		})
+	}
 
-	rt.fails = 1
-	_, _, err = c.ListAPITokens(context.Background(), "")
 	var gerr *GenericError
-	require.ErrorAs(t, err, &gerr, "status-line endpoints do not retry a dropped connection")
+	rt.fails = 3
+	_, _, err := c.ListAPITokens(context.Background(), "")
+	require.ErrorAs(t, err, &gerr, "status-line endpoints still return *GenericError")
 
 	ts.Close()
 	c.httpClient = ts.Client()
@@ -606,6 +630,7 @@ func TestTransportErrors(t *testing.T) {
 	require.Nil(t, resp)
 	var uerr *url.Error
 	require.True(t, errors.As(err, &uerr), "other transport failures surface unchanged")
+	require.Equal(t, codes.Unknown, status.Code(err))
 }
 
 func TestQueryParamsEncoding(t *testing.T) {

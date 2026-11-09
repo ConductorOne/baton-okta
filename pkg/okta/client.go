@@ -18,6 +18,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -141,14 +144,14 @@ func (c *Client) do(ctx context.Context, req request, v any) (*Response, error) 
 		}
 	}
 
-	maxRetries := c.maxRetries
+	max429Retries := c.maxRetries
 	if req.noRetry {
-		maxRetries = 0
+		max429Retries = 0
 	}
-	httpResp, body, err := c.doWithRetries(ctx, httpReq, maxRetries) //nolint:bodyclose // doWithRetries reads and closes the network body
+	httpResp, body, err := c.doWithRetries(ctx, httpReq, max429Retries) //nolint:bodyclose // doWithRetries reads and closes the network body
 	if err != nil {
 		if req.errorStyle == errorStyleGeneric {
-			return nil, &GenericError{Message: err.Error()}
+			return nil, &GenericError{Message: err.Error(), cause: err}
 		}
 		return nil, err
 	}
@@ -223,9 +226,10 @@ func (c *Client) resolve(path string, extra url.Values) (*url.URL, error) {
 	return &u, nil
 }
 
-// doWithRetries sends httpReq, retrying 429 responses after the window Okta
-// advertises. It returns the final response with its body fully read.
-func (c *Client) doWithRetries(ctx context.Context, httpReq *http.Request, maxRetries int) (*http.Response, []byte, error) {
+// doWithRetries sends httpReq, retrying up to max429Retries 429 responses
+// after the window Okta advertises, and up to c.maxRetries connections dropped
+// mid-response (io.EOF). It returns the final response with its body fully read.
+func (c *Client) doWithRetries(ctx context.Context, httpReq *http.Request, max429Retries int) (*http.Response, []byte, error) {
 	var reqBody []byte
 	if httpReq.Body != nil {
 		b, err := io.ReadAll(httpReq.Body)
@@ -236,19 +240,22 @@ func (c *Client) doWithRetries(ctx context.Context, httpReq *http.Request, maxRe
 		reqBody = b
 	}
 
+	eofRetries := 0
 	for attempt := 0; ; attempt++ {
 		if reqBody != nil {
 			httpReq.Body = io.NopCloser(bytes.NewReader(reqBody))
 		}
 		resp, err := c.httpClient.Do(httpReq)
 		if err != nil {
-			// A connection dropped mid-response is retried, up to the same budget
-			// as a 429; anything else from the transport is final.
-			if errors.Is(err, io.EOF) && attempt < maxRetries {
-				continue
-			}
+			// A connection dropped mid-response is retried; anything else from
+			// the transport is final.
 			if errors.Is(err, io.EOF) {
-				return nil, nil, fmt.Errorf("network error: %w", err)
+				if eofRetries < c.maxRetries {
+					eofRetries++
+					attempt--
+					continue
+				}
+				return nil, nil, &TransportError{err: err}
 			}
 			return nil, nil, err
 		}
@@ -270,7 +277,7 @@ func (c *Client) doWithRetries(ctx context.Context, httpReq *http.Request, maxRe
 		if err != nil {
 			return nil, nil, err
 		}
-		if attempt >= maxRetries {
+		if attempt >= max429Retries {
 			return nil, nil, errTooManyRequests
 		}
 		if backoff > c.maxBackoff {
@@ -285,6 +292,22 @@ func (c *Client) doWithRetries(ctx context.Context, httpReq *http.Request, maxRe
 }
 
 var errTooManyRequests = errors.New("too many requests")
+
+// TransportError is a request that got no response because the connection
+// kept dropping mid-response (io.EOF) after every retry. It reports
+// codes.Unavailable, so callers treat it as transient and retry later.
+type TransportError struct {
+	err error
+}
+
+func (e *TransportError) Error() string { return "network error: " + e.err.Error() }
+
+func (e *TransportError) Unwrap() error { return e.err }
+
+// GRPCStatus lets status.Code and status.FromError classify the error.
+func (e *TransportError) GRPCStatus() *status.Status {
+	return status.New(codes.Unavailable, e.Error())
+}
 
 // backoffFor429 is how long Okta asks a client to wait after a 429: until the
 // X-Rate-Limit-Reset epoch, measured against the response's Date, plus a second.
