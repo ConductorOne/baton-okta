@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Error is the error body the Okta Management API returns
@@ -113,22 +114,133 @@ func checkResponse(resp *http.Response, body []byte) error {
 	return &e
 }
 
-// parseAuthParam reads a single `name="value"` WWW-Authenticate parameter.
-// The whole fragment must be that one parameter.
+// parseAuthParam reads one comma-separated WWW-Authenticate fragment the way
+// Okta's error decoding always has: as a single TOML `key = "value"` line. It
+// returns the value when the key is name, "" when the line holds a different
+// string-valued key, and ok=false when the fragment is not such a line. So a
+// fragment carrying several space-separated pairs, or the scheme name ("Bearer
+// error_description=..."), is rejected, while single-quoted, triple-quoted and
+// escaped values and a trailing "# comment" are accepted.
 func parseAuthParam(fragment, name string) (string, bool) {
-	k, v, ok := strings.Cut(strings.TrimSpace(fragment), "=")
-	if !ok || strings.TrimSpace(k) != name {
+	rest := strings.TrimLeft(fragment, " \t")
+	key, rest, ok := tomlKey(rest)
+	if !ok {
 		return "", false
 	}
-	v = strings.TrimSpace(v)
-	if !strings.HasPrefix(v, `"`) {
+	rest = strings.TrimLeft(rest, " \t")
+	if !strings.HasPrefix(rest, "=") {
 		return "", false
 	}
-	unq, err := strconv.Unquote(v)
-	if err != nil {
+	val, rest, ok := tomlString(strings.TrimLeft(rest[1:], " \t"))
+	if !ok {
 		return "", false
 	}
-	return unq, true
+	rest = strings.TrimLeft(rest, " \t")
+	if rest != "" && !strings.HasPrefix(rest, "#") {
+		return "", false
+	}
+	if key != name {
+		return "", true
+	}
+	return val, true
+}
+
+// tomlKey reads a bare or quoted TOML key from the start of s.
+func tomlKey(s string) (string, string, bool) {
+	if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
+		return tomlString(s)
+	}
+	i := 0
+	for i < len(s) && (s[i] == '_' || s[i] == '-' ||
+		(s[i] >= 'a' && s[i] <= 'z') || (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= '0' && s[i] <= '9')) {
+		i++
+	}
+	if i == 0 {
+		return "", "", false
+	}
+	return s[:i], s[i:], true
+}
+
+// tomlString reads a TOML string (basic, literal, or either multi-line form)
+// from the start of s and returns its value and the remaining input.
+func tomlString(s string) (string, string, bool) {
+	switch {
+	case strings.HasPrefix(s, `"""`):
+		return tomlBasic(s[3:], `"""`)
+	case strings.HasPrefix(s, `'''`):
+		end := strings.Index(s[3:], `'''`)
+		if end < 0 {
+			return "", "", false
+		}
+		return s[3 : 3+end], s[3+end+3:], true
+	case strings.HasPrefix(s, `"`):
+		return tomlBasic(s[1:], `"`)
+	case strings.HasPrefix(s, `'`):
+		end := strings.IndexByte(s[1:], '\'')
+		if end < 0 {
+			return "", "", false
+		}
+		return s[1 : 1+end], s[1+end+1:], true
+	}
+	return "", "", false
+}
+
+// tomlBasic decodes a basic string body up to the closing delimiter, applying
+// TOML's escapes.
+func tomlBasic(s, closing string) (string, string, bool) {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if strings.HasPrefix(s[i:], closing) {
+			return b.String(), s[i+len(closing):], true
+		}
+		c := s[i]
+		switch {
+		case c == '\\':
+			if i+1 >= len(s) {
+				return "", "", false
+			}
+			n := 2
+			switch s[i+1] {
+			case 'b':
+				b.WriteByte('\b')
+			case 't':
+				b.WriteByte('\t')
+			case 'n':
+				b.WriteByte('\n')
+			case 'f':
+				b.WriteByte('\f')
+			case 'r':
+				b.WriteByte('\r')
+			case '"':
+				b.WriteByte('"')
+			case '\\':
+				b.WriteByte('\\')
+			case 'u', 'U':
+				digits := 4
+				if s[i+1] == 'U' {
+					digits = 8
+				}
+				if i+2+digits > len(s) {
+					return "", "", false
+				}
+				r, err := strconv.ParseUint(s[i+2:i+2+digits], 16, 32)
+				if err != nil || !utf8.ValidRune(rune(r)) {
+					return "", "", false
+				}
+				b.WriteRune(rune(r))
+				n += digits
+			default:
+				return "", "", false
+			}
+			i += n
+		case (c < 0x20 && c != '\t') || c == 0x7f:
+			return "", "", false
+		default:
+			b.WriteByte(c)
+			i++
+		}
+	}
+	return "", "", false
 }
 
 var jsonContentType = regexp.MustCompile(`(?i:(?:application|text)/(?:vnd\.[^;]+\+)?json)`)

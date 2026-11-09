@@ -701,3 +701,45 @@ func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
 		}
 	}
 }
+
+// The expected summaries below were recorded from the previous SDK-based
+// client, which decoded the matching WWW-Authenticate fragment as TOML.
+func TestWWWAuthenticateErrorDescription(t *testing.T) {
+	for _, tc := range []struct{ header, summary string }{
+		{"Bearer authorization_uri=\"http://x\", realm=\"x\", error=\"insufficient_scope\", error_description=\"The access token provided does not contain the required scopes.\"", "The access token provided does not contain the required scopes."},
+		{"Bearer realm=\"x\" error_description=\"scope missing\"", "unauthorized"},
+		{"Bearer realm=\"x\", error=\"invalid_token\" error_description=\"scope missing\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=\"scope missing\" error=\"invalid_token\"", "unauthorized"},
+		{"Bearer error_description=\"first\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=unquoted", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=\"a \\\"q\\\" b\"", "a \"q\" b"},
+		{"Bearer realm=\"x\", error_description=\"x\",error=\"y\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description = \"spaced\"", "spaced"},
+		{"Bearer realm=\"x\", foo=\"bar\" error_description=\"two\" baz=\"q\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description='single'", "single"},
+		{"Bearer realm=\"x\", error_description=\"x\" # comment", "x"},
+		{"Bearer realm=\"x\", error_description=\"x\"junk", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=\"\"\"triple\"\"\"", "triple"},
+		{"Bearer realm=\"x\", error_description='''lit3'''", "lit3"},
+		{"Bearer realm=\"x\", error_description=\"café\"", "café"},
+		{"Bearer realm=\"x\", error_description=\"\\x41\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=\"\\U0001F600\"", "😀"},
+		{"Bearer realm=\"x\", error_description=\"esc\\e\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=5", "unauthorized"},
+		{"Bearer realm=\"x\", \"error_description\"=\"quotedkey\"", "quotedkey"},
+		{"Bearer realm=\"x\", error=\"see error_description\"", ""},
+		{"Bearer realm=\"x\", error_description=\"tab\\there\"", "tab\there"},
+		{"Bearer realm=\"x\", error_description=\t\"tabbed\"", "tabbed"},
+		{"Bearer realm=\"x\", error_description=\"trailing\"   ", "trailing"},
+		{"Bearer realm=\"x\", error_description=\"\"", ""},
+		{"Bearer realm=\"x\", error_description=\"a\\\\b\"", "a\\b"},
+		{"Bearer realm=\"x\", error_description='it''s'", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=\"bad \\q escape\"", "unauthorized"},
+		{"Bearer realm=\"x\", error_description=\"unterminated", "unauthorized"},
+	} {
+		resp := &http.Response{StatusCode: http.StatusUnauthorized, Header: http.Header{"Www-Authenticate": {tc.header}}}
+		var oktaErr *Error
+		require.ErrorAs(t, checkResponse(resp, nil), &oktaErr, tc.header)
+		require.Equal(t, tc.summary, oktaErr.ErrorSummary, tc.header)
+	}
+}
