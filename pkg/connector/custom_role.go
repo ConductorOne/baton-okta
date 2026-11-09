@@ -303,7 +303,7 @@ func getOktaIamCustomRole(
 	var role *okta.Role
 	resp, err := rq.Do(ctx, req, &role)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get custom role: %w", handleOktaResponseError(resp, err))
+		return nil, nil, err
 	}
 
 	respCtx := &responseContext{

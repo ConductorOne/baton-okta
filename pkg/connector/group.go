@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -220,9 +219,9 @@ func (o *groupResourceType) Grants(
 			}
 
 			defer resp.Body.Close()
-			errOkta, parseErr := getError(resp)
-			if parseErr != nil {
-				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", errors.Join(err, parseErr))
+			errOkta, err := getError(resp)
+			if err != nil {
+				return nil, nil, err
 			}
 			if errOkta.ErrorCode == AccessDeniedErrorCode {
 				err = bag.Next("")
@@ -235,7 +234,7 @@ func (o *groupResourceType) Grants(
 				}
 				return nil, &sdkResource.SyncOpResults{NextPageToken: pageToken}, nil
 			} else {
-				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", err)
+				return nil, nil, fmt.Errorf("okta-connectorv2: failed to list group roles: %w", handleOktaResponseError(resp, &errOkta))
 			}
 		}
 
@@ -344,7 +343,7 @@ func (o *groupResourceType) GetGroupWithParams(
 	var group *okta.Group
 	resp, err := rq.Do(ctx, req, &group)
 	if err != nil {
-		return nil, resp, fmt.Errorf("okta-connectorv2: failed to get group: %w", handleOktaResponseError(resp, err))
+		return nil, resp, err
 	}
 
 	return group, resp, nil
@@ -685,7 +684,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 		if resp != nil {
 			defer resp.Body.Close()
 		}
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group %s: %w", groupId, handleOktaResponseError(resp, err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get group %s: %w", groupId, err)
 	}
 	if resp != nil {
 		defer resp.Body.Close()
@@ -729,7 +728,7 @@ func (o *groupResourceType) handleModifyGroupAction(ctx context.Context, args *s
 			defer updateResp.Body.Close()
 		}
 		l.Error("failed to update Okta group", zap.String("groupId", groupId), zap.Error(err))
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to update group: %w", handleOktaResponseError(updateResp, err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to update group: %w", err)
 	}
 	if updateResp != nil {
 		defer updateResp.Body.Close()
@@ -820,7 +819,7 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 			defer resp.Body.Close()
 		}
 		l.Error("failed to create Okta group", zap.Error(err), zap.String(profileFieldName, groupName))
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create group: %w", handleOktaResponseError(resp, err))
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to create group: %w", err)
 	}
 	if resp != nil {
 		defer resp.Body.Close()
@@ -836,7 +835,7 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 				if memberResp != nil {
 					memberResp.Body.Close()
 				}
-				return nil, nil, fmt.Errorf("okta-connectorv2: group %s created but failed to add member %s: %w", createdGroup.Id, memberID.Resource, handleOktaResponseError(memberResp, err))
+				return nil, nil, fmt.Errorf("okta-connectorv2: group %s created but failed to add member %s: %w", createdGroup.Id, memberID.Resource, err)
 			}
 			if memberResp != nil {
 				memberResp.Body.Close()
