@@ -556,7 +556,12 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 		return nil, errors.New("unsupported credential options")
 	}
 
-	length := min(8, credentialOptions.GetRandomPassword().GetLength())
+	length := max(8, credentialOptions.GetRandomPassword().GetLength())
+	// The public credential contract limits lengths to 64; enforce it here too
+	// because not every connector invocation runs protobuf validation.
+	if length > 64 {
+		return nil, status.Error(codes.InvalidArgument, "random password length must not exceed 64")
+	}
 	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.LocalCredentialOptions_RandomPassword{
 		Length: length,
 	})
