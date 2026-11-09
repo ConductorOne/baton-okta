@@ -1020,6 +1020,7 @@ func TestBlackboxOpsResponseCache(t *testing.T) {
 			require.Equal(t, 1, getsCache)
 			require.Equal(t, 1, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflip"))
 			require.Equal(t, 2, opsRequestCount(f, http.MethodPost, "/api/v1/users/00uflip/lifecycle/suspend"))
+			require.Len(t, f.Requests(), 4, "cached lifecycle state triggers a second suspend")
 		} else {
 			require.Equal(t, 2, getsCache)
 			require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflip"))
