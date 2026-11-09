@@ -114,8 +114,8 @@ func appsGetCall(g *golden, srv types.ConnectorServer, name, rt, id string) {
 	g.Step(name, stripSessionUsage(resp), err)
 }
 
-// appsRateLimitOnce makes the handler answer 429 once (with the headers the SDK
-// retry loop parses), then fall through to ok.
+// appsRateLimitOnce makes the handler answer 429 once (with the headers the Okta
+// client's retry loop parses), then fall through to ok.
 func appsRateLimitOnce(f *fakeOkta, method, pattern string, ok func(w http.ResponseWriter, r *http.Request, m []string)) {
 	var n int
 	f.Handle(method, pattern, func(w http.ResponseWriter, r *http.Request, m []string) {
@@ -136,14 +136,16 @@ func appsFixtureHandler(t *testing.T, name string) func(w http.ResponseWriter, r
 	return func(w http.ResponseWriter, r *http.Request, _ []string) { writeJSON(w, http.StatusOK, body) }
 }
 
-// ---- v5 reachability --------------------------------------------------------
+// ---- device, API-token and resource-set reachability -----------------------
 //
-// The v5 SDK client derives its server URL from the org URL's Hostname(), which
-// drops the port, so it can never reach a fake listening on an ephemeral port
-// by address. Tests that exercise v5 paths therefore configure the domain
+// The connector once reached the device, API-token and resource-set endpoints
+// through a client that built its server URL from the org URL's Hostname(),
+// dropping the port, so it could never reach a fake listening on an ephemeral
+// port by address. Tests of those endpoints therefore configure the domain
 // "example.com" (covered by httptest's certificate) and a process-wide CONNECT
-// proxy, set via HTTPS_PROXY before the SDK's HTTP transport first reads the
-// environment, tunnels example.com:443 to the current test's fake. Loopback
+// proxy, set via HTTPS_PROXY before the HTTP transport first reads the
+// environment, tunnels example.com:443 to the current test's fake. The setup
+// is kept so the same tests run unchanged against both implementations. Loopback
 // destinations are never proxied, so tests that use the fake's own address are
 // unaffected.
 
@@ -418,7 +420,7 @@ func TestBlackboxAppsGrantRevokeGroup(t *testing.T) {
 
 // ---- resource sets / bindings ---------------------------------------------
 
-// appsNoCache turns the SDK response cache off for tests that re-route the same
+// appsNoCache turns the connector's response cache off for tests that re-route the same
 // GET between steps, which the cache would otherwise answer from memory.
 func appsNoCache(c *cfg.Okta) { c.Cache = false }
 
@@ -597,9 +599,9 @@ func TestBlackboxAppsDevices(t *testing.T) {
 }
 
 // Page size 0 and an oversized page size both clamp to Okta's 200 maximum. The
-// SDK response cache is off so each listing reaches the fake; a cache hit on the
-// v5 path returns a response without its Request and the connector panics
-// serializing the next-page token.
+// response cache is off so each listing reaches the fake; with the previous
+// client a cache hit here returned a response without its Request and the
+// connector panicked serializing the next-page token.
 func TestBlackboxAppsDevicesPageSizeClamp(t *testing.T) {
 	f := newFakeOkta(t)
 	f.FixturePages("/api/v1/devices", "apps_devices_page1.json", "apps_devices_page2.json")

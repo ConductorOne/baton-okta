@@ -106,7 +106,7 @@ func idnWithCustomRoles() connOpt {
 	return withConfig(func(c *cfg.Okta) { c.SyncCustomRoles = true })
 }
 
-// idnProvisionCtx bounds a Grant/Revoke call. The SDK retries Unavailable
+// idnProvisionCtx bounds a Grant/Revoke call. baton-sdk retries Unavailable
 // failures (any 5xx / 429) with a 15s linear backoff; the deadline cuts that
 // first sleep short so the recorded error is the connector's own first failure.
 // Nothing else in these tests takes anywhere near the deadline.

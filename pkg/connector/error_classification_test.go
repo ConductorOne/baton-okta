@@ -23,8 +23,9 @@ const (
 	testRoleType = "SUPER_ADMIN"
 )
 
-// rateLimitedStep builds a 429 carrying the headers Get429BackoffTime needs; without
-// them the SDK fails on header parsing and never emits the rate-limit error text.
+// rateLimitedStep builds a 429 carrying the Date and X-Rate-Limit-Reset headers the
+// Okta client's 429 backoff needs; without them the client fails on header parsing
+// and never emits the rate-limit error text.
 func rateLimitedStep(method, path string) oktaRequestStep {
 	now := time.Now().UTC()
 	return oktaRequestStep{
@@ -77,7 +78,7 @@ func newTestAppBuilder(client *okta.Client) *appResourceType {
 	return appBuilder("", "", false, false, nil, client)
 }
 
-// TestRateLimitClassification drives the real vendored SDK: a 429 that exhausts its own
+// TestRateLimitClassification drives the real Okta client: a 429 that exhausts its own
 // retries must reach the connector as codes.Unavailable, not codes.Unknown.
 func TestRateLimitClassification(t *testing.T) {
 	t.Run("group grant", func(t *testing.T) {
@@ -413,7 +414,7 @@ func TestHandleOktaResponseErrorClassification(t *testing.T) {
 		},
 		{
 			// Self-referential: types the same literal the classifier matches, so this
-			// pins the mapping, not the SDK's wording.
+			// pins the mapping, not the client's wording.
 			name: "rate-limit text without response maps to Unavailable",
 			err:  errors.New("too many requests"),
 			want: codes.Unavailable,
@@ -431,8 +432,8 @@ func TestHandleOktaResponseErrorClassification(t *testing.T) {
 }
 
 // TestRateLimitExhaustedCarriesRetryDetail proves the exhausted-429 classification
-// attaches a RateLimitDescription the retryer waits on. The SDK already discarded Okta's
-// headers, so ResetAt is ExtractRateLimitData's 60s no-headers default, not Okta's window.
+// attaches a RateLimitDescription the retryer waits on. The Okta client already discarded
+// Okta's headers, so ResetAt is ExtractRateLimitData's 60s no-headers default, not Okta's window.
 func TestRateLimitExhaustedCarriesRetryDetail(t *testing.T) {
 	err := handleOktaResponseError(nil, errors.New("too many requests"))
 	if status.Code(err) != codes.Unavailable {
@@ -538,8 +539,9 @@ func TestRevokeAcceptsEitherNotFoundSignal(t *testing.T) {
 	}
 }
 
-// TestRateLimitHeaderParseFailureClassification covers the two 429s that leave the SDK's
-// retry loop through Get429BackoffTime instead of the exhausted-retries sentinel. Okta's
+// TestRateLimitHeaderParseFailureClassification covers the two 429s that leave the Okta
+// client's retry loop through its backoff-header parsing instead of the exhausted-retries
+// sentinel. Okta's
 // concurrency limit produces the second one by omitting X-Rate-Limit-Reset, and both
 // arrive with the response already dropped, so only the error text identifies them.
 func TestRateLimitHeaderParseFailureClassification(t *testing.T) {
@@ -626,10 +628,10 @@ func TestSuccessPathReportsRateLimitAnnotations(t *testing.T) {
 	})
 }
 
-// TestGrantPrecheckKeepsOktaRequestID drives the pre-check end to end: the SDK appends
-// x-okta-request-id to its own error on a 500 only, so re-reading the body with getError
-// yields an error without it. Support triage needs that id, so the returned error has to
-// carry the SDK's error too, not just the re-parsed one.
+// TestGrantPrecheckKeepsOktaRequestID drives the pre-check end to end: the Okta client
+// appends x-okta-request-id to its own error on a 500 only, so re-reading the body with
+// getError yields an error without it. Support triage needs that id, so the returned error
+// has to carry the client's error too, not just the re-parsed one.
 func TestGrantPrecheckKeepsOktaRequestID(t *testing.T) {
 	const requestID = "test-okta-request-id"
 

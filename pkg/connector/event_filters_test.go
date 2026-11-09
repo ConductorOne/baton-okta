@@ -177,7 +177,7 @@ func TestApplicationLifecycleFilterEventTypes(t *testing.T) {
 	}
 
 	require.False(t, types.Contains("app.lifecycle.create"), "app.lifecycle.* is not a real Okta namespace")
-	// Both leave the targeted sync with no resource to write, so the SDK records a
+	// Both leave the targeted sync with no resource to write, so baton-sdk records a
 	// task failure and the stale resource survives regardless.
 	require.False(t, types.Contains("application.lifecycle.delete"))
 	require.False(t, types.Contains("application.lifecycle.deactivate"))

@@ -16,7 +16,7 @@ type Response struct {
 	*http.Response
 	// NextPage is the rel="next" link, reduced to a path plus query. The
 	// request's own query parameters are carried into it, overridden by those
-	// in the link, as Okta's SDKs always have.
+	// in the link, as the connector has always done.
 	NextPage string
 }
 

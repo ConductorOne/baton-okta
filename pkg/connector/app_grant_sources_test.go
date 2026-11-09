@@ -147,7 +147,7 @@ func TestAppGrantPhaseSequenceTerminates(t *testing.T) {
 					body:       appGroupAssignmentBody(testAssignment{testAppGroupID, appGroupType}),
 				}
 				if i < groupPages-1 {
-					// Okta signals another page with a Link header; the SDK turns
+					// Okta signals another page with a Link header; the client turns
 					// it into Response.NextPage and parseResp reads the cursor.
 					step.headers = map[string]string{
 						"Link": `<https://example.okta.com/api/v1/apps/` + testGrantAppID +

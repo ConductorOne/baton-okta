@@ -140,7 +140,7 @@ func opsInvoke(t *testing.T, g *golden, srv types.ConnectorServer, step, name, r
 }
 
 // opsListSchemas records the action schemas for a resource type, sorted by name:
-// the SDK lists them in Go map order.
+// baton-sdk lists them in Go map order.
 func opsListSchemas(t *testing.T, g *golden, srv types.ConnectorServer, step, resourceType string) {
 	t.Helper()
 	resp, err := srv.ListActionSchemas(context.Background(), &v2.ListActionSchemasRequest{ResourceTypeId: resourceType})
@@ -940,7 +940,7 @@ func TestBlackboxOpsValidateAndMetadata(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // opsRateLimited answers n times with a 429 whose Date and X-Rate-Limit-Reset
-// are both "now", so the SDK backs off for about a second per retry, then
+// are both "now", so the Okta client backs off for about a second per retry, then
 // defers to next.
 func opsRateLimited(n int, next func(w http.ResponseWriter, r *http.Request, m []string)) func(w http.ResponseWriter, r *http.Request, m []string) {
 	var mu sync.Mutex
@@ -990,7 +990,7 @@ func TestBlackboxOpsRateLimitExhausted(t *testing.T) {
 func TestBlackboxOpsRateLimitMissingHeaders(t *testing.T) {
 	f := newFakeOkta(t)
 	f.Handle(http.MethodGet, `/api/v1/users/00url`, func(w http.ResponseWriter, r *http.Request, _ []string) {
-		// No usable Date/X-Rate-Limit-Reset pair: the SDK gives up without retrying.
+		// No usable Date/X-Rate-Limit-Reset pair: the Okta client gives up without retrying.
 		w.Header().Set("X-Rate-Limit-Reset", "")
 		writeJSON(w, http.StatusTooManyRequests, opsErr("E0000047", "API call exceeded rate limit due to too many requests.", ""))
 	})
