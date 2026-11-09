@@ -124,7 +124,9 @@ func checkResponse(resp *http.Response, body []byte) error {
 // string-valued key, and ok=false when the fragment is not such a line. So a
 // fragment carrying several space-separated pairs, or the scheme name ("Bearer
 // error_description=..."), is rejected, while single-quoted, triple-quoted and
-// escaped values and a trailing "# comment" are accepted.
+// escaped values and a trailing "# comment" are accepted. Only string values
+// are understood: a fragment whose value is a TOML number, boolean or table is
+// rejected even when its key is not name.
 func parseAuthParam(fragment, name string) (string, bool) {
 	rest := strings.TrimLeft(fragment, " \t")
 	key, rest, ok := tomlKey(rest)
