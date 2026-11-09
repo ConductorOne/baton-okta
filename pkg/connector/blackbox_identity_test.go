@@ -623,6 +623,7 @@ func TestBlackboxIdentityRoleGrantRevokeGroupPrincipal(t *testing.T) {
 	ent := idnEnt(idnRes("role", "USER_ADMIN"), "assigned")
 	idnGrant(t, g, srv, "group principal", ent, idnRes("group", idnGroupEng))
 	idnRevoke(t, g, srv, "group principal", ent, idnRes("group", idnGroupEng))
+	require.Empty(t, f.Requests(), "group role operations are rejected before reaching the API")
 	g.Check()
 }
 
