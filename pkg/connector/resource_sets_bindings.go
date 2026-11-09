@@ -214,10 +214,7 @@ func (rsb *resourceSetsBindingsResourceType) unassignMemberFromBinding(ctx conte
 
 func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resource *v2.Resource, attrs sdkResource.SyncOpAttrs) ([]*v2.Grant, *sdkResource.SyncOpResults, error) {
 	pToken := &attrs.PageToken
-	var (
-		rv        []*v2.Grant
-		principal *v2.Resource
-	)
+	var rv []*v2.Grant
 	bag, _, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to parse page token: %w", err)
@@ -232,6 +229,7 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	}
 
 	for _, member := range members {
+		var principal *v2.Resource
 		memberHref := strings.Split(member.Links.Self.Href, "/")
 		resourceType := memberHref[len(memberHref)-resourceMaxLength]
 		resourceId := memberHref[len(memberHref)-lastItem]

@@ -479,10 +479,11 @@ func TestBlackboxAppsResourceSetBindings(t *testing.T) {
 	require.Len(t, bindings, 3) // rs1 x2 roles, rs2 x1 role, rs3 none
 	b1 := bindings[0]
 	listAllEntitlements(t, g, srv, b1)
-	// Members include a non-user/group href, which reuses the previous principal.
+	// Unsupported member types must not duplicate the preceding group grant.
 	grants := listAllGrants(t, g, srv, b1, 0)
-	require.Len(t, grants, 3)
-	require.Equal(t, grants[1].GetPrincipal().GetId(), grants[2].GetPrincipal().GetId())
+	require.Len(t, grants, 2)
+	require.Equal(t, "00u1alice00000001", grants[0].GetPrincipal().GetId().GetResource())
+	require.Equal(t, "00g1engineering01", grants[1].GetPrincipal().GetId().GetResource())
 	appsGetCall(g, srv, "GetResource resourceset-binding", "resourceset-binding", appsRS1+":"+appsRole1)
 
 	ent := appsEnt(b1, "member")
