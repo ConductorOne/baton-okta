@@ -198,7 +198,7 @@ func doRequest(ctx context.Context, url, httpMethod string, res interface{}, cli
 
 	resp, err := rq.Do(ctx, req, &res)
 	if err != nil {
-		return resp, err
+		return resp, fmt.Errorf("okta-connectorv2: request failed: %w", handleOktaResponseError(resp, err))
 	}
 
 	return resp, nil

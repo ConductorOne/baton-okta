@@ -278,7 +278,7 @@ func listUsers(ctx context.Context, client *okta.Client, token *pagination.Token
 
 	resp, err := rq.Do(ctx, req, &oktaUsers)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", handleOktaResponseError(resp, err))
 	}
 
 	respCtx, err := responseToContext(token, resp)
@@ -496,7 +496,7 @@ func (r *userResourceType) CreateAccount(
 		}
 		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: existingResource}, nil, nil, nil
 	case err != nil:
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %w", handleOktaResponseError(response, err))
 	case response != nil && response.StatusCode != http.StatusOK:
 		return nil, nil, nil, fmt.Errorf("okta-connectorv2: failed to create user: %s", response.Status)
 	}
@@ -506,7 +506,7 @@ func (r *userResourceType) CreateAccount(
 	if suppressActivationEmail {
 		_, activateResp, err := r.connector.client.User.ActivateUser(ctx, user.Id, query.NewQueryParams(query.WithSendEmail(false)))
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, err)
+			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation failed: %w", user.Id, handleOktaResponseError(activateResp, err))
 		}
 		if activateResp != nil && activateResp.StatusCode != http.StatusOK {
 			return nil, nil, nil, fmt.Errorf("okta-connectorv2: user %s is staged but activation returned non-200: %s", user.Id, activateResp.Status)
@@ -1081,7 +1081,7 @@ func suspendUser(ctx context.Context, client *okta.Client, oktaUserID string) er
 
 	resp, err := client.User.SuspendUser(ctx, oktaUserID)
 	if err != nil {
-		return fmt.Errorf("okta-connectorv2: failed to suspend user: %w", err)
+		return fmt.Errorf("okta-connectorv2: failed to suspend user: %w", handleOktaResponseError(resp, err))
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("okta-connectorv2: failed to suspend user: %s", resp.Status)
@@ -1105,7 +1105,7 @@ func unsuspendUser(ctx context.Context, client *okta.Client, oktaUserID string) 
 
 	resp, err := client.User.UnsuspendUser(ctx, oktaUserID)
 	if err != nil {
-		return fmt.Errorf("okta-connectorv2: failed to unsuspend user: %w", err)
+		return fmt.Errorf("okta-connectorv2: failed to unsuspend user: %w", handleOktaResponseError(resp, err))
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("okta-connectorv2: failed to unsuspend user: %s", resp.Status)
@@ -1127,7 +1127,7 @@ func activateUser(ctx context.Context, client *okta.Client, oktaUserID string) e
 
 	_, resp, err := client.User.ActivateUser(ctx, oktaUserID, query.NewQueryParams(query.WithSendEmail(false)))
 	if err != nil {
-		return fmt.Errorf("okta-connectorv2: failed to activate user: %w", err)
+		return fmt.Errorf("okta-connectorv2: failed to activate user: %w", handleOktaResponseError(resp, err))
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("okta-connectorv2: failed to activate user: %s", resp.Status)
