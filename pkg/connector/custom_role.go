@@ -188,7 +188,7 @@ func (o *customRoleResourceType) Grants(
 			return nil, nil, err
 		}
 		for _, role := range roles {
-			if role.Status == roleStatusInactive || role.AssignmentType != "USER" {
+			if role.Status == roleStatusInactive || role.AssignmentType != roleAssignmentTypeUser {
 				continue
 			}
 			if role.Type == roleTypeCustom {

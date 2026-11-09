@@ -48,6 +48,7 @@ type Okta struct {
 	SyncCustomRoles     bool
 	skipSecondaryEmails bool
 	skipAppGroups       bool
+	syncAdminRoleScopes bool
 	SyncSecrets         bool
 	userFilters         *userFilterConfig
 	opts                *cli.ConnectorOpts
@@ -207,7 +208,7 @@ func (o *Okta) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 		filterEmailDomains = o.userFilters.includedEmailDomains
 	}
 	resourceSyncer = append(resourceSyncer,
-		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.skipAppGroups, filterEmailDomains, o.client),
+		appBuilder(o.domain, o.apiToken, o.syncInactiveApps, o.skipAppGroups, o.syncAdminRoleScopes, filterEmailDomains, o.client),
 	)
 
 	if o.SyncCustomRoles {
@@ -523,6 +524,7 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		SyncCustomRoles:     cc.SyncCustomRoles,
 		skipSecondaryEmails: cc.SkipSecondaryEmails,
 		skipAppGroups:       cc.SkipAppGroups,
+		syncAdminRoleScopes: cc.SyncAdminRoleScopes,
 		SyncSecrets:         cc.SyncSecrets,
 		opts:                opts,
 		userFilters: &userFilterConfig{
