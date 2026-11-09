@@ -17,12 +17,12 @@ func TestOperationErrorWording(t *testing.T) {
 	})
 	app := appBuilder("example.com", "", false, false, nil, client)
 	_, _, err := app.List(context.Background(), nil, sdkResource.SyncOpAttrs{})
-	require.ErrorContains(t, err, "failed to list users")
+	require.ErrorContains(t, err, "failed to list apps")
 
 	role := &roleResourceType{}
 	principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: "app", Resource: "app1"}}
 	_, err = role.Grant(context.Background(), principal, nil)
-	require.ErrorContains(t, err, "repo membership")
+	require.ErrorContains(t, err, "only users can be granted role membership")
 	_, err = role.Revoke(context.Background(), &v2.Grant{Principal: principal})
-	require.ErrorContains(t, err, "okta-connector:only users or groups")
+	require.ErrorContains(t, err, "okta-connector: only users can have role membership revoked")
 }
