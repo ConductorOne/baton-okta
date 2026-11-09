@@ -750,6 +750,9 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	if user == nil {
 		return nil, annos, nil
 	}
+	if user.Profile == nil {
+		return nil, annos, fmt.Errorf("okta-connector: user response missing profile")
+	}
 
 	// for okta v2, we only attempt to filter users by email domains when a list is provided
 	if !o.connector.shouldIncludeUser(user) {
