@@ -244,6 +244,12 @@ func rateLimitAnnotations(resp *okta.Response) annotations.Annotations {
 	if resp == nil || resp.Response == nil {
 		return annos
 	}
+	return responseRateLimitAnnotations(resp)
+}
+
+// responseRateLimitAnnotations requires an initialized HTTP response.
+func responseRateLimitAnnotations(resp *okta.Response) annotations.Annotations {
+	var annos annotations.Annotations
 	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil && desc != nil {
 		annos.WithRateLimiting(desc)
 	}
