@@ -858,6 +858,9 @@ func (o *groupResourceType) Delete(ctx context.Context, resourceId *v2.ResourceI
 		if resp != nil {
 			defer resp.Body.Close()
 		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
 		l.Error("failed to delete Okta group", zap.String("groupId", groupId), zap.Error(err))
 		return nil, handleOktaResponseError(resp, err)
 	}

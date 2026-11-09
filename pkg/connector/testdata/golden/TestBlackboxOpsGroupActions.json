@@ -460,11 +460,8 @@
       "response": {}
     },
     {
-      "error": {
-        "code": "NotFound",
-        "message": "error: delete resource failed: rpc error: code = NotFound desc = Not found: Resource not found: 00ggone (UserGroup)\nthe API returned an error: Not found: Resource not found: 00ggone (UserGroup)"
-      },
-      "name": "delete group 404"
+      "name": "delete group 404",
+      "response": {}
     },
     {
       "error": {
