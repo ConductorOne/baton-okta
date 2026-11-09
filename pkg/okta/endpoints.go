@@ -32,6 +32,12 @@ func withStatusLineErrors() RequestOption {
 	}
 }
 
+// withFollowUpPage marks a status-line list request as fetching a page after
+// the first one.
+func withFollowUpPage(followUp bool) RequestOption {
+	return func(r *request) { r.followUpPage = followUp }
+}
+
 // Do sends method to path (which may include a query string), JSON-encoding
 // body when non-nil and decoding a successful JSON response into v when
 // non-nil. A non-2xx response is returned alongside an *Error.
@@ -353,7 +359,7 @@ func (c *Client) ListDevices(ctx context.Context, limit int32, nextPage string) 
 		path = fmt.Sprintf("/api/v1/devices?limit=%d", limit)
 	}
 	var out []Device
-	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors())
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors(), withFollowUpPage(nextPage != ""))
 	return out, resp, err
 }
 
@@ -364,7 +370,7 @@ func (c *Client) ListAPITokens(ctx context.Context, nextPage string) ([]APIToken
 		path = "/api/v1/api-tokens"
 	}
 	var out []APIToken
-	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors())
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, &out, withStatusLineErrors(), withFollowUpPage(nextPage != ""))
 	return out, resp, err
 }
 

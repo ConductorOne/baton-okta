@@ -743,3 +743,29 @@ func TestWWWAuthenticateErrorDescription(t *testing.T) {
 		require.Equal(t, tc.summary, oktaErr.ErrorSummary, tc.header)
 	}
 }
+
+func TestDecodeFollowUpPage(t *testing.T) {
+	for _, tc := range []struct {
+		name, ct, body, wantErr string
+		wantLen                 int
+	}{
+		{name: "json", ct: "application/json", body: `[{"id":"a"}]`, wantLen: 1},
+		{name: "json with charset", ct: "application/json; charset=utf-8", body: `[{"id":"a"},{"id":"b"}]`, wantLen: 2},
+		{name: "trailing data after the JSON value is ignored", ct: "application/json", body: `[{"id":"a"}] trailing`, wantLen: 1},
+		{name: "octet-stream is not decoded", ct: "application/octet-stream", body: "binary"},
+		{name: "text/json is not JSON here", ct: "text/json", body: `[]`, wantErr: "could not build a response for type: text/json"},
+		{name: "text/plain", ct: "text/plain", body: "not json", wantErr: "could not build a response for type: text/plain"},
+		{name: "bad json", ct: "application/json", body: `{`, wantErr: "unexpected EOF"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out []Device
+			err := decodeFollowUpPage(tc.ct, []byte(tc.body), &out)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, out, tc.wantLen)
+		})
+	}
+}

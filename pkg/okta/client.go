@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -108,6 +109,9 @@ type request struct {
 	errorStyle errorStyle
 	// noRetry makes the first 429 final.
 	noRetry bool
+	// followUpPage marks a status-line request for a page after the first,
+	// whose success body is decoded by decodeFollowUpPage.
+	followUpPage bool
 }
 
 // do sends req, decoding a successful JSON body into v when v is non-nil. On a
@@ -360,6 +364,15 @@ func (c *Client) buildResponse(httpResp *http.Response, req request, v any) (*Re
 	if len(body) == 0 {
 		return resp, nil
 	}
+	if req.errorStyle == errorStyleGeneric && req.followUpPage {
+		if err := decodeFollowUpPage(httpResp.Header.Get("Content-Type"), body, v); err != nil {
+			if errors.Is(err, errUnknownContentType) {
+				return nil, err
+			}
+			return resp, err
+		}
+		return resp, nil
+	}
 	if v == nil {
 		// Decoded and discarded, so a non-JSON success body is still an error.
 		var discard any
@@ -385,4 +398,30 @@ func (c *Client) buildResponse(httpResp *http.Response, req request, v any) (*Re
 		return nil, errors.New("could not build a response for type: " + ct)
 	}
 	return resp, nil
+}
+
+var errUnknownContentType = errors.New("could not build a response for type")
+
+// decodeFollowUpPage decodes the success body of a device or API-token page
+// fetched from a rel="next" link. These pages have always been decoded with
+// different rules from first pages: the Content-Type must contain
+// application/json (or application/xml), application/octet-stream bodies are
+// not decoded, decode errors are returned bare, and any other type fails with
+// "could not build a response for type: <type>".
+func decodeFollowUpPage(ct string, body []byte, v any) error {
+	var err error
+	switch {
+	case strings.Contains(ct, "application/xml"):
+		err = xml.NewDecoder(bytes.NewReader(body)).Decode(v)
+	case strings.Contains(ct, contentTypeJSON):
+		err = json.NewDecoder(bytes.NewReader(body)).Decode(v)
+	case strings.Contains(ct, "application/octet-stream"):
+		return nil
+	default:
+		return fmt.Errorf("%w: %s", errUnknownContentType, ct)
+	}
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
 }
