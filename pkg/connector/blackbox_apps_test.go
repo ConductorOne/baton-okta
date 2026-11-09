@@ -480,7 +480,9 @@ func TestBlackboxAppsResourceSetBindings(t *testing.T) {
 	b1 := bindings[0]
 	listAllEntitlements(t, g, srv, b1)
 	// Members include a non-user/group href, which reuses the previous principal.
-	listAllGrants(t, g, srv, b1, 0)
+	grants := listAllGrants(t, g, srv, b1, 0)
+	require.Len(t, grants, 3)
+	require.Equal(t, grants[1].GetPrincipal().GetId(), grants[2].GetPrincipal().GetId())
 	appsGetCall(g, srv, "GetResource resourceset-binding", "resourceset-binding", appsRS1+":"+appsRole1)
 
 	ent := appsEnt(b1, "member")
