@@ -3,8 +3,6 @@ package connector
 import (
 	"net/url"
 
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
-
 	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -24,9 +22,7 @@ func parseResp(resp *okta.Response) (string, annotations.Annotations, error) {
 		}
 		after := u.Query().Get("after")
 
-		if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-			annos.WithRateLimiting(desc)
-		}
+		annos = responseRateLimitAnnotations(resp)
 		nextPage = after
 	}
 

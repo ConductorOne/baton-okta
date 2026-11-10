@@ -6,7 +6,6 @@ import (
 
 	"github.com/conductorone/baton-okta/pkg/okta"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/ratelimit"
 )
 
 // parseRespLinkToken is the pagination used by the device and API token
@@ -19,9 +18,7 @@ func parseRespLinkToken(resp *okta.Response) (string, annotations.Annotations, e
 		return "", nil, nil
 	}
 
-	if desc, err := ratelimit.ExtractRateLimitData(resp.StatusCode, &resp.Header); err == nil {
-		annos.WithRateLimiting(desc)
-	}
+	annos = responseRateLimitAnnotations(resp)
 
 	nextPage, err := serializeLinkToken(resp)
 	if err != nil {

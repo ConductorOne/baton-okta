@@ -8,6 +8,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    concurrency:
+      group: baton-okta-ci-live-tests
+      cancel-in-progress: false
+      queue: max
     env:
       BATON_LOG_LEVEL: debug
       # Add any environment variables needed to run baton-okta
