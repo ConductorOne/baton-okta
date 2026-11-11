@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/conductorone/baton-okta/pkg/okta"
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,4 +48,30 @@ func TestConnectorRequestPathsEscapeIDs(t *testing.T) {
 		"/api/v1/iam/resource-sets/set%2Fa/bindings",
 		"/api/v1/iam/resource-sets/set%2Fa/bindings/role%3Fb/members/member%23c",
 	}, paths)
+}
+
+func TestBindingMemberPathsDecodeOnlySupportedTypes(t *testing.T) {
+	members := `{"members":[
+		{"id":"m1","_links":{"self":{"href":"https://example.okta.com/api/v1/iam/resource-sets/rs1/bindings/cr1/members/users/00u%2F1"}}},
+		{"id":"m2","_links":{"self":{"href":"https://example.okta.com/api/v1/iam/resource-sets/rs1/bindings/cr1/members/apps/%zz"}}},
+		{"id":"m3","_links":{"self":{"href":"https://example.okta.com/api/v1/iam/resource-sets/rs1/bindings/cr1/members/groups/00g1"}}}
+	]}`
+	path := "/api/v1/iam/resource-sets/rs1/bindings/cr1/members"
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{method: http.MethodGet, path: path, statusCode: http.StatusOK, body: members},
+		oktaRequestStep{method: http.MethodGet, path: path, statusCode: http.StatusOK, body: members},
+	)
+	rsb := resourceSetsBindingsBuilder("example.com", client)
+	binding := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeResourceSetsBindings.Id, Resource: "rs1:cr1"}}
+
+	grants, _, err := rsb.Grants(context.Background(), binding, sdkResource.SyncOpAttrs{})
+	require.NoError(t, err)
+	require.Len(t, grants, 2)
+	require.Equal(t, "00u/1", grants[0].GetPrincipal().GetId().GetResource())
+	require.Equal(t, "00g1", grants[1].GetPrincipal().GetId().GetResource())
+
+	entitlement := &v2.Entitlement{Resource: binding}
+	principal := &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeGroup.Id, Resource: "00g9"}}
+	_, err = rsb.Revoke(context.Background(), &v2.Grant{Entitlement: entitlement, Principal: principal})
+	require.NoError(t, err)
 }
