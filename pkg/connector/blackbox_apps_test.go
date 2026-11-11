@@ -328,7 +328,7 @@ func TestBlackboxAppsGetResourceSyncInactive(t *testing.T) {
 
 func TestBlackboxAppsGrantRevokeUser(t *testing.T) {
 	f := newFakeOkta(t)
-	srv := newServer(t, f, withConfig(appsNoCache))
+	srv := newServer(t, f)
 	g := newGolden(t, f)
 	app := appsRes(appsSAMLID, "Salesforce Sandbox")
 	ent := appsEnt(app, "access")
@@ -384,7 +384,7 @@ func TestBlackboxAppsGrantRevokeUser(t *testing.T) {
 
 func TestBlackboxAppsGrantRevokeGroup(t *testing.T) {
 	f := newFakeOkta(t)
-	srv := newServer(t, f, withConfig(appsNoCache))
+	srv := newServer(t, f)
 	g := newGolden(t, f)
 	app := appsRes(appsSAMLID, "Salesforce Sandbox")
 	ent := appsEnt(app, "access")
@@ -420,10 +420,6 @@ func TestBlackboxAppsGrantRevokeGroup(t *testing.T) {
 
 // ---- resource sets / bindings ---------------------------------------------
 
-// appsNoCache turns the connector's response cache off for tests that re-route the same
-// GET between steps, which the cache would otherwise answer from memory.
-func appsNoCache(c *cfg.Okta) { c.Cache = false }
-
 func appsCustomRoles(c *cfg.Okta) { c.SyncCustomRoles = true }
 
 func appsRegisterResourceSets(t *testing.T, f *fakeOkta) {
@@ -438,7 +434,7 @@ func TestBlackboxAppsResourceSets(t *testing.T) {
 	f := newFakeOkta(t)
 	appsRegisterResourceSets(t, f)
 	f.Fixture(http.MethodGet, "/api/v1/iam/resource-sets/"+appsRS1, "apps_resource_set_get.json")
-	srv := newServer(t, f, appsVia(t, f), withConfig(appsCustomRoles), withConfig(appsNoCache))
+	srv := newServer(t, f, appsVia(t, f), withConfig(appsCustomRoles))
 	g := newGolden(t, f)
 
 	sets := listAllResources(t, g, srv, "resource-set", nil, 2)
@@ -472,7 +468,7 @@ func TestBlackboxAppsResourceSetBindings(t *testing.T) {
 	f.Fixture(http.MethodGet, bindingPath, "apps_binding_get.json")
 	f.Fixture(http.MethodGet, "/api/v1/iam/resource-sets/"+appsRS1, "apps_resource_set_get.json")
 	f.Fixture(http.MethodGet, bindingPath+"/members", "apps_binding_members.json")
-	srv := newServer(t, f, appsVia(t, f), withConfig(appsCustomRoles), withConfig(appsNoCache))
+	srv := newServer(t, f, appsVia(t, f), withConfig(appsCustomRoles))
 	g := newGolden(t, f)
 
 	bindings := listAllResources(t, g, srv, "resourceset-binding", nil, 2)
@@ -601,10 +597,7 @@ func TestBlackboxAppsDevices(t *testing.T) {
 	g.Check()
 }
 
-// Page size 0 and an oversized page size both clamp to Okta's 200 maximum. The
-// response cache is off so each listing reaches the fake; with the previous
-// client a cache hit here returned a response without its Request and the
-// connector panicked serializing the next-page token.
+// Page size 0 and an oversized page size both clamp to Okta's 200 maximum.
 func TestBlackboxAppsDevicesPageSizeClamp(t *testing.T) {
 	f := newFakeOkta(t)
 	f.FixturePages("/api/v1/devices", "apps_devices_page1.json", "apps_devices_page2.json")

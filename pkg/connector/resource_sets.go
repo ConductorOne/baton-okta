@@ -167,7 +167,7 @@ func listBindings(
 	client *okta.Client,
 	resourceSetId string,
 ) ([]Role, *okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings")
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, okta.PathEscape(resourceSetId), "bindings")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -197,7 +197,7 @@ func doRequest(ctx context.Context, url, httpMethod string, res interface{}, cli
 // deleteBinding. Delete a Role Resource Set Binding
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleDResourceSetBinding/#tag/RoleDResourceSetBinding/operation/deleteBinding
 func (rs *resourceSetsResourceType) deleteBinding(ctx context.Context, resourceSetId, roleId string) (*okta.Response, error) {
-	apiPath, err := url.JoinPath(apiPathListIamResourceSets, resourceSetId, "bindings", roleId)
+	apiPath, err := url.JoinPath(apiPathListIamResourceSets, okta.PathEscape(resourceSetId), "bindings", okta.PathEscape(roleId))
 	if err != nil {
 		return nil, err
 	}
