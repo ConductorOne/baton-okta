@@ -140,7 +140,7 @@ func TestEndpointRequestShapes(t *testing.T) {
 		}
 		writeJSON(w, 200, `{}`)
 	})
-	c, _ := newTestClient(t, ts, func(c *Config) { c.CacheEnabled = true })
+	c, _ := newTestClient(t, ts)
 	ctx := context.Background()
 	qp := &QueryParams{Limit: 2, After: "c1", Search: "status pr", Filter: `status eq "ACTIVE"`, Expand: "stats"}
 
@@ -474,7 +474,7 @@ func TestNonJSONSuccessBody(t *testing.T) {
 	require.EqualError(t, err, "could not build a response for type: text/html")
 }
 
-func TestResponseCache(t *testing.T) {
+func TestResponseReadsAreFresh(t *testing.T) {
 	var hits int
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		hits++
@@ -485,9 +485,7 @@ func TestResponseCache(t *testing.T) {
 		w.Header().Set("X-Rate-Limit-Remaining", strconv.Itoa(hits))
 		writeJSON(w, 200, fmt.Sprintf(`{"id":"u1","status":"S%d"}`, hits))
 	})
-	c, _ := newTestClient(t, ts, func(c *Config) { c.CacheEnabled = true; c.CacheTTL = time.Minute })
-	now := time.Unix(1_700_000_000, 0)
-	c.cache.now = func() time.Time { return now }
+	c, _ := newTestClient(t, ts)
 	ctx := context.Background()
 
 	u, _, err := c.GetUser(ctx, "u1")
@@ -496,43 +494,21 @@ func TestResponseCache(t *testing.T) {
 
 	u, resp, err := c.GetUser(ctx, "u1")
 	require.NoError(t, err)
-	require.Equal(t, "S1", u.Status, "served from cache")
-	require.Equal(t, "1", resp.Header.Get("X-Rate-Limit-Remaining"), "cached headers replay too")
-	require.Equal(t, 1, hits)
-
-	u, _, err = c.GetUser(ctx, "u1", WithFreshRead())
-	require.NoError(t, err)
 	require.Equal(t, "S2", u.Status)
-	u, _, _ = c.GetUser(ctx, "u1")
-	require.Equal(t, "S2", u.Status, "a fresh read refreshes the cache")
+	require.Equal(t, "2", resp.Header.Get("X-Rate-Limit-Remaining"))
+	require.Equal(t, 2, hits)
 
-	// A mutation of the same URL evicts it.
-	_, _, err = c.PartialUpdateUser(ctx, "u1", User{})
+	u, _, err = c.GetUser(ctx, "u1")
 	require.NoError(t, err)
+	require.Equal(t, "S3", u.Status)
 	u, _, _ = c.GetUser(ctx, "u1")
 	require.Equal(t, "S4", u.Status)
 
-	now = now.Add(2 * time.Minute)
+	_, _, err = c.PartialUpdateUser(ctx, "u1", User{})
+	require.NoError(t, err)
 	u, _, _ = c.GetUser(ctx, "u1")
-	require.Equal(t, "S5", u.Status, "expired entries are refetched")
-
-	// Error responses are never cached.
-	require.Equal(t, 5, hits)
-}
-
-func TestResponseCacheNoTTLAndDisabled(t *testing.T) {
-	var hits int
-	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) { hits++; writeJSON(w, 200, `{}`) })
-	c, _ := newTestClient(t, ts, func(c *Config) { c.CacheEnabled = true })
-	c.cache.now = func() time.Time { return time.Unix(1<<40, 0) }
-	_, _, _ = c.GetOrgSettings(context.Background())
-	_, _, _ = c.GetOrgSettings(context.Background())
-	require.Equal(t, 1, hits, "a zero TTL never expires")
-
-	c2, _ := newTestClient(t, ts)
-	_, _, _ = c2.GetOrgSettings(context.Background())
-	_, _, _ = c2.GetOrgSettings(context.Background())
-	require.Equal(t, 3, hits, "no cache when disabled")
+	require.Equal(t, "S6", u.Status)
+	require.Equal(t, 6, hits)
 }
 
 func TestRateLimitPrevention(t *testing.T) {
@@ -658,36 +634,6 @@ func TestDeviceGetters(t *testing.T) {
 	require.Equal(t, "iam1", rs.GetId())
 }
 
-func TestResponseCachePurgesExpiredEntries(t *testing.T) {
-	cache := newResponseCache(time.Minute, 30*time.Second)
-	now := time.Unix(1_700_000_000, 0)
-	cache.now = func() time.Time { return now }
-	resp := &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Header: http.Header{}}
-
-	cache.set("a", resp, []byte("a"))
-	cache.set("b", resp, []byte("b"))
-	require.Equal(t, 2, cache.len())
-
-	// Both entries expire, but nothing reads them again.
-	now = now.Add(2 * time.Minute)
-	cache.set("c", resp, []byte("c"))
-	require.Equal(t, 1, cache.len(), "the write after the cleanup interval purges expired entries")
-
-	// The next interval has elapsed too, so c is purged as well.
-	now = now.Add(2 * time.Minute)
-	cache.set("d", resp, []byte("d"))
-	require.Equal(t, 1, cache.len(), "c expired and was purged on this write")
-	_, ok := cache.get("d")
-	require.True(t, ok)
-
-	noCleanup := newResponseCache(time.Minute, 0)
-	noCleanup.now = cache.now
-	noCleanup.set("x", resp, nil)
-	now = now.Add(time.Hour)
-	noCleanup.set("y", resp, nil)
-	require.Equal(t, 2, noCleanup.len(), "a zero cleanup interval never purges")
-}
-
 // A single-object lookup answered with 200 and an empty or null body returns a
 // nil object and no error, so callers can tell "nothing there" from a record.
 func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
@@ -714,7 +660,7 @@ func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
 	}
 	for _, body := range []string{"", "null"} {
 		ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, body) })
-		c, _ := newTestClient(t, ts, func(cfg *Config) { cfg.CacheEnabled = false })
+		c, _ := newTestClient(t, ts)
 		for name, get := range getters {
 			isNil, err := get(c)
 			require.NoError(t, err, "%s body=%q", name, body)

@@ -591,7 +591,7 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		return rateLimitAnnotations(response), nil
 	case resourceTypeGroup.Id:
 		groupId := principal.Id.Resource
-		roles, resp, err := g.client.ListGroupRoles(ctx, groupId, okta.WithFreshRead())
+		roles, resp, err := g.client.ListGroupRoles(ctx, groupId)
 		if err != nil {
 			return revokeNotFoundOrError(ctx, principal, resp, err,
 				"okta-connector: revoke: group no longer exists",

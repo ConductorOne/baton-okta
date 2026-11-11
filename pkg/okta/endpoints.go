@@ -15,11 +15,6 @@ func WithContentType(ct string) RequestOption {
 	return func(r *request) { r.contentType = ct }
 }
 
-// WithFreshRead makes a GET skip the response cache.
-func WithFreshRead() RequestOption {
-	return func(r *request) { r.fresh = true }
-}
-
 // The device, API token and resource-set lookups have always differed from the
 // rest of the API in three ways, each set by one option. statusLineEndpoint
 // applies all three.
@@ -256,16 +251,7 @@ func (c *Client) AssignRoleToGroup(ctx context.Context, groupID string, body Ass
 
 // RemoveRoleFromGroup sends DELETE /api/v1/groups/{id}/roles/{roleAssignmentId}.
 func (c *Client) RemoveRoleFromGroup(ctx context.Context, groupID, roleID string) (*Response, error) {
-	resp, err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v/roles/%v", PathEscape(groupID), PathEscape(roleID)), nil, nil)
-	// The DELETE targets an assignment URL, but the cached role list has a
-	// different URL and must not replay the pre-delete membership.
-	if c.cache != nil {
-		u, resolveErr := c.resolve(fmt.Sprintf("/api/v1/groups/%v/roles", PathEscape(groupID)), nil)
-		if resolveErr == nil {
-			c.cache.delete(u.String())
-		}
-	}
-	return resp, err
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/groups/%v/roles/%v", PathEscape(groupID), PathEscape(roleID)), nil, nil)
 }
 
 // ---- Apps
