@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 
 	"github.com/conductorone/baton-okta/pkg/okta"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -85,7 +84,7 @@ func (o *customRoleResourceType) Entitlements(
 // listGroupAssignedRoles. List all group role assignments
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentBGroup/#tag/RoleAssignmentBGroup/operation/listGroupAssignedRoles
 func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId string) ([]*Roles, *okta.Response, error) {
-	apiPath, err := url.JoinPath(groupsUrl, groupId, "roles")
+	apiPath, err := url.JoinPath(groupsUrl, okta.PathEscape(groupId), "roles")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +106,7 @@ func listGroupAssignedRoles(ctx context.Context, client *okta.Client, groupId st
 // listAssignedRolesForUser. List all user role assignments.
 // https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RoleAssignmentAUser/#tag/RoleAssignmentAUser/operation/listAssignedRolesForUser
 func listAssignedRolesForUser(ctx context.Context, client *okta.Client, userId string) ([]*Roles, *okta.Response, error) {
-	apiPath, err := url.JoinPath(usersUrl, userId, "roles")
+	apiPath, err := url.JoinPath(usersUrl, okta.PathEscape(userId), "roles")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -284,15 +283,13 @@ func getOktaIamCustomRole(
 	client *okta.Client,
 	roleId string,
 ) (*okta.Role, *responseContext, error) {
-	url, err := url.Parse(apiPathListIamCustomRoles)
+	roleURL, err := url.JoinPath(apiPathListIamCustomRoles, okta.PathEscape(roleId))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	url.Path = path.Join(url.Path, roleId)
-
 	var role *okta.Role
-	resp, err := client.Do(ctx, http.MethodGet, url.String(), nil, &role)
+	resp, err := client.Do(ctx, http.MethodGet, roleURL, nil, &role)
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get custom role: %w", handleOktaResponseError(resp, err))
 	}

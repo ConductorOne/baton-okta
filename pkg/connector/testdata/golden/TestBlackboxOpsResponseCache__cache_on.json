@@ -16,6 +16,15 @@
         "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
       },
       "method": "GET",
+      "path": "/api/v1/users/00ucache"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
       "path": "/api/v1/users/00uflip"
     },
     {
@@ -29,10 +38,11 @@
     {
       "headers": {
         "Accept": "application/json",
-        "Authorization": "SSWS test-api-token-0123456789"
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
       },
-      "method": "POST",
-      "path": "/api/v1/users/00uflip/lifecycle/suspend"
+      "method": "GET",
+      "path": "/api/v1/users/00uflip"
     }
   ],
   "steps": [
@@ -172,7 +182,7 @@
       "response": {
         "name": "disable_user",
         "response": {
-          "message": "Account 00uflip has been successfully disabled",
+          "message": "Account 00uflip was already disabled (Okta status SUSPENDED)",
           "success": true
         },
         "status": "BATON_ACTION_STATUS_COMPLETE"

@@ -28,9 +28,9 @@ func emptyBodyGet(t *testing.T, path, rt, id string, opts func(t *testing.T, f *
 		t.Run(b.name, func(t *testing.T) {
 			f := newFakeOkta(t)
 			f.JSON(http.MethodGet, path, http.StatusOK, b.body)
-			conn := []connOpt{withConfig(appsNoCache)}
+			var conn []connOpt
 			if opts != nil {
-				conn = append(conn, opts(t, f)...)
+				conn = opts(t, f)
 			}
 			srv := newServer(t, f, conn...)
 			g := newGolden(t, f)

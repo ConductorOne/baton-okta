@@ -556,7 +556,12 @@ func getCredentialOption(credentialOptions *v2.LocalCredentialOptions) (*okta.Us
 		return nil, errors.New("unsupported credential options")
 	}
 
-	length := min(8, credentialOptions.GetRandomPassword().GetLength())
+	length := max(8, credentialOptions.GetRandomPassword().GetLength())
+	// The public credential contract limits lengths to 64; enforce it here too
+	// because not every connector invocation runs protobuf validation.
+	if length > 64 {
+		return nil, status.Error(codes.InvalidArgument, "random password length must not exceed 64")
+	}
 	plaintextPassword, err := crypto.GenerateRandomPassword(&v2.LocalCredentialOptions_RandomPassword{
 		Length: length,
 	})
@@ -767,36 +772,21 @@ func (o *userResourceType) Get(ctx context.Context, resourceId *v2.ResourceId, p
 	return resource, annos, nil
 }
 
-// getUser retrieves the Okta user with the specified ID (and may use the client
-// GET cache). The request omits credentials and related fields to reduce the
-// payload.
+// getUser retrieves the Okta user with the specified ID, omitting credentials
+// and related fields to reduce the payload.
 func getUser(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
-	return getUserWithCachePolicy(ctx, client, oktaUserID, false)
-}
-
-// getUserFresh bypasses the client's GET cache for lifecycle reconciliation after
-// a failed mutation.
-func getUserFresh(ctx context.Context, client *okta.Client, oktaUserID string) (*okta.User, *responseContext, error) {
-	return getUserWithCachePolicy(ctx, client, oktaUserID, true)
-}
-
-func getUserWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID string, fresh bool) (*okta.User, *responseContext, error) {
 	reqUrl, err := url.Parse(usersUrl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	reqUrl = reqUrl.JoinPath(oktaUserID)
+	reqUrl = reqUrl.JoinPath(okta.PathEscape(oktaUserID))
 
 	// Using okta-response="omitCredentials,omitCredentialsLinks,omitTransitioningToStatus" in the content type header omits
 	// the credentials, credentials links, and `transitioningToStatus` field from the response which applies performance optimization.
 	// https://developer.okta.com/docs/api/openapi/okta-management/management/tag/User/#tag/User/operation/listUsers!in=header&path=Content-Type&t=request
 	oktaUsers := &okta.User{}
-	opts := []okta.RequestOption{okta.WithContentType(okta.OmitCredentialsContentType)}
-	if fresh {
-		opts = append(opts, okta.WithFreshRead())
-	}
-	resp, err := client.Do(ctx, http.MethodGet, reqUrl.String(), nil, &oktaUsers, opts...)
+	resp, err := client.Do(ctx, http.MethodGet, reqUrl.String(), nil, &oktaUsers, okta.WithContentType(okta.OmitCredentialsContentType))
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get user: %w", handleOktaResponseError(resp, err))
 	}
@@ -825,31 +815,33 @@ func (o *userResourceType) Delete(ctx context.Context, resourceID *v2.ResourceId
 }
 
 func oktaUserIDFromResourceID(resourceID *v2.ResourceId) (string, error) {
+	return oktaIDFromResourceID(resourceID, resourceTypeUser)
+}
+
+func oktaIDFromResourceID(resourceID *v2.ResourceId, resourceType *v2.ResourceType) (string, error) {
 	if resourceID == nil {
-		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user resource ID is required")
+		return "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: %s resource ID is required", resourceType.Id)
 	}
-	if resourceID.GetResourceType() != resourceTypeUser.Id {
+	if resourceID.GetResourceType() != resourceType.Id {
 		return "", status.Errorf(
 			codes.InvalidArgument,
 			"okta-connectorv2: expected resource type %q, got %q",
-			resourceTypeUser.Id,
+			resourceType.Id,
 			resourceID.GetResourceType(),
 		)
 	}
 	if resourceID.GetResource() == "" {
-		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+		return "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: %s ID cannot be empty", resourceType.Id)
 	}
 	return resourceID.GetResource(), nil
 }
 
-// ensureUserDeactivated transitions an existing user to DEPROVISIONED. It
-// bypasses the client's GET cache because a stale DEPROVISIONED status could turn
-// Okta's first DELETE call into deactivation while the connector reports a
-// permanent deletion. The booleans report whether this call changed the status
+// ensureUserDeactivated transitions an existing user to DEPROVISIONED using
+// current status. Its booleans report whether this call changed the status
 // and whether the user is already absent; callers decide whether absence
 // satisfies their contract.
 func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID string) (bool, bool, error) {
-	currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+	currentStatus, err := getUserStatus(ctx, client, oktaUserID)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return false, true, nil
@@ -864,7 +856,7 @@ func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID 
 		// Reconcile concurrent lifecycle changes without relying on vendor error
 		// text. Only a confirmed terminal state converts the mutation error to
 		// success.
-		reconciledStatus, reconcileErr := getUserStatusFresh(ctx, client, oktaUserID)
+		reconciledStatus, reconcileErr := getUserStatus(ctx, client, oktaUserID)
 		if reconcileErr != nil {
 			if status.Code(reconcileErr) == codes.NotFound {
 				return false, true, nil
@@ -889,7 +881,7 @@ func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID 
 
 func waitForUserDeprovisioned(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
 	for attempt := 1; attempt <= userDeprovisionConfirmationAttempts; attempt++ {
-		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		currentStatus, err := getUserStatus(ctx, client, oktaUserID)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				return true, nil
@@ -948,7 +940,7 @@ func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID 
 			return false, err
 		}
 
-		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		currentStatus, err := getUserStatus(ctx, client, oktaUserID)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				return true, nil
@@ -973,27 +965,11 @@ func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID 
 }
 
 func getUserStatus(ctx context.Context, client *okta.Client, oktaUserID string) (string, error) {
-	return getUserStatusWithCachePolicy(ctx, client, oktaUserID, false)
-}
-
-func getUserStatusFresh(ctx context.Context, client *okta.Client, oktaUserID string) (string, error) {
-	return getUserStatusWithCachePolicy(ctx, client, oktaUserID, true)
-}
-
-func getUserStatusWithCachePolicy(ctx context.Context, client *okta.Client, oktaUserID string, fresh bool) (string, error) {
 	if oktaUserID == "" {
 		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
 	}
 
-	var (
-		user *okta.User
-		err  error
-	)
-	if fresh {
-		user, _, err = getUserFresh(ctx, client, oktaUserID)
-	} else {
-		user, _, err = getUser(ctx, client, oktaUserID)
-	}
+	user, _, err := getUser(ctx, client, oktaUserID)
 	if err != nil {
 		return "", fmt.Errorf("okta-connectorv2: failed to find user %s: %w", oktaUserID, err)
 	}
