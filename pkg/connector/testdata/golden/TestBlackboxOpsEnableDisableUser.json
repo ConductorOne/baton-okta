@@ -108,6 +108,24 @@
         "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
       },
       "method": "GET",
+      "path": "/api/v1/users/00ususpended2"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00udeprov"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json; okta-response=\"omitCredentials,omitCredentialsLinks,omitTransitioningToStatus\""
+      },
+      "method": "GET",
       "path": "/api/v1/users/00ustaged2"
     },
     {
@@ -256,7 +274,7 @@
       "response": {
         "name": "disable_user",
         "response": {
-          "message": "Account 00ususpended was already disabled (Okta status SUSPENDED)",
+          "message": "Account 00ususpended2 was already disabled (Okta status SUSPENDED)",
           "success": true
         },
         "status": "BATON_ACTION_STATUS_COMPLETE"
