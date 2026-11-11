@@ -22,3 +22,21 @@ func TestResourceSetGetEmptyResponse(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, codes.Unknown, status.Code(err))
 }
+
+func TestResourceSetBindingGetEmptyResourceSetResponse(t *testing.T) {
+	client := newScriptedOktaClient(t,
+		oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/iam/resource-sets/rs1/bindings/cr1",
+			statusCode: http.StatusOK, body: `{"id":"cr1"}`,
+		},
+		oktaRequestStep{
+			method: http.MethodGet, path: "/api/v1/iam/resource-sets/rs1",
+			statusCode: http.StatusOK,
+		},
+	)
+	builder := resourceSetsBindingsBuilder("example.com", client)
+	resource, _, err := builder.Get(context.Background(), &v2.ResourceId{Resource: "rs1:cr1"}, nil)
+	require.Nil(t, resource)
+	require.Error(t, err)
+	require.Equal(t, codes.Unknown, status.Code(err))
+}
