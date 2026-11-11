@@ -15,11 +15,6 @@ func WithContentType(ct string) RequestOption {
 	return func(r *request) { r.contentType = ct }
 }
 
-// WithFreshRead makes a GET skip the response cache.
-func WithFreshRead() RequestOption {
-	return func(r *request) { r.fresh = true }
-}
-
 // The device, API token and resource-set lookups have always differed from the
 // rest of the API in three ways, each set by one option. statusLineEndpoint
 // applies all three.
@@ -235,9 +230,9 @@ func (c *Client) RemoveUserFromGroup(ctx context.Context, groupID, userID string
 }
 
 // ListGroupRoles reads GET /api/v1/groups/{id}/roles.
-func (c *Client) ListGroupRoles(ctx context.Context, groupID string) ([]*Role, *Response, error) {
+func (c *Client) ListGroupRoles(ctx context.Context, groupID string, opts ...RequestOption) ([]*Role, *Response, error) {
 	var out []*Role
-	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v/roles", PathEscape(groupID)), nil, &out)
+	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/groups/%v/roles", PathEscape(groupID)), nil, &out, opts...)
 	if err != nil {
 		return nil, resp, err
 	}

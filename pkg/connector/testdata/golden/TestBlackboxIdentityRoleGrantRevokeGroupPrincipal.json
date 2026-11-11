@@ -1,19 +1,62 @@
 {
-  "requests": null,
-  "steps": [
+  "requests": [
     {
-      "error": {
-        "code": "Unknown",
-        "message": "grant failed: okta-connector: only users can be granted role membership"
+      "body": {
+        "type": "USER_ADMIN"
       },
-      "name": "Grant group principal"
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789",
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "path": "/api/v1/groups/00geng0000000000000g2/roles"
     },
     {
-      "error": {
-        "code": "Unknown",
-        "message": "revoke failed: okta-connector: only users can have role membership revoked"
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
       },
-      "name": "Revoke group principal"
+      "method": "GET",
+      "path": "/api/v1/groups/00geng0000000000000g2/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "DELETE",
+      "path": "/api/v1/groups/00geng0000000000000g2/roles/irb7777777777777777"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Grant group principal",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Revoke group principal",
+      "response": {
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.RateLimitDescription",
+            "limit": "600",
+            "remaining": "599",
+            "reset_at": "2026-01-01T00:00:00Z",
+            "status": "STATUS_OK"
+          }
+        ]
+      }
     }
   ]
 }
