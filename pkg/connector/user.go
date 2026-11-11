@@ -825,19 +825,23 @@ func (o *userResourceType) Delete(ctx context.Context, resourceID *v2.ResourceId
 }
 
 func oktaUserIDFromResourceID(resourceID *v2.ResourceId) (string, error) {
+	return oktaIDFromResourceID(resourceID, resourceTypeUser)
+}
+
+func oktaIDFromResourceID(resourceID *v2.ResourceId, resourceType *v2.ResourceType) (string, error) {
 	if resourceID == nil {
-		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user resource ID is required")
+		return "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: %s resource ID is required", resourceType.Id)
 	}
-	if resourceID.GetResourceType() != resourceTypeUser.Id {
+	if resourceID.GetResourceType() != resourceType.Id {
 		return "", status.Errorf(
 			codes.InvalidArgument,
 			"okta-connectorv2: expected resource type %q, got %q",
-			resourceTypeUser.Id,
+			resourceType.Id,
 			resourceID.GetResourceType(),
 		)
 	}
 	if resourceID.GetResource() == "" {
-		return "", status.Error(codes.InvalidArgument, "okta-connectorv2: user ID cannot be empty")
+		return "", status.Errorf(codes.InvalidArgument, "okta-connectorv2: %s ID cannot be empty", resourceType.Id)
 	}
 	return resourceID.GetResource(), nil
 }
