@@ -841,7 +841,7 @@ func oktaIDFromResourceID(resourceID *v2.ResourceId, resourceType *v2.ResourceTy
 // and whether the user is already absent; callers decide whether absence
 // satisfies their contract.
 func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID string) (bool, bool, error) {
-	currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+	currentStatus, err := getUserStatus(ctx, client, oktaUserID)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return false, true, nil
@@ -856,7 +856,7 @@ func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID 
 		// Reconcile concurrent lifecycle changes without relying on vendor error
 		// text. Only a confirmed terminal state converts the mutation error to
 		// success.
-		reconciledStatus, reconcileErr := getUserStatusFresh(ctx, client, oktaUserID)
+		reconciledStatus, reconcileErr := getUserStatus(ctx, client, oktaUserID)
 		if reconcileErr != nil {
 			if status.Code(reconcileErr) == codes.NotFound {
 				return false, true, nil
@@ -881,7 +881,7 @@ func ensureUserDeactivated(ctx context.Context, client *okta.Client, oktaUserID 
 
 func waitForUserDeprovisioned(ctx context.Context, client *okta.Client, oktaUserID string) (bool, error) {
 	for attempt := 1; attempt <= userDeprovisionConfirmationAttempts; attempt++ {
-		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		currentStatus, err := getUserStatus(ctx, client, oktaUserID)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				return true, nil
@@ -940,7 +940,7 @@ func permanentlyDeleteUser(ctx context.Context, client *okta.Client, oktaUserID 
 			return false, err
 		}
 
-		currentStatus, err := getUserStatusFresh(ctx, client, oktaUserID)
+		currentStatus, err := getUserStatus(ctx, client, oktaUserID)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				return true, nil
@@ -977,10 +977,6 @@ func getUserStatus(ctx context.Context, client *okta.Client, oktaUserID string) 
 		return "", status.Errorf(codes.NotFound, "okta-connectorv2: user %s not found", oktaUserID)
 	}
 	return user.Status, nil
-}
-
-func getUserStatusFresh(ctx context.Context, client *okta.Client, oktaUserID string) (string, error) {
-	return getUserStatus(ctx, client, oktaUserID)
 }
 
 func deactivateUser(ctx context.Context, client *okta.Client, oktaUserID string) error {

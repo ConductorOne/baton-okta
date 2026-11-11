@@ -140,7 +140,7 @@ func TestEndpointRequestShapes(t *testing.T) {
 		}
 		writeJSON(w, 200, `{}`)
 	})
-	c, _ := newTestClient(t, ts, func(c *Config) { c.CacheEnabled = true })
+	c, _ := newTestClient(t, ts)
 	ctx := context.Background()
 	qp := &QueryParams{Limit: 2, After: "c1", Search: "status pr", Filter: `status eq "ACTIVE"`, Expand: "stats"}
 
@@ -485,8 +485,7 @@ func TestResponseReadsAreFresh(t *testing.T) {
 		w.Header().Set("X-Rate-Limit-Remaining", strconv.Itoa(hits))
 		writeJSON(w, 200, fmt.Sprintf(`{"id":"u1","status":"S%d"}`, hits))
 	})
-	c, _ := newTestClient(t, ts, func(c *Config) { c.CacheEnabled = true; c.CacheTTL = time.Minute })
-	// The legacy cache settings are accepted but no longer cache responses.
+	c, _ := newTestClient(t, ts)
 	ctx := context.Background()
 
 	u, _, err := c.GetUser(ctx, "u1")
@@ -499,7 +498,7 @@ func TestResponseReadsAreFresh(t *testing.T) {
 	require.Equal(t, "2", resp.Header.Get("X-Rate-Limit-Remaining"))
 	require.Equal(t, 2, hits)
 
-	u, _, err = c.GetUser(ctx, "u1", WithFreshRead())
+	u, _, err = c.GetUser(ctx, "u1")
 	require.NoError(t, err)
 	require.Equal(t, "S3", u.Status)
 	u, _, _ = c.GetUser(ctx, "u1")
@@ -510,21 +509,6 @@ func TestResponseReadsAreFresh(t *testing.T) {
 	u, _, _ = c.GetUser(ctx, "u1")
 	require.Equal(t, "S6", u.Status)
 	require.Equal(t, 6, hits)
-}
-
-func TestLegacyCacheEnabledAndDisabled(t *testing.T) {
-	var hits int
-	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) { hits++; writeJSON(w, 200, `{}`) })
-	c, _ := newTestClient(t, ts, func(c *Config) { c.CacheEnabled = true })
-	// Zero TTL is also a no-op.
-	_, _, _ = c.GetOrgSettings(context.Background())
-	_, _, _ = c.GetOrgSettings(context.Background())
-	require.Equal(t, 2, hits)
-
-	c2, _ := newTestClient(t, ts)
-	_, _, _ = c2.GetOrgSettings(context.Background())
-	_, _, _ = c2.GetOrgSettings(context.Background())
-	require.Equal(t, 4, hits)
 }
 
 func TestRateLimitPrevention(t *testing.T) {
@@ -650,29 +634,6 @@ func TestDeviceGetters(t *testing.T) {
 	require.Equal(t, "iam1", rs.GetId())
 }
 
-func TestLegacyCacheTTLAndCleanupAreNoOps(t *testing.T) {
-	// Legacy TTL and cleanup settings do not change request behavior.
-	for _, ttl := range []time.Duration{0, time.Second} {
-		t.Run(ttl.String(), func(t *testing.T) {
-			var hits int
-			ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-				hits++
-				writeJSON(w, 200, `{}`)
-			})
-			c, _ := newTestClient(t, ts, func(cfg *Config) {
-				cfg.CacheEnabled = true
-				cfg.CacheTTL = ttl
-				cfg.CacheCleanupInterval = time.Second
-			})
-			_, _, err := c.GetOrgSettings(context.Background())
-			require.NoError(t, err)
-			_, _, err = c.GetOrgSettings(context.Background())
-			require.NoError(t, err)
-			require.Equal(t, 2, hits)
-		})
-	}
-}
-
 // A single-object lookup answered with 200 and an empty or null body returns a
 // nil object and no error, so callers can tell "nothing there" from a record.
 func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
@@ -699,7 +660,7 @@ func TestSingleObjectGettersReturnNilOnEmptyBody(t *testing.T) {
 	}
 	for _, body := range []string{"", "null"} {
 		ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, body) })
-		c, _ := newTestClient(t, ts, func(cfg *Config) { cfg.CacheEnabled = false })
+		c, _ := newTestClient(t, ts)
 		for name, get := range getters {
 			isNil, err := get(c)
 			require.NoError(t, err, "%s body=%q", name, body)

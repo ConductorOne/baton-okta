@@ -45,7 +45,7 @@ func TestBlackboxNonJSONDevices(t *testing.T) {
 	t.Run("first page", func(t *testing.T) {
 		f := newFakeOkta(t)
 		nonJSON(f, "/api/v1/devices")
-		srv := newServer(t, f, appsVia(t, f), withConfig(appsNoCache))
+		srv := newServer(t, f, appsVia(t, f))
 		g := newGolden(t, f)
 		listAllResources(t, g, srv, "device", nil, 2)
 		g.Check()
@@ -53,7 +53,7 @@ func TestBlackboxNonJSONDevices(t *testing.T) {
 	t.Run("next page", func(t *testing.T) {
 		f := newFakeOkta(t)
 		nonJSONPages(f, "/api/v1/devices", fixture(t, "apps_devices_page1.json"))
-		srv := newServer(t, f, appsVia(t, f), withConfig(appsNoCache))
+		srv := newServer(t, f, appsVia(t, f))
 		g := newGolden(t, f)
 		listAllResources(t, g, srv, "device", nil, 2)
 		g.Check()
@@ -62,7 +62,7 @@ func TestBlackboxNonJSONDevices(t *testing.T) {
 
 func TestBlackboxNonJSONApiTokens(t *testing.T) {
 	opts := func(t *testing.T, f *fakeOkta) []connOpt {
-		return []connOpt{appsVia(t, f), withConfig(appsNoCache),
+		return []connOpt{appsVia(t, f),
 			withCLIOpts(&cli.ConnectorOpts{}), withConfig(func(c *cfg.Okta) { c.SyncSecrets = true })}
 	}
 	t.Run("get", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestBlackboxFollowUpPageServerErrors(t *testing.T) {
 				w.WriteHeader(tc.status)
 				_, _ = w.Write([]byte(tc.body))
 			})
-			srv := newServer(t, f, appsVia(t, f), withConfig(appsNoCache))
+			srv := newServer(t, f, appsVia(t, f))
 			g := newGolden(t, f)
 			listAllResources(t, g, srv, "device", nil, 2)
 			g.Check()

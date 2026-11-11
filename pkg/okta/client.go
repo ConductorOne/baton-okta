@@ -45,11 +45,6 @@ type Config struct {
 	// APIToken, when set, is sent as "Authorization: SSWS <token>". When empty
 	// the transport is responsible for authorization (OAuth/DPoP mode).
 	APIToken string
-	// CacheEnabled, CacheTTL and CacheCleanupInterval are retained for
-	// compatibility. Responses are no longer cached.
-	CacheEnabled         bool
-	CacheTTL             time.Duration
-	CacheCleanupInterval time.Duration
 }
 
 // Client calls the Okta Management API.

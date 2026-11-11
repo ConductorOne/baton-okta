@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	cfg "github.com/conductorone/baton-okta/pkg/config"
 	"github.com/conductorone/baton-okta/pkg/okta"
@@ -373,13 +371,6 @@ func (c *Okta) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 	return "", nil, fmt.Errorf("not implemented")
 }
 
-func safeCacheInt32(val int) (int32, error) {
-	if val > math.MaxInt32 || val < 0 {
-		return 0, fmt.Errorf("value %d is out of range for int32", val)
-	}
-	return int32(val), nil
-}
-
 // parseOktaOrgURL returns a canonical HTTPS URL for the configured Okta domain.
 // An explicit port is preserved (e.g. local mocks); path, query, fragment, and userinfo are rejected.
 func parseOktaOrgURL(raw string) (*url.URL, error) {
@@ -423,28 +414,14 @@ func New(ctx context.Context, cc *cfg.Okta, opts *cli.ConnectorOpts) (connectorb
 		return nil, nil, err
 	}
 
-	cacheTTI, err := safeCacheInt32(cc.CacheTti)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cacheTTL, err := safeCacheInt32(cc.CacheTtl)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	authMethod := ""
 	if opts != nil {
 		authMethod = opts.SelectedAuthMethod
 	}
 
 	clientCfg := okta.Config{
-		OrgURL:       orgURL,
-		HTTPClient:   httpClient,
-		CacheEnabled: cc.Cache,
-		CacheTTL:     time.Duration(cacheTTL) * time.Second,
-		// Retained for compatibility; response cache settings are no-ops.
-		CacheCleanupInterval: time.Duration(cacheTTI) * time.Second,
+		OrgURL:     orgURL,
+		HTTPClient: httpClient,
 	}
 
 	switch authMethod {

@@ -2,7 +2,7 @@ package connector_test
 
 // Black-box regression tests for actions, account lifecycle, events,
 // connector-level operations (Validate, GetMetadata) and transport behavior
-// (429 retries, response cache, error classification, auth modes).
+// (429 retries, legacy cache flags, error classification, auth modes).
 //
 // Every helper in this file is prefixed "ops" so it cannot collide with the
 // helpers other black-box test files define in this package.
@@ -1011,7 +1011,8 @@ func TestBlackboxOpsResponseCache(t *testing.T) {
 
 		opsGetUser(t, g, srv, "GetResource first", "00ucache")
 		opsGetUser(t, g, srv, "GetResource second", "00ucache")
-		// Both cache settings use fresh reads, so a second disable is a no-op.
+		// The cache flag has no effect: every read reaches Okta, so a second
+		// disable sees SUSPENDED and is a no-op.
 		opsInvoke(t, g, srv, "disable first", "disable_user", "", map[string]any{"user_id": "00uflip"})
 		opsInvoke(t, g, srv, "disable second", "disable_user", "", map[string]any{"user_id": "00uflip"})
 
@@ -1087,96 +1088,6 @@ func TestBlackboxOpsApiTokenAuthHeader(t *testing.T) {
 	require.Len(t, reqs, 1)
 	require.Equal(t, "SSWS "+testAPIToken, reqs[0].Headers["Authorization"])
 	g.Check()
-}
-
-// TestBlackboxOpsResponseCacheSemantics retains the historical scenario names
-// while verifying that the legacy cache settings no longer cache reads.
-func TestBlackboxOpsResponseCacheSemantics(t *testing.T) {
-	cacheConf := func(ttl, tti int) connOpt {
-		return withConfig(func(c *cfg.Okta) { c.Cache = true; c.CacheTtl = ttl; c.CacheTti = tti })
-	}
-
-	t.Run("entries expire after cache-ttl", func(t *testing.T) {
-		f := newFakeOkta(t)
-		newOpsOrg(f, map[string]string{"00uttl": "ACTIVE"})
-		srv := newServer(t, f, cacheConf(1, 1))
-		g := newGolden(t, f)
-		opsGetUser(t, g, srv, "GetResource first", "00uttl")
-		opsGetUser(t, g, srv, "GetResource second", "00uttl")
-		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uttl"))
-		time.Sleep(1500 * time.Millisecond)
-		opsGetUser(t, g, srv, "GetResource after ttl", "00uttl")
-		require.Equal(t, 3, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uttl"))
-		g.Check()
-	})
-
-	t.Run("cache-ttl 0 never expires", func(t *testing.T) {
-		f := newFakeOkta(t)
-		newOpsOrg(f, map[string]string{"00uttl": "ACTIVE"})
-		srv := newServer(t, f, cacheConf(0, 1))
-		g := newGolden(t, f)
-		opsGetUser(t, g, srv, "GetResource first", "00uttl")
-		time.Sleep(1500 * time.Millisecond)
-		opsGetUser(t, g, srv, "GetResource later", "00uttl")
-		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uttl"))
-		g.Check()
-	})
-
-	t.Run("error responses are not cached", func(t *testing.T) {
-		f := newFakeOkta(t)
-		var mu sync.Mutex
-		calls := 0
-		f.Handle(http.MethodGet, `/api/v1/users/00uflaky`, func(w http.ResponseWriter, r *http.Request, _ []string) {
-			mu.Lock()
-			calls++
-			n := calls
-			mu.Unlock()
-			if n == 1 {
-				writeJSON(w, http.StatusNotFound, fmt.Sprintf(opsOktaNotFound, "00uflaky"))
-				return
-			}
-			writeJSON(w, http.StatusOK, opsUserJSON("00uflaky", "ACTIVE", "00uflaky@example.com"))
-		})
-		srv := newServer(t, f)
-		g := newGolden(t, f)
-		opsGetUser(t, g, srv, "GetResource 404", "00uflaky")
-		opsGetUser(t, g, srv, "GetResource 200", "00uflaky")
-		opsGetUser(t, g, srv, "GetResource second 200", "00uflaky")
-		require.Equal(t, 3, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflaky"))
-		g.Check()
-	})
-
-	t.Run("list pages are cached by full URL", func(t *testing.T) {
-		f := newFakeOkta(t)
-		f.Pages(`/api/v1/users`,
-			"["+opsUserJSON("00ulist1", "ACTIVE", "list1@example.com")+"]",
-			"["+opsUserJSON("00ulist2", "ACTIVE", "list2@example.com")+"]",
-		)
-		srv := newServer(t, f)
-		g := newGolden(t, f)
-		require.Len(t, listAllResources(t, g, srv, "user", nil, 1), 2)
-		require.Len(t, listAllResources(t, g, srv, "user", nil, 1), 2)
-		require.Equal(t, 4, opsRequestCount(f, http.MethodGet, "/api/v1/users"))
-		require.Len(t, listAllResources(t, g, srv, "user", nil, 2), 2)
-		g.Check()
-	})
-
-	t.Run("writes evict only their own URL and Delete reads fresh", func(t *testing.T) {
-		f := newFakeOkta(t)
-		newOpsOrg(f, map[string]string{"00ugone": "ACTIVE", "00ususp": "ACTIVE"})
-		srv := newServer(t, f)
-		g := newGolden(t, f)
-		// Reads reflect the user status after suspension.
-		opsGetUser(t, g, srv, "GetResource before suspend", "00ususp")
-		opsInvoke(t, g, srv, "suspend", "disable_user", "", map[string]any{"user_id": "00ususp"})
-		opsGetUser(t, g, srv, "GetResource after suspend", "00ususp")
-		require.Equal(t, 3, opsRequestCount(f, http.MethodGet, "/api/v1/users/00ususp"))
-		// Delete continues to check current status before and after deletion.
-		opsGetUser(t, g, srv, "GetResource before delete", "00ugone")
-		opsDelete(t, g, srv, "Delete", "user", "00ugone")
-		opsGetUser(t, g, srv, "GetResource after delete", "00ugone")
-		g.Check()
-	})
 }
 
 // Every Okta request, including the OAuth token exchange in private-key mode,

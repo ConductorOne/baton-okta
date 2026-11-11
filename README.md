@@ -196,7 +196,7 @@ See [CONTRIBUTING.md](https://github.com/ConductorOne/baton/blob/main/CONTRIBUTI
 
 The legacy `--cache`, `--cache-ttl`, and `--cache-tti` flags remain accepted
 for compatibility but have no effect. Okta responses are not cached by the
-connector, regardless of the flag descriptions shown in the generated help.
+connector.
 
 ```
 baton-okta
@@ -215,9 +215,9 @@ Available Commands:
 Flags:
       --api-token string                                 required: The API token for the service account ($BATON_API_TOKEN)
       --auth-method string                               ($BATON_AUTH_METHOD)
-      --cache                                            Enable response cache ($BATON_CACHE) (default true)
-      --cache-tti int                                    Response cache cleanup interval in seconds ($BATON_CACHE_TTI) (default 60)
-      --cache-ttl int                                    Response cache time to live in seconds ($BATON_CACHE_TTL) (default 300)
+      --cache                                            No effect; accepted for compatibility ($BATON_CACHE) (default true)
+      --cache-tti int                                    No effect; accepted for compatibility ($BATON_CACHE_TTI) (default 60)
+      --cache-ttl int                                    No effect; accepted for compatibility ($BATON_CACHE_TTL) (default 300)
       --client-id string                                 The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
       --client-secret string                             The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
       --domain string                                    required: Okta organization hostname, optionally prefixed with https:// ($BATON_DOMAIN)

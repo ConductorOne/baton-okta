@@ -15,11 +15,6 @@ func WithContentType(ct string) RequestOption {
 	return func(r *request) { r.contentType = ct }
 }
 
-// WithFreshRead is retained for compatibility; all reads are fresh.
-func WithFreshRead() RequestOption {
-	return func(*request) {}
-}
-
 // The device, API token and resource-set lookups have always differed from the
 // rest of the API in three ways, each set by one option. statusLineEndpoint
 // applies all three.
