@@ -21,7 +21,7 @@
     {
       "error": {
         "code": "PermissionDenied",
-        "message": "error: listing resources failed: okta-connectorv2: failed to list users: okta-connectorv2: failed to fetch apps from okta: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
+        "message": "error: listing resources failed: okta-connectorv2: failed to list apps: okta-connectorv2: failed to fetch apps from okta: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
       },
       "name": "ListResources app page 1"
     }

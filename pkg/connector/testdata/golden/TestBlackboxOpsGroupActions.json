@@ -139,6 +139,14 @@
       "path": "/api/v1/groups/00gops000000000001"
     },
     {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/groups/00gops000000000001"
+    },
+    {
       "body": {
         "profile": {
           "description": "New description",
