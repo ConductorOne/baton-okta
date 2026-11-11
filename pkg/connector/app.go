@@ -95,7 +95,7 @@ func (o *appResourceType) List(
 	qp := queryParams(token.Size, page)
 	apps, respCtx, err := listApps(ctx, o.client, o.syncInactiveApps, token, qp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list users: %w", err)
+		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list apps: %w", err)
 	}
 
 	nextPage, annos, err := parseResp(respCtx.OktaResponse)
