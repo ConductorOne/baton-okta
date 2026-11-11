@@ -2,7 +2,7 @@ package connector_test
 
 // Black-box regression tests for actions, account lifecycle, events,
 // connector-level operations (Validate, GetMetadata) and transport behavior
-// (429 retries, response cache, error classification, auth modes).
+// (429 retries, legacy cache flags, error classification, auth modes).
 //
 // Every helper in this file is prefixed "ops" so it cannot collide with the
 // helpers other black-box test files define in this package.
@@ -295,7 +295,7 @@ func TestBlackboxOpsEnableDisableUser(t *testing.T) {
 	newOpsOrg(f, map[string]string{
 		"00uactive": "ACTIVE", "00ustaged": "STAGED", "00ususpended": "SUSPENDED",
 		"00udeprov": "DEPROVISIONED", "00ulocked": "LOCKED_OUT", "00uprov": "PROVISIONED",
-		"00uactive2": "ACTIVE", "00ustaged2": "STAGED", "00uforbid": "ACTIVE", "00ubadreq": "SUSPENDED",
+		"00uactive2": "ACTIVE", "00ustaged2": "STAGED", "00ususpended2": "SUSPENDED", "00uforbid": "ACTIVE", "00ubadreq": "SUSPENDED",
 	})
 	srv := newServer(t, f)
 	g := newGolden(t, f)
@@ -312,7 +312,8 @@ func TestBlackboxOpsEnableDisableUser(t *testing.T) {
 
 	// disable_user
 	opsInvoke(t, g, srv, "disable ACTIVE suspends", "disable_user", "", map[string]any{"user_id": "00uactive2"})
-	opsInvoke(t, g, srv, "disable SUSPENDED is a no-op", "disable_user", "", map[string]any{"user_id": "00ususpended"})
+	opsInvoke(t, g, srv, "disable SUSPENDED is a no-op", "disable_user", "", map[string]any{"user_id": "00ususpended2"})
+	require.Zero(t, opsRequestCount(f, http.MethodPost, "/api/v1/users/00ususpended2/lifecycle/suspend"))
 	opsInvoke(t, g, srv, "disable DEPROVISIONED is a no-op", "disable_user", "", map[string]any{"user_id": "00udeprov"})
 	opsInvoke(t, g, srv, "disable STAGED is a no-op", "disable_user", "", map[string]any{"user_id": "00ustaged2"})
 	opsInvoke(t, g, srv, "disable unknown user is 404", "disable_user", "", map[string]any{"user_id": "00unobody"})
@@ -1010,21 +1011,15 @@ func TestBlackboxOpsResponseCache(t *testing.T) {
 
 		opsGetUser(t, g, srv, "GetResource first", "00ucache")
 		opsGetUser(t, g, srv, "GetResource second", "00ucache")
-		// disable_user reads status through the cache: after the first call suspends the
-		// user, the second still sees the cached ACTIVE status when caching is on.
+		// The cache flag has no effect: every read reaches Okta, so a second
+		// disable sees SUSPENDED and is a no-op.
 		opsInvoke(t, g, srv, "disable first", "disable_user", "", map[string]any{"user_id": "00uflip"})
 		opsInvoke(t, g, srv, "disable second", "disable_user", "", map[string]any{"user_id": "00uflip"})
 
-		getsCache := opsRequestCount(f, http.MethodGet, "/api/v1/users/00ucache")
-		if cache {
-			require.Equal(t, 1, getsCache)
-			require.Equal(t, 1, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflip"))
-			require.Equal(t, 2, opsRequestCount(f, http.MethodPost, "/api/v1/users/00uflip/lifecycle/suspend"))
-		} else {
-			require.Equal(t, 2, getsCache)
-			require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflip"))
-			require.Equal(t, 1, opsRequestCount(f, http.MethodPost, "/api/v1/users/00uflip/lifecycle/suspend"))
-		}
+		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00ucache"))
+		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflip"))
+		require.Equal(t, 1, opsRequestCount(f, http.MethodPost, "/api/v1/users/00uflip/lifecycle/suspend"))
+		require.Len(t, f.Requests(), 5)
 		g.Check()
 	}
 	t.Run("cache on", func(t *testing.T) { run(t, true) })
@@ -1093,105 +1088,6 @@ func TestBlackboxOpsApiTokenAuthHeader(t *testing.T) {
 	require.Len(t, reqs, 1)
 	require.Equal(t, "SSWS "+testAPIToken, reqs[0].Headers["Authorization"])
 	g.Check()
-}
-
-// TestBlackboxOpsResponseCacheSemantics pins the observable rules of the
-// connector's GET response cache (config cache, cache-ttl, cache-tti):
-//   - an entry expires cache-ttl seconds after it was stored, and cache-ttl 0
-//     means entries never expire;
-//   - only successful GET responses are stored, keyed by full URL, and that
-//     includes list pages;
-//   - a non-GET request evicts only the entry for its own URL;
-//   - the lifecycle reconciliation in Delete reads the user fresh.
-//
-// cache-tti only sets how often expired entries are purged from memory, which
-// is not observable through the connector.
-func TestBlackboxOpsResponseCacheSemantics(t *testing.T) {
-	cacheConf := func(ttl, tti int) connOpt {
-		return withConfig(func(c *cfg.Okta) { c.Cache = true; c.CacheTtl = ttl; c.CacheTti = tti })
-	}
-
-	t.Run("entries expire after cache-ttl", func(t *testing.T) {
-		f := newFakeOkta(t)
-		newOpsOrg(f, map[string]string{"00uttl": "ACTIVE"})
-		srv := newServer(t, f, cacheConf(1, 1))
-		g := newGolden(t, f)
-		opsGetUser(t, g, srv, "GetResource first", "00uttl")
-		opsGetUser(t, g, srv, "GetResource cached", "00uttl")
-		require.Equal(t, 1, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uttl"))
-		time.Sleep(1500 * time.Millisecond)
-		opsGetUser(t, g, srv, "GetResource after ttl", "00uttl")
-		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uttl"))
-		g.Check()
-	})
-
-	t.Run("cache-ttl 0 never expires", func(t *testing.T) {
-		f := newFakeOkta(t)
-		newOpsOrg(f, map[string]string{"00uttl": "ACTIVE"})
-		srv := newServer(t, f, cacheConf(0, 1))
-		g := newGolden(t, f)
-		opsGetUser(t, g, srv, "GetResource first", "00uttl")
-		time.Sleep(1500 * time.Millisecond)
-		opsGetUser(t, g, srv, "GetResource later", "00uttl")
-		require.Equal(t, 1, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uttl"))
-		g.Check()
-	})
-
-	t.Run("error responses are not cached", func(t *testing.T) {
-		f := newFakeOkta(t)
-		var mu sync.Mutex
-		calls := 0
-		f.Handle(http.MethodGet, `/api/v1/users/00uflaky`, func(w http.ResponseWriter, r *http.Request, _ []string) {
-			mu.Lock()
-			calls++
-			n := calls
-			mu.Unlock()
-			if n == 1 {
-				writeJSON(w, http.StatusNotFound, fmt.Sprintf(opsOktaNotFound, "00uflaky"))
-				return
-			}
-			writeJSON(w, http.StatusOK, opsUserJSON("00uflaky", "ACTIVE", "00uflaky@example.com"))
-		})
-		srv := newServer(t, f)
-		g := newGolden(t, f)
-		opsGetUser(t, g, srv, "GetResource 404", "00uflaky")
-		opsGetUser(t, g, srv, "GetResource 200", "00uflaky")
-		opsGetUser(t, g, srv, "GetResource cached 200", "00uflaky")
-		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users/00uflaky"))
-		g.Check()
-	})
-
-	t.Run("list pages are cached by full URL", func(t *testing.T) {
-		f := newFakeOkta(t)
-		f.Pages(`/api/v1/users`,
-			"["+opsUserJSON("00ulist1", "ACTIVE", "list1@example.com")+"]",
-			"["+opsUserJSON("00ulist2", "ACTIVE", "list2@example.com")+"]",
-		)
-		srv := newServer(t, f)
-		g := newGolden(t, f)
-		require.Len(t, listAllResources(t, g, srv, "user", nil, 1), 2)
-		require.Len(t, listAllResources(t, g, srv, "user", nil, 1), 2)
-		require.Equal(t, 2, opsRequestCount(f, http.MethodGet, "/api/v1/users"))
-		require.Len(t, listAllResources(t, g, srv, "user", nil, 2), 2)
-		g.Check()
-	})
-
-	t.Run("writes evict only their own URL and Delete reads fresh", func(t *testing.T) {
-		f := newFakeOkta(t)
-		newOpsOrg(f, map[string]string{"00ugone": "ACTIVE", "00ususp": "ACTIVE"})
-		srv := newServer(t, f)
-		g := newGolden(t, f)
-		// The suspend POST targets .../lifecycle/suspend, so the cached user read stays.
-		opsGetUser(t, g, srv, "GetResource before suspend", "00ususp")
-		opsInvoke(t, g, srv, "suspend", "disable_user", "", map[string]any{"user_id": "00ususp"})
-		opsGetUser(t, g, srv, "GetResource after suspend", "00ususp")
-		require.Equal(t, 1, opsRequestCount(f, http.MethodGet, "/api/v1/users/00ususp"))
-		// DELETE /api/v1/users/{id} shares the user read's URL and evicts it.
-		opsGetUser(t, g, srv, "GetResource before delete", "00ugone")
-		opsDelete(t, g, srv, "Delete", "user", "00ugone")
-		opsGetUser(t, g, srv, "GetResource after delete", "00ugone")
-		g.Check()
-	})
 }
 
 // Every Okta request, including the OAuth token exchange in private-key mode,

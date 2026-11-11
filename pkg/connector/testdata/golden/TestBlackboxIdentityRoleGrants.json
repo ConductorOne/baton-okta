@@ -44,6 +44,64 @@
       },
       "method": "GET",
       "path": "/api/v1/users/00uaa2222222222222a2/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "limit": [
+          "1"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "1"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "limit": [
+          "1"
+        ]
+      }
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/iam/assignees/users",
+      "query": {
+        "after": [
+          "cursor1"
+        ],
+        "limit": [
+          "1"
+        ]
+      }
     }
   ],
   "steps": [
