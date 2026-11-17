@@ -98,7 +98,7 @@ On such an app, every group-scoped user's direct grant is marked immutable, beca
 
 Devices are an opt-in resource type: enable the **Device** resource type in the connector's sync configuration to include it. Device sync is read-only; the connector does not manage device-to-user assignments.
 
-Secrets (Okta API tokens) are an opt-in resource type. From C1, enable the **API Token** resource type in the connector's sync configuration. A CLI run has no resource-type selection, so there `--sync-secrets` is the only way to include them: without it the type is still advertised and the sync emits zero tokens. The flag is deprecated and still honored on both paths. They are read-only, and C1 displays them on the Inventory page.
+Secrets (Okta API tokens) are an opt-in resource type. From C1, enable the **API Token** resource type in the connector's sync configuration. A full, unfiltered CLI run does not fetch them: the type is still advertised and the sync emits zero tokens. To include them on the CLI, add `api-token` to `--sync-resource-types`, or set the deprecated `--sync-secrets`, which is still honored on both paths. They are read-only, and C1 displays them on the Inventory page.
 
 The connector also supports an event feed and targeted sync. The event feed streams a filtered set of Okta System Log events: user lifecycle and profile changes, application creation and update, group creation, group memberships added and removed, application user assignments, group-to-application assignment additions, admin-role grants, and SSO sign-ins. Targeted sync narrows a run to specific resource types or resource IDs via `--sync-resource-types` and `--sync-resources`.
 
