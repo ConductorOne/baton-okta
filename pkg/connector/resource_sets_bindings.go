@@ -414,8 +414,8 @@ func (rsb *resourceSetsBindingsResourceType) Get(ctx context.Context, resourceId
 	if err != nil {
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to get resource set: %w", err)
 	}
-	if rsResp == nil || rsResp.Id == nil {
-		return nil, nil, fmt.Errorf("okta-connector: resource-set response missing id")
+	if rsResp == nil {
+		return nil, nil, fmt.Errorf("okta-connector: empty resource-set response")
 	}
 
 	rsCopy := *rsResp

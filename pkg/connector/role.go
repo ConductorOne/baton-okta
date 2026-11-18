@@ -524,13 +524,15 @@ func (g *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, en
 			return nil, fmt.Errorf("okta-connector: failed to assign role to group: %w", handleOktaResponseError(response, errors.Join(&errOkta, err)))
 		}
 
-		l.Debug("Role Membership has been created.",
-			zap.String("ID", createdRole.Id),
-			zap.String("Description", createdRole.Description),
-			zap.String("Label", createdRole.Label),
-			zap.String("Status", createdRole.Status),
-			zap.String("Type", createdRole.Type),
-		)
+		if createdRole != nil {
+			l.Debug("Role Membership has been created.",
+				zap.String("ID", createdRole.Id),
+				zap.String("Description", createdRole.Description),
+				zap.String("Label", createdRole.Label),
+				zap.String("Status", createdRole.Status),
+				zap.String("Type", createdRole.Type),
+			)
+		}
 
 		return rateLimitAnnotations(response), nil
 	default:

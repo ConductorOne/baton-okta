@@ -2,6 +2,7 @@ package connector
 
 import (
 	"net/http"
+	"strconv"
 	"testing"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -20,6 +21,16 @@ func TestGroupRoleProvisioningIdempotency(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, annos.Contains(&v2.GrantAlreadyExists{}))
 	})
+	for _, body := range []string{"", "null"} {
+		t.Run("assign returns 201 with body "+strconv.Quote(body), func(t *testing.T) {
+			client := newScriptedOktaClient(t, oktaRequestStep{
+				method: http.MethodPost, path: "/api/v1/groups/" + testGroupID + "/roles",
+				statusCode: http.StatusCreated, body: body,
+			})
+			_, err := roleBuilder(client, nil).Grant(t.Context(), appGroupPrincipal(), roleAssignedEntitlement())
+			require.NoError(t, err)
+		})
+	}
 	t.Run("delete races with another removal", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{

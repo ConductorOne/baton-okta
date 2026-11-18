@@ -3,8 +3,7 @@ package connector_test
 // Black-box tests for single-object lookups that Okta answers with 200 and an
 // empty body or a JSON null. They pin what GetResource and Validate do with
 // such a response for each lookup that can be reached without a panic.
-// User, group, custom-role and resource-set lookups panic on these bodies and
-// are not covered here.
+// Group and custom-role lookups panic on these bodies and are not covered here.
 // See blackbox_harness_test.go.
 
 import (
