@@ -33,11 +33,11 @@ This page covers the Okta **connector**, which syncs and provisions access data 
 </Note>
 
 <Note>
-**Resource sets and resource set bindings require Sync Custom Roles.** These two resource types model Okta's custom-role machinery: a resource set is the collection of Okta objects a custom role applies to, and a binding pairs a resource set with a custom role. Granting a binding assigns a user or group to that custom role over that resource set. Both are synced only when **Sync Custom Roles** is enabled.
+**Resource sets and resource set bindings require Sync Custom Roles.** These two resource types model Okta's custom-role machinery: a resource set is the collection of Okta objects a custom role applies to, and a binding pairs a resource set with a custom role. Granting a binding assigns a user or group to that custom role over that resource set. Both are synced, and bindings can be granted, only when **Sync Custom Roles** is enabled.
 </Note>
 
 <Warning>
-**Grant access on the resource set binding, not on the resource set.** A grant on a resource set's **Bindings** entitlement is accepted and reported as successful without creating the binding in Okta, so C1 records access that Okta does not have. Use the **Resource set binding** entitlement instead.
+**Grant custom roles through the binding's Resource Set Binding Member entitlement.** A grant on a resource set's own **Resource Set Binding** entitlement is accepted and reported as successful without creating the binding in Okta, so C1 records access that Okta does not have.
 </Warning>
 
 <Note>
