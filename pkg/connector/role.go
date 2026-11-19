@@ -616,7 +616,9 @@ func (g *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotat
 		roleId = roles[rolePos].Id
 		response, err := g.client.RemoveRoleFromGroup(ctx, groupId, roleId)
 		if err != nil {
-			return nil, fmt.Errorf("okta-connector: failed to remove role: %w", handleOktaResponseError(response, err))
+			return revokeNotFoundOrError(ctx, principal, response, err,
+				"okta-connector: revoke: group role assignment already removed",
+				"failed to remove role")
 		}
 
 		if response != nil && response.StatusCode == http.StatusNoContent {
