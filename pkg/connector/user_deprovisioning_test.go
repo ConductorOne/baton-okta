@@ -231,7 +231,7 @@ func TestUserResourceDelete(t *testing.T) {
 		}
 	})
 
-	t.Run("stale cached status is bypassed", func(t *testing.T) {
+	t.Run("status is read again before deleting", func(t *testing.T) {
 		client := newScriptedOktaClient(t,
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusDeprovisioned)},
 			oktaRequestStep{method: http.MethodGet, path: "/api/v1/users/" + testOktaUserID, statusCode: http.StatusOK, body: oktaUserResponse(userStatusActive)},
@@ -242,7 +242,7 @@ func TestUserResourceDelete(t *testing.T) {
 		)
 
 		if got, err := getUserStatus(t.Context(), client, testOktaUserID); err != nil || got != userStatusDeprovisioned {
-			t.Fatalf("prime cached user status = %q, %v; want %q, nil", got, err, userStatusDeprovisioned)
+			t.Fatalf("initial user status = %q, %v; want %q, nil", got, err, userStatusDeprovisioned)
 		}
 
 		builder := userBuilder(&Okta{client: client})

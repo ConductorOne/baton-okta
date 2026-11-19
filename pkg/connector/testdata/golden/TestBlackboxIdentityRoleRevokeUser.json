@@ -71,6 +71,22 @@
       },
       "method": "DELETE",
       "path": "/api/v1/users/00uaa5555555555555a5/roles/irbC000000000000001"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa1111111111111a1/roles"
+    },
+    {
+      "headers": {
+        "Accept": "application/json",
+        "Authorization": "SSWS test-api-token-0123456789"
+      },
+      "method": "GET",
+      "path": "/api/v1/users/00uaa1111111111111a1/roles"
     }
   ],
   "steps": [

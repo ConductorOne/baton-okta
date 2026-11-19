@@ -47,19 +47,19 @@ var (
 	)
 	cache = field.BoolField("cache",
 		field.WithDisplayName("Enable cache"),
-		field.WithDescription("Enable response cache"),
+		field.WithDescription("No effect; accepted for compatibility"),
 		field.WithDefaultValue(true),
 		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	cacheTTI = field.IntField("cache-tti",
 		field.WithDisplayName("Cache TTI"),
-		field.WithDescription("Response cache cleanup interval in seconds"),
+		field.WithDescription("No effect; accepted for compatibility"),
 		field.WithDefaultValue(60),
 		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 	cacheTTL = field.IntField("cache-ttl",
 		field.WithDisplayName("Cache TTL"),
-		field.WithDescription("Response cache time to live in seconds"),
+		field.WithDescription("No effect; accepted for compatibility"),
 		field.WithDefaultValue(300),
 		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)

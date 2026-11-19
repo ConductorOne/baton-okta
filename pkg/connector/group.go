@@ -21,6 +21,8 @@ import (
 	sdkResource "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -323,7 +325,7 @@ func (o *groupResourceType) GetGroupWithParams(
 	ctx context.Context,
 	groupID string,
 ) (*okta.Group, *okta.Response, error) {
-	reqUrl, err := url.Parse(fmt.Sprintf(apiPathGetGroupFmt, groupID))
+	reqUrl, err := url.Parse(fmt.Sprintf(apiPathGetGroupFmt, okta.PathEscape(groupID)))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -851,22 +853,27 @@ func (o *groupResourceType) handleCreateGroupAction(ctx context.Context, args *s
 func (o *groupResourceType) Delete(ctx context.Context, resourceId *v2.ResourceId, parentResourceID *v2.ResourceId) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	groupId := resourceId.Resource
+	groupId, err := oktaIDFromResourceID(resourceId, resourceTypeGroup)
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := o.connector.client.DeleteGroup(ctx, groupId)
-	if err != nil {
-		if resp != nil {
-			defer resp.Body.Close()
-		}
-		l.Error("failed to delete Okta group", zap.String("groupId", groupId), zap.Error(err))
-		return nil, handleOktaResponseError(resp, err)
-	}
 	if resp != nil {
 		defer resp.Body.Close()
 	}
+	if err != nil {
+		classified := handleOktaResponseError(resp, err)
+		if status.Code(classified) == codes.NotFound {
+			l.Info("Okta group was already deleted", zap.String("groupId", groupId))
+			return rateLimitAnnotations(resp), nil
+		}
+		l.Error("failed to delete Okta group", zap.String("groupId", groupId), zap.Error(err))
+		return nil, classified
+	}
 
 	l.Info("deleted Okta group", zap.String("groupId", groupId))
-	return nil, nil
+	return rateLimitAnnotations(resp), nil
 }
 
 func groupBuilder(connector *Okta) *groupResourceType {

@@ -418,41 +418,6 @@
                 "resource_type": "group"
               }
             }
-          },
-          {
-            "annotations": [
-              {
-                "@type": "type.googleapis.com/c1.connector.v2.V1Identifier",
-                "id": "grant:membership:iam1abcdefghijklmn01:cr0adminrole00000001:iam1abcdefghijklmn01:cr0adminrole00000001"
-              }
-            ],
-            "entitlement": {
-              "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member",
-              "resource": {
-                "annotations": [
-                  {
-                    "@type": "type.googleapis.com/c1.connector.v2.AppTrait"
-                  }
-                ],
-                "display_name": "Engineering Apps",
-                "id": {
-                  "resource": "iam1abcdefghijklmn01:cr0adminrole00000001",
-                  "resource_type": "resourceset-binding"
-                },
-                "profile": {
-                  "description": "Apps owned by engineering",
-                  "id": "iam1abcdefghijklmn01:cr0adminrole00000001",
-                  "label": "Engineering Apps"
-                }
-              }
-            },
-            "id": "resourceset-binding:iam1abcdefghijklmn01:cr0adminrole00000001:member:group:00g1engineering01",
-            "principal": {
-              "id": {
-                "resource": "00g1engineering01",
-                "resource_type": "group"
-              }
-            }
           }
         ]
       }

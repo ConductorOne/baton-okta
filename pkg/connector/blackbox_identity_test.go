@@ -610,8 +610,7 @@ func TestBlackboxIdentityRoleGrantUser(t *testing.T) {
 	g.Check()
 }
 
-// Group principals are advertised as grantable on role entitlements but the
-// provisioner rejects them before any request is sent.
+// Role assignments can be granted to and revoked from groups.
 func TestBlackboxIdentityRoleGrantRevokeGroupPrincipal(t *testing.T) {
 	f := newFakeOkta(t)
 	f.Fixture(http.MethodGet, `/api/v1/groups/`+idnGroupEng+`/roles`, "identity_group_roles_revoke.json")
@@ -623,6 +622,7 @@ func TestBlackboxIdentityRoleGrantRevokeGroupPrincipal(t *testing.T) {
 	ent := idnEnt(idnRes("role", "USER_ADMIN"), "assigned")
 	idnGrant(t, g, srv, "group principal", ent, idnRes("group", idnGroupEng))
 	idnRevoke(t, g, srv, "group principal", ent, idnRes("group", idnGroupEng))
+	require.Len(t, f.Requests(), 3, "grant and revoke must reach the group role API")
 	g.Check()
 }
 
