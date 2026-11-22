@@ -321,11 +321,8 @@
       }
     },
     {
-      "error": {
-        "code": "PermissionDenied",
-        "message": "error: listing grants for resource role/SUPER_ADMIN failed: okta-connectorv2: request failed: rpc error: code = PermissionDenied desc = You do not have permission to perform the requested action\nthe API returned an error: You do not have permission to perform the requested action"
-      },
-      "name": "ListGrants role/SUPER_ADMIN page 2"
+      "name": "ListGrants role/SUPER_ADMIN page 2",
+      "response": {}
     }
   ]
 }

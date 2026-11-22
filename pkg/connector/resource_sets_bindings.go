@@ -225,6 +225,9 @@ func (rsb *resourceSetsBindingsResourceType) Grants(ctx context.Context, resourc
 	customRoleId := resourceIDs[lastItem]
 	members, resp, err := rsb.listMembersOfBinding(ctx, rsb.client, resourceSetId, customRoleId)
 	if err != nil {
+		if skipRoleGrantsOnAccessDenied(ctx, resource, err) {
+			return nil, &sdkResource.SyncOpResults{}, nil
+		}
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list members of resource set binding: %w", handleOktaResponseError(resp, err))
 	}
 
