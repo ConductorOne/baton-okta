@@ -3,7 +3,7 @@ module github.com/conductorone/baton-okta
 go 1.27.4
 
 require (
-	github.com/conductorone/baton-sdk v0.46.1
+	github.com/conductorone/baton-sdk v0.47.0
 	github.com/conductorone/dpop v0.4.1
 	github.com/conductorone/dpop/integrations/dpop_oauth2 v0.4.1
 	github.com/deckarep/golang-set/v2 v2.9.0
