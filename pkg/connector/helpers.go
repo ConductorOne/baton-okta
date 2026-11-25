@@ -144,6 +144,22 @@ var oktaErrToGRPCError = map[string]codes.Code{
 	"E0000011": codes.Unauthenticated,
 }
 
+// skipRoleGrantsOnAccessDenied matches the group role-listing behavior, but only
+// for an explicit Okta access-denied error. PermissionDenied alone also covers
+// non-Okta 403 responses, which must still fail the sync.
+func skipRoleGrantsOnAccessDenied(ctx context.Context, resource *v2.Resource, err error) bool {
+	var oktaErr *okta.Error
+	if !errors.As(err, &oktaErr) || oktaErr.ErrorCode != AccessDeniedErrorCode {
+		return false
+	}
+
+	ctxzap.Extract(ctx).Warn("okta-connectorv2: skipping role grant listing: access denied",
+		zap.String("resource_type", resource.GetId().GetResourceType()),
+		zap.String("resource_id", resource.GetId().GetResource()),
+	)
+	return true
+}
+
 func bodyExcerpt(body []byte) string {
 	excerpt := strings.TrimSpace(string(body))
 	if len(excerpt) > errorBodyExcerptLimit {

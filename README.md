@@ -85,6 +85,8 @@ By default, `baton-okta` will sync information for inactive applications. You ca
 
 For syncing custom roles `--sync-custom-roles` must be provided. Its default value is `false`.
 
+If Okta returns `E0000006` (access denied) while listing role assignments, resource-set bindings, or binding members during grant sync, the connector logs a warning and completes the affected resource's grant listing without grants. Other sync data can still be collected, but the affected role access will be missing; give the token permission to read these assignments for a complete sync. Authentication failures, other API errors, and permission errors during provisioning still fail the operation.
+
 `--skip-app-groups` excludes `APP_GROUP` type groups — the ones Okta imports from an app or directory integration — from the group sync. This changes how app access is attributed, so it is worth understanding before enabling it.
 
 Normally a group assigned to an app gets a group-principal grant that ConductorOne expands to the group's members, recording the group as the source of their access. A skipped group is never synced, so access conferred by one has nothing to expand into. To avoid dropping that access, the connector falls back to emitting direct user grants for the affected app users.

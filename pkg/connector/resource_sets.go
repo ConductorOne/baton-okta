@@ -225,6 +225,9 @@ func (rs *resourceSetsResourceType) Grants(ctx context.Context, resource *v2.Res
 
 	roles, oktaResp, err := listBindings(ctx, rs.client, resource.GetId().GetResource())
 	if err != nil {
+		if skipRoleGrantsOnAccessDenied(ctx, resource, err) {
+			return nil, &sdkResource.SyncOpResults{}, nil
+		}
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list resource set bindings: %w", handleOktaResponseError(oktaResp, err))
 	}
 

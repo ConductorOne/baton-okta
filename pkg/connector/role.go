@@ -153,6 +153,9 @@ func (o *roleResourceType) Grants(
 
 	usersWithRoleAssignments, respCtx, err := listAllUsersWithRoleAssignments(ctx, o.connector.client, token, qp)
 	if err != nil {
+		if skipRoleGrantsOnAccessDenied(ctx, resource, err) {
+			return nil, &sdkResource.SyncOpResults{}, nil
+		}
 		return nil, nil, fmt.Errorf("okta-connectorv2: failed to list all users with role assignments: %w", err)
 	}
 
@@ -207,6 +210,9 @@ func (o *roleResourceType) Grants(
 		newUserRoles := mapset.NewSet[string]()
 		roles, _, err := listAssignedRolesForUser(ctx, o.connector.client, userId)
 		if err != nil {
+			if skipRoleGrantsOnAccessDenied(ctx, resource, err) {
+				return nil, &sdkResource.SyncOpResults{}, nil
+			}
 			return nil, nil, err
 		}
 		for _, role := range roles {
